@@ -199,15 +199,16 @@ void InteractionPairSmart<PairwiseInteraction>::setSpecificPair(std::string pv1n
 {
     intMap.insert({{pv1name, pv2name}, pair});
     intMap.insert({{pv2name, pv1name}, pair});
+
 }
 
 // for testing purpose
-template class InteractionPairSmart<Pairwise_Norandom_DPD>;
-
-template class InteractionPairSmart<Pairwise_DPD>;
-template class InteractionPairSmart<Pairwise_LJ>;
-template class InteractionPairSmart<Pairwise_LJObjectAware>;
-
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_DPD>>;
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJ>>;
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJObjectAware>>;
+// template class InteractionPairSmart<Pairwise_Norandom_DPD>;
+//
+// template class InteractionPairSmart<Pairwise_DPD>;
+// template class InteractionPairSmart<Pairwise_LJ>;
+// template class InteractionPairSmart<Pairwise_LJObjectAware>;
+//
+// template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_DPD>>;
+// template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJ>>;
+// template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJObjectAware>>;
