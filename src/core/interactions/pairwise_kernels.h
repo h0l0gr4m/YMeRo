@@ -3,6 +3,7 @@
 
 #include <core/celllist.h>
 #include <core/utils/cuda_common.h>
+#include <core/interactions/pairwise_interactions/smartdpd.h>
 
 #include <core/pvs/views/pv.h>
 
@@ -65,37 +66,37 @@ __device__ inline float distance2(const Ta a, const Tb b)
  * forces, such that either p1 \<-\> p2 or p2 \<-\> p1 is ignored
  * based on particle ids
  */
-template<InteractionOut NeedDstAcc, InteractionOut NeedSrcAcc, InteractionWith InteractWith, typename Interaction>
-__device__ inline void computeCell(
-        int pstart, int pend,
-        Particle dstP, int dstId, float3& dstFrc,
-        CellListInfo cinfo,
-        float rc2, Interaction& interaction)
-{
-    for (int srcId = pstart; srcId < pend; srcId++)
-    {
-        Particle srcP;
-        srcP.readCoordinate(cinfo.particles, srcId);
+ template<InteractionOut NeedDstAcc, InteractionOut NeedSrcAcc, InteractionWith InteractWith, typename Interaction>
+ __device__ inline void computeCell(
+         int pstart, int pend,
+         Particle dstP, int dstId, float3& dstFrc,
+         CellListInfo cinfo,
+         float rc2, Interaction& interaction)
+ {
+     for (int srcId = pstart; srcId < pend; srcId++)
+     {
+         Particle srcP;
+         srcP.readCoordinate(cinfo.particles, srcId);
 
-        bool interacting = distance2(srcP.r, dstP.r) < rc2;
+         bool interacting = distance2(srcP.r, dstP.r) < rc2;
 
-        if (InteractWith == InteractionWith::Self)
-            if (dstId <= srcId) interacting = false;
+         if (InteractWith == InteractionWith::Self)
+             if (dstId <= srcId) interacting = false;
 
-        if (interacting)
-        {
-            srcP.readVelocity(cinfo.particles, srcId);
+         if (interacting)
+         {
+             srcP.readVelocity(cinfo.particles, srcId);
 
-            float3 frc = interaction(dstP, dstId, srcP, srcId);
+             float3 frc = interaction(dstP, dstId, srcP, srcId);
 
-            if (NeedDstAcc == InteractionOut::NeedAcc)
-                dstFrc += frc;
+             if (NeedDstAcc == InteractionOut::NeedAcc)
+                 dstFrc += frc;
 
-            if (NeedSrcAcc == InteractionOut::NeedAcc)
-                atomicAdd(cinfo.forces + srcId, -frc);
-        }
-    }
-}
+             if (NeedSrcAcc == InteractionOut::NeedAcc)
+                 atomicAdd(cinfo.forces + srcId, -frc);
+         }
+     }
+ }
 
 /**
  * Compute interactions within a single ParticleVector.
@@ -113,7 +114,7 @@ __device__ inline void computeCell(
  *        \code float3 interaction(const Particle dst, int dstId, const Particle src, int srcId) \endcode
  *        The return value is the force acting on the first particle.
  *        The second one experiences the opposite force.
- */
+*/
 template<typename Interaction>
 __launch_bounds__(128, 16)
 __global__ void computeSelfInteractions(
@@ -151,6 +152,9 @@ __global__ void computeSelfInteractions(
 
     atomicAdd(cinfo.forces + dstId, dstFrc);
 }
+
+
+
 
 
 /**
@@ -211,7 +215,7 @@ __global__ void computeExternalInteractions_1tpp(
                 int rowEnd    = min(midCellId+2, srcCinfo.totcells);
 
                 if (rowStart >= rowEnd) continue;
-                
+
                 const int pstart = srcCinfo.cellStarts[rowStart];
                 const int pend   = srcCinfo.cellStarts[rowEnd];
 
@@ -277,7 +281,7 @@ __global__ void computeExternalInteractions_3tpp(
             int rowEnd    = min(midCellId+2, srcCinfo.totcells);
 
             if (rowStart >= rowEnd) continue;
-            
+
             const int pstart = srcCinfo.cellStarts[rowStart];
             const int pend   = srcCinfo.cellStarts[rowEnd];
 
@@ -343,7 +347,7 @@ __global__ void computeExternalInteractions_9tpp(
         int rowEnd    = min(midCellId+2, srcCinfo.totcells);
 
         if (rowStart >= rowEnd) return;
-        
+
         const int pstart = srcCinfo.cellStarts[rowStart];
         const int pend   = srcCinfo.cellStarts[rowEnd];
 

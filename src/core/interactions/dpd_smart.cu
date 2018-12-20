@@ -7,18 +7,18 @@
 #include <core/pvs/particle_vector.h>
 
 
-InteractionSmartDPD::InteractionSmartDPD(std::string name, float rc, float a, float gamma, float kbt, float dt, float power, bool allocateImpl) :
+InteractionSmartDPD::InteractionSmartDPD(std::string name,std::string parameterName, float rc, float a, float gamma, float kbt, float dt, float power, bool allocateImpl) :
     Interaction(name, rc),
-    a(a), gamma(gamma), kbt(kbt), dt(dt), power(power)
+    parameterName(parameterName),a(a), gamma(gamma), kbt(kbt), dt(dt), power(power)
 {
     if (allocateImpl) {
-        Pairwise_SmartDPD dpd(rc, a, gamma, kbt, dt, power);
-        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (name, rc, dpd);
+        Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, dt, power);
+        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (name,parameterName, rc, dpd);
     }
 }
 
-InteractionSmartDPD::InteractionSmartDPD(std::string name, float rc, float a, float gamma, float kbt, float dt, float power) :
-    InteractionSmartDPD(name, rc, a, gamma, kbt, dt, power, true)
+InteractionSmartDPD::InteractionSmartDPD(std::string name,std::string parameterName, float rc, float a, float gamma, float kbt, float dt, float power) :
+    InteractionSmartDPD(name,parameterName, rc, a, gamma, kbt, dt, power, true)
 {}
 
 InteractionSmartDPD::~InteractionSmartDPD() = default;
@@ -51,7 +51,7 @@ void InteractionSmartDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* p
     if (dt    == Default) dt    = this->dt;
     if (power == Default) power = this->power;
 
-    Pairwise_SmartDPD dpd(this->rc, a, gamma, kbt, dt, power);
+    Pairwise_SmartDPD dpd(parameterName,this->rc, a, gamma, kbt, dt, power);
     auto ptr = static_cast< InteractionPairSmart<Pairwise_SmartDPD>* >(impl.get());
 
     ptr->setSpecificPair(pv1->name, pv2->name, dpd);

@@ -7,6 +7,7 @@
 #include <core/utils/helper_math.h>
 
 #include <random>
+#include <core/pvs/particle_vector.h>
 
 class CellList;
 class LocalParticleVector;
@@ -22,16 +23,16 @@ float fastPower(float x, float a)
 
 struct DPDparameter
 {
-  float alpha_p, gamma_p
-}
+  float alpha_p, gamma_p;
+};
+
 
 class Pairwise_SmartDPD
 {
 public:
-    Pairwise_SmartDPD(float rc, float a, float gamma, float kbT, float dt, float power) :
-        rc(rc), a(a), gamma(gamma), power(power)
+    Pairwise_SmartDPD(std::string parameterName,float rc, float a, float gamma, float kbT, float dt, float power) :
+        parameterName(parameterName),rc(rc), a(a), gamma(gamma), power(power),kbT(kbT),dt(dt)
     {
-        sigma = sqrt(2 * gamma * kbT / dt);
         rc2 = rc*rc;
         invrc = 1.0 / rc;
     }
@@ -48,15 +49,16 @@ public:
         seed = udistr(gen);
         pv1DPDparameter = lpv1->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
         pv2DPDparameter = lpv2->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
-        }
 
     }
 
     __D__ inline float3 operator()(const Particle dst, int dstId, const Particle src, int srcId) const
     {
-        const float alpha_p = (&pv1DPDparameter[srcId].alpha_p + &pv1DPDparameter[dstId].alpha_p)/2
-        const float gamma_p = (&pv1DPDparameter[srcId].gamma_p + &pv1DPDparameter[dstId].gamma_p)/2
-        const float sigma_p = sqrt(2 * gamma_p * kbT / dt);
+        float alpha_p = (pv1DPDparameter[dstId].alpha_p + pv2DPDparameter[srcId].alpha_p)/2;
+        float gamma_p = (pv1DPDparameter[dstId].gamma_p + pv2DPDparameter[srcId].gamma_p)/2;
+	      // printf("alpha_p: %f , gamma_p %f \n" , alpha_p , gamma_p);
+
+        float sigma_p = sqrt(2 * gamma_p * kbT / dt);
         const float3 dr = dst.r - src.r;
         const float rij2 = dot(dr, dr);
         if (rij2 > rc2) return make_float3(0.0f);
@@ -72,14 +74,15 @@ public:
 
         const float myrandnr = Logistic::mean0var1(seed, min(src.i1, dst.i1), max(src.i1, dst.i1));
 
-        const float strength = alpha_p * argwr - (gamma_p * wr * rdotv + sigma * myrandnr) * wr;
+        const float strength = alpha_p * argwr - (gamma_p * wr * rdotv + sigma_p * myrandnr) * wr;
 
         return dr_r * strength;
     }
 
-protected:
-
-    float a, gamma, sigma, power, rc;
+public:
+    std::string parameterName;
+    DPDparameter *pv1DPDparameter, *pv2DPDparameter;
+    float a, gamma, power, rc,kbT,dt;
     float invrc, rc2;
     float seed;
 };

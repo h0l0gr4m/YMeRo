@@ -31,7 +31,7 @@ std::vector<int> findGloballyReady(std::vector<MPI_Request>& requests, std::vect
     int index;
     MPI_Status stat;
     MPI_Check( MPI_Waitany(requests.size(), requests.data(), &index, &stat) );
-    statuses[index] = stat;    
+    statuses[index] = stat;
 
     std::vector<int> mask(requests.size(), 0);
     mask[index] = 1;
@@ -45,7 +45,7 @@ std::vector<int> findGloballyReady(std::vector<MPI_Request>& requests, std::vect
             if (requests[i] != MPI_REQUEST_NULL)
                 MPI_Check( MPI_Wait(&requests[i], &statuses[i]) );
         }
-    
+
     return ids;
 }
 
@@ -67,27 +67,26 @@ void Postprocess::run()
         requests.push_back(pl->waitData());
     requests.push_back(endReq);
     std::vector<MPI_Status> statuses(requests.size());
-    
+
     info("Postprocess is listening to messages now");
     while (true)
     {
         auto readyIds = findGloballyReady(requests, statuses, comm);
-
         for (auto index : readyIds)
         {
             if (index == plugins.size())
             {
                 if (dummy != -1)
                     die("Something went terribly wrong");
-    
-                info("Postprocess got a stopping message and will stop now");    
-                
+
+                info("Postprocess got a stopping message and will stop now");
+
                 for (int i=0; i<plugins.size(); i++)
                     MPI_Check( MPI_Cancel(requests.data() + i) );
-                
+
                 return;
             }
-        
+
             debug2("Postprocess got a request from plugin '%s', executing now", plugins[index]->name.c_str());
             plugins[index]->recv();
             plugins[index]->deserialize(statuses[index]);
@@ -95,4 +94,3 @@ void Postprocess::run()
         }
     }
 }
-

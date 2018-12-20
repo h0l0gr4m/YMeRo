@@ -1,5 +1,7 @@
 #pragma once
 #include "interface.h"
+#include "pairwise_interactions/smartdpd.h"
+
 
 #include <map>
 
@@ -16,16 +18,21 @@ public:
 
     void regular(ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, const float t, cudaStream_t stream) override;
     void halo   (ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, const float t, cudaStream_t stream) override;
+    void setPrerequisites(ParticleVector* pv1, ParticleVector* pv2);
 
-    InteractionPairSmart(std::string name, float rc, PairwiseInteraction pair) :
-        Interaction(name, rc), defaultPair(pair)
+    InteractionPairSmart(std::string name, std::string parameterName,  float rc, PairwiseInteraction pair) :
+        Interaction(name, rc),parameterName(parameterName), defaultPair(pair)
     { }
 
     void setSpecificPair(std::string pv1name, std::string pv2name, PairwiseInteraction pair);
 
+
+
     ~InteractionPairSmart() = default;
 
 private:
-    PairwiseInteraction defaultPair;
     std::map< std::pair<std::string, std::string>, PairwiseInteraction > intMap;
+    std::string parameterName;
+    PairwiseInteraction defaultPair;
+    DPDparameter *pv1DPDparameter, *pv2DPDparameter;
 };

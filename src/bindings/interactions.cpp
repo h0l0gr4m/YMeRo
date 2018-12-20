@@ -291,10 +291,11 @@ void exportInteractions(py::module& m)
             J. Chem. Phys., 107(11), 4423–4435. `doi <https://doi.org/10.1063/1.474784>`_
     )");
 
-    pyIntSmartDPD.def(py::init<std::string, float, float, float, float, float, float>(),
-         "name"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, R"(
+    pyIntSmartDPD.def(py::init<std::string,std::string, float, float, float, float, float, float>(),
+         "name"_a,"parameterName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, R"(
             Args:
             name: name of the interaction
+            parameterName: Name of the parameters
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 a: :math:`a`
                 gamma: :math:`\gamma`
@@ -303,10 +304,10 @@ void exportInteractions(py::module& m)
                 power: :math:`p` in the weight function
     )");
 
-    pyIntSmartDPD.def("setSpecificPair", &InteractionDPD::setSpecificPair,
+    pyIntSmartDPD.def("setSpecificPair", &InteractionSmartDPD::setSpecificPair,
          "pv1"_a, "pv2"_a,
-         "a"_a=InteractionDPD::Default, "gamma"_a=InteractionDPD::Default,
-         "kbt"_a=InteractionDPD::Default, "dt"_a=InteractionDPD::Default, "power"_a=InteractionDPD::Default,
+         "a"_a=InteractionSmartDPD::Default, "gamma"_a=InteractionSmartDPD::Default,
+         "kbt"_a=InteractionSmartDPD::Default, "dt"_a=InteractionSmartDPD::Default, "power"_a=InteractionSmartDPD::Default,
          R"(
             Override some of the interaction parameters for a specific pair of Particle Vectors
          )");
