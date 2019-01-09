@@ -9,6 +9,7 @@
 
 #include "pairwise_kernels.h"
 
+#include "pairwise_interactions/smartdpd.h"
 #include "pairwise_interactions/stress_wrapper.h"
 #include "pairwise_interactions/dpd.h"
 #include "pairwise_interactions/lj.h"
@@ -198,5 +199,3 @@ template class InteractionPair<Pairwise_LJObjectAware>;
 template class InteractionPair<PairwiseStressWrapper<Pairwise_DPD>>;
 template class InteractionPair<PairwiseStressWrapper<Pairwise_LJ>>;
 template class InteractionPair<PairwiseStressWrapper<Pairwise_LJObjectAware>>;
-
-

@@ -3,6 +3,7 @@
 #include <core/interactions/interface.h>
 #include <core/interactions/dpd.h>
 #include <core/interactions/dpd_with_stress.h>
+#include <core/interactions/dpd_smart_with_stress.h>
 #include <core/interactions/lj.h>
 #include <core/interactions/lj_with_stress.h>
 #include <core/interactions/membrane_kantor.h>
@@ -310,5 +311,25 @@ void exportInteractions(py::module& m)
          "kbt"_a=InteractionSmartDPD::Default, "dt"_a=InteractionSmartDPD::Default, "power"_a=InteractionSmartDPD::Default,
          R"(
             Override some of the interaction parameters for a specific pair of Particle Vectors
-         )");
+    )");
+
+
+    py::handlers_class<InteractionSmartDPDWithStress> pyIntSmartDPDWithStress(m, "SmartDPDWithStress", pyIntSmartDPD, R"(
+        wrapper of :any:`SmartDPD` with, in addition, stress computation
+    )");
+
+    pyIntSmartDPDWithStress.def(py::init<std::string, std::string,std::string, float, float, float, float, float, float, float>(),
+                                "name"_a,"parameterName"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, "stressPeriod"_a, R"(
+                 Args:
+                     name: name of the interaction
+                     parametName: name of the dpd parameter
+                     stressName: name of the stress entry
+                     rc: interaction cut-off (no forces between particles further than **rc** apart)
+                     a: :math:`a`
+                     gamma: :math:`\gamma`
+                     kbt: :math:`k_B T`
+                     dt: time-step, that for consistency has to be the same as the integration time-step for the corresponding particle vectors
+                     power: :math:`p` in the weight function
+                     stressPeriod: compute the stresses every this period (in simulation time units)
+    )");
 }

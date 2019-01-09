@@ -154,11 +154,11 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
             SAFE_KERNEL_LAUNCH(
                     copy_kernel,
                     getNblocks(np, nth), nth, 0, stream,
-                    pv1DPDparameter,np, defaultPair.a, defaultPair.gamma);
+                    pv1DPDparameter,np,a,gamma);
             SAFE_KERNEL_LAUNCH(
                     copy_kernel,
                     getNblocks(np, nth), nth, 0, stream,
-                    pv2DPDparameter,np, defaultPair.a, defaultPair.gamma);
+                    pv2DPDparameter,np, a, gamma);
             SAFE_KERNEL_LAUNCH(
                     computeSelfInteractions,
                     getNblocks(np, nth), nth, 0, stream,
@@ -210,18 +210,6 @@ void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector*
     pv2->requireDataPerParticle<DPDparameter>(parameterName, true);
 
 
-    // const int np = pv1->local()->size();
-    // for (int i = 0; i < np;i++)
-    // {
-    //   pv1DPDparameter[i].alpha_p = defaultPair.a;
-    //   pv1DPDparameter[i].gamma_p = defaultPair.gamma;
-    //   pv2DPDparameter[i].alpha_p = defaultPair.a;
-    //   pv2DPDparameter[i].gamma_p = defaultPair.gamma;
-    // }
-    // pv1->local()->extraPerParticle.getData<DPDparameter>(parameterName)->uploadToDevice(0);
-    // pv2->local()->extraPerParticle.getData<DPDparameter>(parameterName)->uploadToDevice(0);
-
-
 }
 
 template<class PairwiseInteraction>
@@ -235,3 +223,4 @@ void InteractionPairSmart<PairwiseInteraction>::setSpecificPair(std::string pv1n
 
 //for testing purpose
 template class InteractionPairSmart<Pairwise_SmartDPD>;
+template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_SmartDPD>>;

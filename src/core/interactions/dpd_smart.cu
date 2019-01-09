@@ -13,7 +13,7 @@ InteractionSmartDPD::InteractionSmartDPD(std::string name,std::string parameterN
 {
     if (allocateImpl) {
         Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, dt, power);
-        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (name,parameterName, rc, dpd);
+        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (name,parameterName,a,gamma ,rc, dpd);
     }
 }
 

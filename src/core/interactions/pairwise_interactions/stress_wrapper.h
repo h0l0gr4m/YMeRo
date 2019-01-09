@@ -59,8 +59,9 @@ public:
 
 private:
 
+
     std::string stressName;
-    
+
     Stress *pv1Stress, *pv2Stress;
 
     BasicPairwiseForce basicForce;

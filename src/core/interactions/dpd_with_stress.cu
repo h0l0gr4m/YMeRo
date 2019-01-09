@@ -19,7 +19,7 @@ InteractionDPDWithStress::InteractionDPDWithStress(std::string name, std::string
 
 InteractionDPDWithStress::~InteractionDPDWithStress() = default;
 
-void InteractionDPDWithStress::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2, 
+void InteractionDPDWithStress::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
                                                float a, float gamma, float kbt, float dt, float power)
 {
     if (a     == Default) a     = this->a;
@@ -30,6 +30,6 @@ void InteractionDPDWithStress::setSpecificPair(ParticleVector* pv1, ParticleVect
 
     Pairwise_DPD dpd(this->rc, a, gamma, kbt, dt, power);
     auto ptr = static_cast< InteractionPair_withStress<Pairwise_DPD>* >(impl.get());
-    
+
     ptr->setSpecificPair(pv1->name, pv2->name, dpd);
 }

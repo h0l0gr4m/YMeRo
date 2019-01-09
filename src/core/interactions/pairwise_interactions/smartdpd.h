@@ -56,7 +56,7 @@ public:
     {
         float alpha_p = (pv1DPDparameter[dstId].alpha_p + pv2DPDparameter[srcId].alpha_p)/2;
         float gamma_p = (pv1DPDparameter[dstId].gamma_p + pv2DPDparameter[srcId].gamma_p)/2;
-	      // printf("alpha_p: %f , gamma_p %f \n" , alpha_p , gamma_p);
+	//printf("alpha_p: %f , gamma_p %f \n" , alpha_p , gamma_p);
 
         float sigma_p = sqrt(2 * gamma_p * kbT / dt);
         const float3 dr = dst.r - src.r;
