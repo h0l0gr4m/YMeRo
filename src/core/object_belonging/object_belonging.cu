@@ -32,6 +32,13 @@ __global__ void copyInOut(
     }
 }
 
+ObjectBelongingChecker_Common::ObjectBelongingChecker_Common(const YmrState *state, std::string name) :
+    ObjectBelongingChecker(state, name)
+{}
+
+ObjectBelongingChecker_Common::~ObjectBelongingChecker_Common() = default;
+
+
 void ObjectBelongingChecker_Common::splitByBelonging(ParticleVector* src, ParticleVector* pvIn, ParticleVector* pvOut, cudaStream_t stream)
 {
     if (dynamic_cast<ObjectVector*>(src) != nullptr)
@@ -47,7 +54,7 @@ void ObjectBelongingChecker_Common::splitByBelonging(ParticleVector* src, Partic
               pvOut->name.c_str(), src->name.c_str());
 
     {
-        PrimaryCellList cl(src, 1.0f, src->domain.localSize);
+        PrimaryCellList cl(src, 1.0f, state->domain.localSize);
         cl.build(stream);
         checkInner(src, &cl, stream);
     }

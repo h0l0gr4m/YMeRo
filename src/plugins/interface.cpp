@@ -1,9 +1,35 @@
 #include "interface.h"
 
+Plugin::Plugin() = default;
+Plugin::~Plugin() = default;
+    
+void Plugin::handshake() {}
+void Plugin::talk() {}  
 
-SimulationPlugin::SimulationPlugin(std::string name) :
-    Plugin<YmrSimulationObject>(name), sizeReq(MPI_REQUEST_NULL), dataReq(MPI_REQUEST_NULL)
+int Plugin::_tag(const std::string& name)
+{
+    return (int)( nameHash(name) % MaxTag );
+}
+
+void Plugin::_setup(const MPI_Comm& comm, const MPI_Comm& interComm)
+{
+    MPI_Check( MPI_Comm_dup(comm, &this->comm) );
+    this->interComm = interComm;
+    
+    MPI_Check( MPI_Comm_rank(this->comm, &rank) );
+    MPI_Check( MPI_Comm_size(this->comm, &nranks) );
+}
+
+
+
+SimulationPlugin::SimulationPlugin(const YmrState *state, std::string name) :
+    Plugin(),
+    YmrSimulationObject(state, name),
+    sizeReq(MPI_REQUEST_NULL),
+    dataReq(MPI_REQUEST_NULL)
 {}
+
+SimulationPlugin::~SimulationPlugin() = default;
 
 void SimulationPlugin::beforeForces               (cudaStream_t stream) {};
 void SimulationPlugin::beforeIntegration          (cudaStream_t stream) {};
@@ -21,7 +47,6 @@ void SimulationPlugin::setTime(float t, int tstep)
 
 void SimulationPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
 {
-    setSimulation(simulation);
     debug("Setting up simulation plugin '%s', MPI tag is %d", name.c_str(), _tag());
     this->simulation = simulation;
     _setup(comm, interComm);
@@ -32,6 +57,11 @@ void SimulationPlugin::finalize()
     debug3("Plugin %s is finishing all the communications", name.c_str());
     MPI_Check( MPI_Wait(&sizeReq, MPI_STATUS_IGNORE) );
     MPI_Check( MPI_Wait(&dataReq, MPI_STATUS_IGNORE) );
+}
+
+int SimulationPlugin::_tag()
+{
+    return Plugin::_tag(name);
 }
 
 void SimulationPlugin::waitPrevSend()
@@ -65,8 +95,10 @@ void SimulationPlugin::send(const void* data, int sizeInBytes)
 // PostprocessPlugin
 
 PostprocessPlugin::PostprocessPlugin(std::string name) :
-    Plugin<YmrObject>(name)
+    Plugin(), YmrObject(name)
 {}
+
+PostprocessPlugin::~PostprocessPlugin() = default;
 
 MPI_Request PostprocessPlugin::waitData()
 {
@@ -98,6 +130,10 @@ void PostprocessPlugin::setup(const MPI_Comm& comm, const MPI_Comm& interComm)
     _setup(comm, interComm);
 }
 
+int PostprocessPlugin::_tag()
+{
+    return Plugin::_tag(name);
+}
 
 
 

@@ -7,7 +7,7 @@ ranks  = (1, 1, 1)
 domain = [4., 2., 3.]
 density = 8
 
-u = ymr.ymero(ranks, tuple(domain), debug_level=3, log_filename='log')
+u = ymr.ymero(ranks, tuple(domain), dt=0, debug_level=3, log_filename='log')
 
 pv = ymr.ParticleVectors.ParticleVector('pv', mass = 1)
 ic = ymr.InitialConditions.Uniform(density=density)
@@ -29,4 +29,4 @@ if pv:
 # cd ic
 # rm -rf pos*.txt vel*.txt
 # ymr.run --runargs "-n 2" ./uniform.py > /dev/null
-# paste pos.ic.txt vel.ic.txt | sort > ic.out.txt
+# paste pos.ic.txt vel.ic.txt | LC_ALL=en_US.utf8 sort > ic.out.txt

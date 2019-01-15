@@ -6,6 +6,7 @@
 #include <core/logger.h>
 #include <core/containers.h>
 #include <core/utils/make_unique.h>
+#include <core/utils/typeMap.h>
 
 #include <cuda_runtime.h>
 
@@ -25,6 +26,16 @@ class ExtraDataManager
 {
 public:
 
+    enum class CommunicationMode
+    {
+        None, NeedExchange
+    };
+
+    enum class PersistenceMode
+    {
+        None, Persistent
+    };
+    
     /**
      * Struct that contains of data itself (as a unique_ptr to \c GPUcontainer)
      * and its properties: needExchange (for MPI) and shiftTypeSize (for shift)
@@ -32,8 +43,10 @@ public:
     struct ChannelDescription
     {
         std::unique_ptr<GPUcontainer> container;
-        bool needExchange = false;
+        CommunicationMode communication = CommunicationMode::None;
+        PersistenceMode persistence = PersistenceMode::None;
         int shiftTypeSize = 0;
+        DataType dataType;
     };
 
     using NamedChannelDesc = std::pair< std::string, const ChannelDescription* >;
@@ -66,21 +79,24 @@ public:
 
         auto ptr = std::make_unique< PinnedBuffer<T> >(size);
         channelMap[name].container = std::move(ptr);
+        channelMap[name].dataType  = typeTokenize<T>();
 
         sortedChannels.push_back({name, &channelMap[name]});
-        std::sort(sortedChannels.begin(), sortedChannels.end(), [] (NamedChannelDesc ch1, NamedChannelDesc ch2) {
-            return ch1.second->container->datatype_size() > ch2.second->container->datatype_size();
-        });
+        sortChannels();
     }
 
     /**
-     * Make buffer be communicated by MPI
+     * set communication mode; allows to enable MPI
+     * can only add communication; does nothing otherwise
      */
-    void requireExchange(const std::string& name)
-    {
-        auto& desc = getChannelDescOrDie(name);
-        desc.needExchange = true;
-    }
+    void setExchangeMode(const std::string& name, CommunicationMode communication);
+
+    /**
+     * set persistence of the data: the data will stick to the particles/objects
+     * note that this will enable communication if set to persistent
+     * can only add persistence; does nothing otherwise
+     */
+    void setPersistenceMode(const std::string& name, PersistenceMode persistence);
 
     /**
      * @brief Make buffer elements be shifted when migrating to another MPI rank
@@ -106,23 +122,7 @@ public:
      * @param datatypeSize treat coordinates as \c float (== 4) or as \c double (== 8)
      * Other values are not allowed
      */
-    void requireShift(const std::string& name, int datatypeSize)
-    {
-        if (datatypeSize != 4 && datatypeSize != 8)
-            die("Can only shift float3 or double3 data for MPI communications");
-
-        auto& desc = getChannelDescOrDie(name);
-
-        if ( (desc.container->datatype_size() % sizeof(float4)) != 0)
-            die("Incorrect alignment of channel '%s' elements. Size (now %d) should be divisible by 16",
-                    name.c_str(), desc.container->datatype_size());
-
-        if (desc.container->datatype_size() < 3*datatypeSize)
-            die("Size of an element of the channel '%s' (%d) is too small to apply shift, need to be at least %d",
-                    name.c_str(), desc.container->datatype_size(), 4*datatypeSize);
-
-        desc.shiftTypeSize = datatypeSize;
-    }
+    void requireShift(const std::string& name, size_t datatypeSize);
 
     /**
      * Get gpu buffer by name
@@ -130,12 +130,7 @@ public:
      * @param name buffer name
      * @return pointer to \c GPUcontainer corresponding to the given name
      */
-    GPUcontainer* getGenericData(const std::string& name)
-    {
-        auto& desc = getChannelDescOrDie(name);
-        return desc.container.get();
-    }
-    
+    GPUcontainer* getGenericData(const std::string& name);    
     
     /**
      * Get buffer by name
@@ -156,63 +151,40 @@ public:
      * @param name buffer name
      * @return pointer to device data held by the corresponding \c PinnedBuffer
      */
-    void* getGenericPtr(const std::string& name)
-    {
-        auto& desc = getChannelDescOrDie(name);
-        return desc.container->genericDevPtr();
-    }
+    void* getGenericPtr(const std::string& name);
 
     /**
      * \c true if channel with given \c name exists, \c false otherwise
      */
-    bool checkChannelExists(const std::string& name) const
-    {
-        return channelMap.find(name) != channelMap.end();
-    }
+    bool checkChannelExists(const std::string& name) const;
 
     /**
      * @return vector of channels sorted (descending) by size of their elements
      */
-    const std::vector<NamedChannelDesc>& getSortedChannels() const
-    {
-        return sortedChannels;
-    }
+    const std::vector<NamedChannelDesc>& getSortedChannels() const;
 
     /**
      * Returns true if the channel has to be exchanged by MPI
      */
-    bool checkNeedExchange(const std::string& name) const
-    {
-        auto& desc = getChannelDescOrDie(name);
-        return desc.needExchange;
-    }
+    bool checkNeedExchange(const std::string& name) const;
+
+    /**
+     * Returns true if the channel is persistent
+     */
+    bool checkPersistence(const std::string& name) const;
 
     /**
      * Returns 0 if no shift needed, 4 if shift with floats needed, 8 -- if shift with doubles
      */
-    int shiftTypeSize(const std::string& name) const
-    {
-        auto& desc = getChannelDescOrDie(name);
-        return desc.shiftTypeSize;
-    }
-
+    int shiftTypeSize(const std::string& name) const;
 
     /// Resize all the channels, keep their data
-    void resize(int n, cudaStream_t stream)
-    {
-        for (auto& kv : channelMap)
-            kv.second.container->resize(n, stream);
-    }
+    void resize(int n, cudaStream_t stream);
 
     /// Resize all the channels, don't care about existing data
-    void resize_anew(int n)
-    {
-        for (auto& kv : channelMap)
-            kv.second.container->resize_anew(n);
-    }
+    void resize_anew(int n);
 
-private:
-
+private:    
 
     /// Map of name --> data
     using ChannelMap = std::map< std::string, ChannelDescription >;
@@ -235,23 +207,11 @@ private:
     friend class ParticlePacker;
     friend class ObjectExtraPacker;
 
-    /// Get entry from channelMap or die if it is not found
-    ChannelDescription& getChannelDescOrDie(const std::string& name)
-    {
-        auto it = channelMap.find(name);
-        if (it == channelMap.end())
-            die("No such channel: '%s'", name.c_str());
+    void sortChannels();
 
-        return it->second;
-    }
+    /// Get entry from channelMap or die if it is not found
+    ChannelDescription& getChannelDescOrDie(const std::string& name);
 
     /// Get constant entry from channelMap or die if it is not found
-    const ChannelDescription& getChannelDescOrDie(const std::string& name) const
-    {
-        auto it = channelMap.find(name);
-        if (it == channelMap.end())
-            die("No such channel: '%s'", name.c_str());
-
-        return it->second;
-    }
+    const ChannelDescription& getChannelDescOrDie(const std::string& name) const;
 };

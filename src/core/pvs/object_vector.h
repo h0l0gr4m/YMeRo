@@ -78,26 +78,26 @@ public:
 class ObjectVector : public ParticleVector
 {
 protected:
-    ObjectVector( std::string name, float mass, int objSize, LocalObjectVector *local, LocalObjectVector *halo ) :
-        ParticleVector(name, mass, local, halo), objSize(objSize)
+    ObjectVector(const YmrState *state, std::string name, float mass, int objSize, LocalObjectVector *local, LocalObjectVector *halo) :
+        ParticleVector(state, name, mass, local, halo), objSize(objSize)
     {
         // center of mass and extents are not to be sent around
         // it's cheaper to compute them on site
-        requireDataPerObject<LocalObjectVector::COMandExtent>("com_extents", false);
+        requireDataPerObject<LocalObjectVector::COMandExtent>("com_extents", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
         // object ids must always follow objects
-        requireDataPerObject<int>("ids", true);
+        requireDataPerObject<int>("ids", ExtraDataManager::CommunicationMode::NeedExchange, ExtraDataManager::PersistenceMode::Persistent);
     }
 
 public:
     int objSize;
     std::shared_ptr<Mesh> mesh;
 
-    ObjectVector(std::string name, float mass, const int objSize, const int nObjects = 0) :
-        ObjectVector( name, mass, objSize,
+    ObjectVector(const YmrState *state, std::string name, float mass, const int objSize, const int nObjects = 0) :
+        ObjectVector( state, name, mass, objSize,
                       new LocalObjectVector(this, objSize, nObjects),
                       new LocalObjectVector(this, objSize, 0) )
-    {    }
+    {}
 
     void findExtentAndCOM(cudaStream_t stream, ParticleVectorType type);
 
@@ -108,16 +108,16 @@ public:
     void restart    (MPI_Comm comm, std::string path) override;
 
     template<typename T>
-    void requireDataPerObject(std::string name, bool needExchange)
+    void requireDataPerObject(std::string name, ExtraDataManager::CommunicationMode communication, ExtraDataManager::PersistenceMode persistence)
     {
-        requireDataPerObject<T>(name, needExchange, 0);
+        requireDataPerObject<T>(name, communication, persistence, 0);
     }
 
     template<typename T>
-    void requireDataPerObject(std::string name, bool needExchange, int shiftDataType)
+    void requireDataPerObject(std::string name, ExtraDataManager::CommunicationMode communication, ExtraDataManager::PersistenceMode persistence, size_t shiftDataSize)
     {
-        requireDataPerObject<T>(local(), name, needExchange, shiftDataType);
-        requireDataPerObject<T>(halo(),  name, needExchange, shiftDataType);
+        requireDataPerObject<T>(local(), name, communication, persistence, shiftDataSize);
+        requireDataPerObject<T>(halo(),  name, communication, persistence, shiftDataSize);
     }
 
     virtual ~ObjectVector() = default;
@@ -127,16 +127,21 @@ protected:
     void _getRestartExchangeMap(MPI_Comm comm, const std::vector<Particle> &parts, std::vector<int>& map) override;
     std::vector<int> _restartParticleData(MPI_Comm comm, std::string path) override;
 
+    void _extractPersistentExtraObjectData(std::vector<XDMF::Channel>& channels, const std::set<std::string>& blackList = {});
+    
     virtual void _checkpointObjectData(MPI_Comm comm, std::string path);
     virtual void _restartObjectData(MPI_Comm comm, std::string path, const std::vector<int>& map);
     
 private:
     template<typename T>
-    void requireDataPerObject(LocalObjectVector* lov, std::string name, bool needExchange, int shiftDataType)
+    void requireDataPerObject(LocalObjectVector* lov, std::string name, ExtraDataManager::CommunicationMode communication,
+                              ExtraDataManager::PersistenceMode persistence, size_t shiftDataSize)
     {
         lov->extraPerObject.createData<T> (name, lov->nObjects);
-        if (needExchange) lov->extraPerObject.requireExchange(name);
-        if (shiftDataType != 0) lov->extraPerObject.requireShift(name, shiftDataType);
+        lov->extraPerObject.setExchangeMode(name, communication);
+        lov->extraPerObject.setPersistenceMode(name, persistence);
+        if (shiftDataSize != 0) lov->extraPerObject.requireShift(name, shiftDataSize);
+
     }
 };
 

@@ -6,19 +6,24 @@
 #include <core/interactions/membrane.h>
 
 
-IntegratorSubStepMembrane::IntegratorSubStepMembrane(std::string name, float dt, int substeps, Interaction *fastForces) :
-    Integrator(name, dt), substeps(substeps),
-    subIntegrator(new IntegratorVV<Forcing_None>(name + "_sub", dt/substeps, Forcing_None()))
+IntegratorSubStepMembrane::IntegratorSubStepMembrane(const YmrState *state, std::string name, int substeps, Interaction *fastForces) :
+    Integrator(state, name), substeps(substeps),
+    subIntegrator(new IntegratorVV<Forcing_None>(state, name + "_sub", Forcing_None()))
 {
-    if ( !(this->fastForces = dynamic_cast<InteractionMembrane*>(fastForces)) )
-        die("IntegratorSubStepMembrane expects an interaction of type <InteractionMembrane>.");
-}
+    this->fastForces = dynamic_cast<InteractionMembrane*>(fastForces);
     
+    if ( this->fastForces == nullptr )
+        die("IntegratorSubStepMembrane expects an interaction of type <InteractionMembrane>.");
 
-void IntegratorSubStepMembrane::stage1(ParticleVector *pv, float t, cudaStream_t stream)
+    subIntegrator->dt = dt / substeps;
+}
+
+IntegratorSubStepMembrane::~IntegratorSubStepMembrane() = default;
+
+void IntegratorSubStepMembrane::stage1(ParticleVector *pv, cudaStream_t stream)
 {}
 
-void IntegratorSubStepMembrane::stage2(ParticleVector *pv, float t, cudaStream_t stream)
+void IntegratorSubStepMembrane::stage2(ParticleVector *pv, cudaStream_t stream)
 {
     // save "slow forces"
     slowForces.copy(pv->local()->forces, stream);
@@ -32,9 +37,10 @@ void IntegratorSubStepMembrane::stage2(ParticleVector *pv, float t, cudaStream_t
         if (substep != 0)
             pv->local()->forces.copy(slowForces, stream);
 
-        fastForces->regular(pv, pv, nullptr, nullptr, t + substep * dt / substeps, stream);
-
-        subIntegrator->stage2(pv, t, stream);
+        // TODO was , t + substep * dt / substeps
+        fastForces->regular(pv, pv, nullptr, nullptr, stream);
+        
+        subIntegrator->stage2(pv, stream);
     }
     
     // restore previous positions into old_particles channel

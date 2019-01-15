@@ -1,5 +1,6 @@
 #include "object_redistributor.h"
 #include "exchange_helpers.h"
+#include "fragments_mapping.h"
 
 #include <core/utils/kernel_launch.h>
 #include <core/pvs/particle_vector.h>
@@ -9,7 +10,12 @@
 #include <core/logger.h>
 #include <core/utils/cuda_common.h>
 
-template<bool QUERY>
+enum class PackMode
+{
+    Querry, Pack
+};
+
+template <PackMode packMode>
 __global__ void getExitingObjects(const DomainInfo domain, OVview view, const ObjectPacker packer, BufferOffsetsSizesWrap dataWrap)
 {
     const int objId = blockIdx.x;
@@ -19,29 +25,29 @@ __global__ void getExitingObjects(const DomainInfo domain, OVview view, const Ob
 
     // Find to which buffer this object should go
     auto prop = view.comAndExtents[objId];
-    int cx = 1, cy = 1, cz = 1;
+    int dx = 0, dy = 0, dz = 0;
 
-    if (prop.com.x  < -0.5f*domain.localSize.x) cx = 0;
-    if (prop.com.y  < -0.5f*domain.localSize.y) cy = 0;
-    if (prop.com.z  < -0.5f*domain.localSize.z) cz = 0;
+    if (prop.com.x  < -0.5f*domain.localSize.x) dx = -1;
+    if (prop.com.y  < -0.5f*domain.localSize.y) dy = -1;
+    if (prop.com.z  < -0.5f*domain.localSize.z) dz = -1;
 
-    if (prop.com.x >=  0.5f*domain.localSize.x) cx = 2;
-    if (prop.com.y >=  0.5f*domain.localSize.y) cy = 2;
-    if (prop.com.z >=  0.5f*domain.localSize.z) cz = 2;
+    if (prop.com.x >=  0.5f*domain.localSize.x) dx = 1;
+    if (prop.com.y >=  0.5f*domain.localSize.y) dy = 1;
+    if (prop.com.z >=  0.5f*domain.localSize.z) dz = 1;
 
-    const int bufId = (cz*3 + cy)*3 + cx;
+    const int bufId = FragmentMapping::getId(dx, dy, dz);
 
     __shared__ int shDstObjId;
 
-    const float3 shift{ domain.localSize.x*(cx-1),
-                        domain.localSize.y*(cy-1),
-                        domain.localSize.z*(cz-1) };
+    const float3 shift{ domain.localSize.x * dx,
+                        domain.localSize.y * dy,
+                        domain.localSize.z * dz };
 
     __syncthreads();
     if (tid == 0)
         shDstObjId = atomicAdd(dataWrap.sizes + bufId, 1);
 
-    if (QUERY) {
+    if (packMode == PackMode::Querry) {
         return;
     }
     else {
@@ -86,11 +92,13 @@ bool ObjectRedistributor::needExchange(int id)
     return !objects[id]->redistValid;
 }
 
-void ObjectRedistributor::attach(ObjectVector* ov, float rc)
+void ObjectRedistributor::attach(ObjectVector* ov)
 {
     objects.push_back(ov);
-    ExchangeHelper* helper = new ExchangeHelper(ov->name);
-    helpers.push_back(helper);
+
+    auto helper = std::make_unique<ExchangeHelper>(ov->name);
+    helpers.push_back(std::move(helper));
+
     info("The Object vector '%s' was attached", ov->name.c_str());
 }
 
@@ -99,8 +107,9 @@ void ObjectRedistributor::prepareSizes(int id, cudaStream_t stream)
 {
     auto ov  = objects[id];
     auto lov = ov->local();
-    auto helper = helpers[id];
-
+    auto helper = helpers[id].get();
+    auto bulkId = helper->bulkId;
+    
     ov->findExtentAndCOM(stream, ParticleVectorType::Local);
 
     OVview ovView(ov, ov->local());
@@ -115,21 +124,21 @@ void ObjectRedistributor::prepareSizes(int id, cudaStream_t stream)
     if (ovView.nObjects > 0)
     {
         SAFE_KERNEL_LAUNCH(
-                getExitingObjects<true>,
+                getExitingObjects<PackMode::Querry>,
                 ovView.nObjects, nthreads, 0, stream,
-                ov->domain, ovView, packer, helper->wrapSendData() );
+                ov->state->domain, ovView, packer, helper->wrapSendData() );
 
-        helper->makeSendOffsets_Dev2Dev(stream);
+        helper->computeSendOffsets_Dev2Dev(stream);
     }
 
-    int nObjs = helper->sendSizes[13];
+    int nObjs = helper->sendSizes[bulkId];
     debug2("%d objects of '%s' will leave", ovView.nObjects - nObjs, ov->name.c_str());
 
     // Early termination support
     if (nObjs == ovView.nObjects)
     {
-        helper->sendSizes[13] = 0;
-        helper->makeSendOffsets();
+        helper->sendSizes[bulkId] = 0;
+        helper->computeSendOffsets();
         helper->resizeSendBuf();
     }
 }
@@ -138,17 +147,18 @@ void ObjectRedistributor::prepareData(int id, cudaStream_t stream)
 {
     auto ov  = objects[id];
     auto lov = ov->local();
-    auto helper = helpers[id];
+    auto helper = helpers[id].get();
+    auto bulkId = helper->bulkId;
 
     OVview ovView(ov, ov->local());
     ObjectPacker packer(ov, ov->local(), stream);
     helper->setDatumSize(packer.totalPackedSize_byte);
 
     const int nthreads = 256;
-    int nObjs = helper->sendSizes[13];
+    int nObjs = helper->sendSizes[bulkId];
 
     // Early termination - no redistribution
-    if (helper->sendOffsets[27] == 0)
+    if (helper->sendOffsets[FragmentMapping::numFragments] == 0)
     {
         debug2("No objects of '%s' leaving, no need to rebuild the object vector", ov->name.c_str());
         return;
@@ -160,9 +170,9 @@ void ObjectRedistributor::prepareData(int id, cudaStream_t stream)
     helper->resizeSendBuf();
     helper->sendSizes.clearDevice(stream);
     SAFE_KERNEL_LAUNCH(
-            getExitingObjects<false>,
+            getExitingObjects<PackMode::Pack>,
             lov->nObjects, nthreads, 0, stream,
-            ov->domain, ovView, packer, helper->wrapSendData() );
+            ov->state->domain, ovView, packer, helper->wrapSendData() );
 
 
     // Unpack the central buffer into the object vector itself
@@ -174,46 +184,17 @@ void ObjectRedistributor::prepareData(int id, cudaStream_t stream)
     SAFE_KERNEL_LAUNCH(
             unpackObject,
             nObjs, nthreads, 0, stream,
-            helper->sendBuf.devPtr() + helper->sendOffsets[13] * packer.totalPackedSize_byte, 0, ovView, packer );
-
-
-    // Finally need to compact the buffers
-    // to get rid of the "self" part
-    // TODO: remove this, own buffer should be last (performance penalty only, correctness is there)
-    
-    int copySize = (helper->sendOffsets[27]-helper->sendOffsets[14]) * helper->datumSize;
-    temp.resize_anew(copySize);
-    
-    CUDA_Check( cudaMemcpyAsync( temp.devPtr(),
-                                 helper->sendBuf.devPtr() + helper->sendOffsets[14]*helper->datumSize,
-                                 copySize, cudaMemcpyDeviceToDevice, stream ) );
-    
-    CUDA_Check( cudaMemcpyAsync( helper->sendBuf.devPtr() + helper->sendOffsets[13]*helper->datumSize,
-                                 temp.devPtr(),
-                                 copySize, cudaMemcpyDeviceToDevice, stream ) );
-                                 
-    helper->sendSizes[13] = 0;
-    helper->makeSendOffsets();
+            helper->sendBuf.devPtr() + helper->sendOffsets[bulkId] * packer.totalPackedSize_byte, 0, ovView, packer );
+                                     
+    helper->sendSizes[bulkId] = 0;
+    helper->computeSendOffsets();
     helper->resizeSendBuf();
-
-    // simple workaround when # of remaining >= # of leaving
-//    if (helper->sendSizes[13] >= helper->sendOffsets[27]-helper->sendOffsets[14])
-//    {
-//        CUDA_Check( cudaMemcpyAsync( helper->sendBuf.devPtr() + helper->sendOffsets[13]*helper->datumSize,
-//                                     helper->sendBuf.devPtr() + helper->sendOffsets[14]*helper->datumSize,
-//                                     (helper->sendOffsets[27]-helper->sendOffsets[14]) * helper->datumSize,
-//                                     cudaMemcpyDeviceToDevice, stream ) );
-//
-//        helper->sendSizes[13] = 0;
-//        helper->makeSendOffsets();
-//        helper->resizeSendBuf();
-//    }
 }
 
 void ObjectRedistributor::combineAndUploadData(int id, cudaStream_t stream)
 {
     auto ov = objects[id];
-    auto helper = helpers[id];
+    auto helper = helpers[id].get();
 
     int oldNObjs = ov->local()->nObjects;
     int objSize = ov->objSize;

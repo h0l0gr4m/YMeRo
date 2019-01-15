@@ -7,14 +7,14 @@
  */
 class BounceFromRigidEllipsoid : public Bouncer
 {
-protected:
-    void exec(ParticleVector* pv, CellList* cl, float dt, bool local, cudaStream_t stream) override;
-
 public:
 
-    BounceFromRigidEllipsoid(std::string name);
+    BounceFromRigidEllipsoid(const YmrState *state, std::string name);
+    ~BounceFromRigidEllipsoid();
 
-    void setup(ObjectVector* ov) override;
+    void setup(ObjectVector *ov) override;
 
-    ~BounceFromRigidEllipsoid() = default;
+protected:
+
+    void exec(ParticleVector *pv, CellList *cl, bool local, cudaStream_t stream) override;
 };

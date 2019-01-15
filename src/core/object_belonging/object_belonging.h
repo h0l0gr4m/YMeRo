@@ -13,7 +13,9 @@ class ObjectBelongingChecker_Common : ObjectBelongingChecker
 public:
     std::string name;
 
-    ObjectBelongingChecker_Common(std::string name) : ObjectBelongingChecker(name) { }
+    ObjectBelongingChecker_Common(const YmrState *state, std::string name);
+
+    ~ObjectBelongingChecker_Common() override;
 
     /**
      * Particle with tags == BelongingTags::Outside  will be copied to pvOut

@@ -3,6 +3,11 @@ class BelongingChecker:
         Base class for checking if particles belong to objects
     
     """
+    def __init__():
+        r"""Initialize self.  See help(type(self)) for accurate signature.
+        """
+        pass
+
 class Ellipsoid(BelongingChecker):
     r"""
         This checker will use the analytical representation of the ellipsoid to detect *inside*-*outside* status.

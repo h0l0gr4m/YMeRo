@@ -61,13 +61,11 @@ static void copyToPinnedBuffer(const PyTypes::VectorOfFloat3& in, PinnedBuffer<f
     out.uploadToDevice(stream);    
 }
 
-void RigidIC::exec(const MPI_Comm& comm, ParticleVector* pv, DomainInfo domain, cudaStream_t stream)
+void RigidIC::exec(const MPI_Comm& comm, ParticleVector* pv, cudaStream_t stream)
 {
     auto ov = dynamic_cast<RigidObjectVector*>(pv);
     if (ov == nullptr)
         die("Can only generate rigid object vector");
-
-    pv->domain = domain;
 
     copyToPinnedBuffer(coords, ov->initialPositions, stream);
     if (ov->objSize != ov->initialPositions.size())
@@ -90,9 +88,9 @@ void RigidIC::exec(const MPI_Comm& comm, ParticleVector* pv, DomainInfo domain, 
         
         if (i < comVelocities.size()) motion.vel = {comVelocities[i][0], comVelocities[i][1], comVelocities[i][2]};
 
-        if (ov->domain.inSubDomain(motion.r))
+        if (ov->state->domain.inSubDomain(motion.r))
         {
-            motion.r = make_rigidReal3( ov->domain.global2local(make_float3(motion.r)) );
+            motion.r = make_rigidReal3( ov->state->domain.global2local(make_float3(motion.r)) );
             motions.resize(nObjs + 1);
             motions[nObjs] = motion;
             nObjs++;
@@ -130,7 +128,8 @@ void RigidIC::exec(const MPI_Comm& comm, ParticleVector* pv, DomainInfo domain, 
 
     // Do the initial rotation    
     ov->local()->forces.clear(stream);
-    IntegratorVVRigid integrator("dummy", 0.0f);
-    integrator.stage2(pv, 0, stream);
+    YmrState state(ov->state->domain, /* dt */ 0.f);
+    IntegratorVVRigid integrator(&state, "__dummy__");
+    integrator.stage2(pv, stream);
 }
 

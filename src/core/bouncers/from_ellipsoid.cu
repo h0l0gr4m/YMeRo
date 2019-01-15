@@ -21,8 +21,11 @@
  * Create the bouncer
  * @param name unique bouncer name
  */
-BounceFromRigidEllipsoid::BounceFromRigidEllipsoid(std::string name) : Bouncer(name)
-{    }
+BounceFromRigidEllipsoid::BounceFromRigidEllipsoid(const YmrState *state, std::string name) :
+    Bouncer(state, name)
+{}
+
+BounceFromRigidEllipsoid::~BounceFromRigidEllipsoid() = default;
 
 /**
  * @param ov will need an 'old_motions' channel with the rigid motion
@@ -32,14 +35,15 @@ void BounceFromRigidEllipsoid::setup(ObjectVector* ov)
 {
     this->ov = ov;
 
-    ov->requireDataPerObject<RigidMotion> ("old_motions", true, sizeof(RigidReal));
+    ov->requireDataPerObject<RigidMotion> ("old_motions", ExtraDataManager::CommunicationMode::NeedExchange,
+                                           ExtraDataManager::PersistenceMode::None, sizeof(RigidReal));
 }
 
 /**
  * Calls ObjectVector::findExtentAndCOM and then calls
  * bounceEllipsoid() function
  */
-void BounceFromRigidEllipsoid::exec(ParticleVector* pv, CellList* cl, float dt, bool local, cudaStream_t stream)
+void BounceFromRigidEllipsoid::exec(ParticleVector *pv, CellList *cl, bool local, cudaStream_t stream)
 {
     auto reov = dynamic_cast<RigidEllipsoidObjectVector*>(ov);
     if (reov == nullptr)
@@ -67,7 +71,7 @@ void BounceFromRigidEllipsoid::exec(ParticleVector* pv, CellList* cl, float dt, 
     SAFE_KERNEL_LAUNCH(
             bounceEllipsoid,
             ovView.nObjects, nthreads, 2*nthreads*sizeof(int), stream,
-            ovView, pvView, cl->cellInfo(), dt );
+            ovView, pvView, cl->cellInfo(), state->dt );
 }
 
 

@@ -12,11 +12,12 @@ args = parser.parse_args()
 
 ranks  = args.ranks
 domain = (16, 16, 16)
+dt = 0.01
 
 if args.restart:
-    u = ymr.ymero(ranks, domain, debug_level=8, log_filename='log', checkpoint_every=0)
+    u = ymr.ymero(ranks, domain, dt, debug_level=3, log_filename='log', checkpoint_every=0)
 else:
-    u = ymr.ymero(ranks, domain, debug_level=8, log_filename='log', checkpoint_every=5)
+    u = ymr.ymero(ranks, domain, dt, debug_level=3, log_filename='log', checkpoint_every=5)
 
     
 mesh = trimesh.creation.icosphere(subdivisions=1, radius = 0.1)
@@ -55,12 +56,12 @@ u.run(7)
 # rm -rf restart stats stats.rigid*txt
 # ymr.run --runargs "-n 1" ./rigidVector.py --ranks 1 1 1           > /dev/null
 # ymr.run --runargs "-n 2" ./rigidVector.py --ranks 1 1 1 --restart > /dev/null
-# cat stats/pv.txt | sort > stats.rigid.out.txt
+# cat stats/pv.txt | LC_ALL=en_US.utf8 sort > stats.rigid.out.txt
 
 # TEST: restart.rigidVector.mpi
 # cd restart
 # rm -rf restart stats stats.rigid*txt
 # ymr.run --runargs "-n 2" ./rigidVector.py --ranks 1 1 2           > /dev/null
 # ymr.run --runargs "-n 4" ./rigidVector.py --ranks 1 1 2 --restart > /dev/null
-# cat stats/pv.txt | sort > stats.rigid.out.txt
+# cat stats/pv.txt | LC_ALL=en_US.utf8 sort > stats.rigid.out.txt
 

@@ -10,6 +10,11 @@
 
 #include <core/rigid_kernels/integration.h>
 
+IntegratorVVRigid::IntegratorVVRigid(const YmrState *state, std::string name) :
+    Integrator(state, name)
+{}
+
+IntegratorVVRigid::~IntegratorVVRigid() = default;
 
 /**
  * Can only be applied to RigidObjectVector and requires it to have
@@ -21,13 +26,13 @@ void IntegratorVVRigid::setPrerequisites(ParticleVector* pv)
     if (ov == nullptr)
         die("Rigid integration only works with rigid objects, can't work with %s", pv->name.c_str());
 
-    ov->requireDataPerObject<RigidMotion>("old_motions", false);
+    ov->requireDataPerObject<RigidMotion>("old_motions", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     warn("Only objects with diagonal inertia tensors are supported now for rigid integration");
 }
 
 
 // FIXME: split VV into two stages
-void IntegratorVVRigid::stage1(ParticleVector* pv, float t, cudaStream_t stream)
+void IntegratorVVRigid::stage1(ParticleVector *pv, cudaStream_t stream)
 {}
 
 
@@ -43,8 +48,9 @@ void IntegratorVVRigid::stage1(ParticleVector* pv, float t, cudaStream_t stream)
  *   object.
  * - Clear RigidMotion::force and RigidMotion::torque for each object.
  */
-void IntegratorVVRigid::stage2(ParticleVector* pv, float t, cudaStream_t stream)
+void IntegratorVVRigid::stage2(ParticleVector *pv, cudaStream_t stream)
 {
+    float t = state->currentTime;
     auto ov = dynamic_cast<RigidObjectVector*> (pv);
 
     debug("Integrating %d rigid objects %s (total %d particles), timestep is %f",

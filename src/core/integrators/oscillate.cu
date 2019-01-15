@@ -11,19 +11,23 @@
  * @param vel Velocity magnitude
  * @param period Sine wave period
  */
-IntegratorOscillate::IntegratorOscillate(std::string name, float dt, float3 vel, float period) :
-    Integrator(name, dt),
+IntegratorOscillate::IntegratorOscillate(const YmrState *state, std::string name, float3 vel, float period) :
+    Integrator(state, name),
     vel(vel), period(period)
 {
     if (period <= 0)
         die("Oscillating period should be strictly positive");
 }
 
+IntegratorOscillate::~IntegratorOscillate() = default;
+
 /**
  * Oscillate with cos wave in time, regardless force
  */
-void IntegratorOscillate::stage2(ParticleVector* pv, float t, cudaStream_t stream)
+void IntegratorOscillate::stage2(ParticleVector *pv, cudaStream_t stream)
 {
+    float t = state->currentTime;
+    
     const auto _vel = vel;
     float cosOmega = cos(2*M_PI * t / period);
 

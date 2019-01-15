@@ -1,6 +1,6 @@
-#include <extern/pybind11/include/pybind11/stl.h>
-#include <extern/pybind11/include/pybind11/numpy.h>
-#include <extern/pybind11/include/pybind11/functional.h>
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+#include <pybind11/functional.h>
 
 #include <plugins/factory.h>
 #include <core/xdmf/channel.h>
@@ -69,8 +69,8 @@ void exportPlugins(py::module& m)
                 resolution.push_back(ch.nComponents());
             
                 pybind11::dtype dt;
-                if (ch.datatype == XDMF::Channel::Datatype::Float) dt = pybind11::dtype::of<float>();
-                if (ch.datatype == XDMF::Channel::Datatype::Int)   dt = pybind11::dtype::of<int>();
+                if (ch.numberType == XDMF::Channel::NumberType::Float) dt = pybind11::dtype::of<float>();
+                if (ch.numberType == XDMF::Channel::NumberType::Int)   dt = pybind11::dtype::of<int>();
             
                 return py::array(dt, resolution, (float*)ch.data, py::cast(dumper));
             });
@@ -223,6 +223,17 @@ void exportPlugins(py::module& m)
         `keepVelocity = False`, in which case it sets the velocity to a term drawn from a Maxwell distribution.
     )");
 
+    py::handlers_class<VirialPressurePlugin>(m, "VirialPressure", pysim, R"(
+        This plugin compute the virial pressure from a given :any:`ParticleVector`.
+        Note that the stress computation must be enabled with the corresponding stressName.
+        This returns the total internal virial part only (no temperature term).
+        Note that the volume is not devided in the result, the user is responsible to properly scale the output.
+    )");
+
+    py::handlers_class<VirialPressureDumper>(m, "VirialPressureDumper", pypost, R"(
+        Postprocess side plugin of :any:`VirialPressure`.
+        Responsible for performing the I/O.
+    )");
     
     py::handlers_class<WallRepulsionPlugin>(m, "WallRepulsion", pysim, R"(
         This plugin will add force on all the particles that are nearby a specified wall. The motivation of this plugin is as follows.
@@ -259,7 +270,7 @@ void exportPlugins(py::module& m)
     
     
     m.def("__createAddForce", &PluginFactory::createAddForcePlugin,
-         "compute_task"_a, "name"_a, "pv"_a, "force"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "force"_a, R"(
         Create :any:`AddForce` plugin
         
         Args:
@@ -269,7 +280,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createAddTorque", &PluginFactory::createAddTorquePlugin, 
-          "compute_task"_a, "name"_a, "ov"_a, "torque"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "ov"_a, "torque"_a, R"(
         Create :any:`AddTorque` plugin
         
         Args:
@@ -279,7 +290,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createDumpAverage", &PluginFactory::createDumpAveragePlugin, 
-          "compute_task"_a, "name"_a, "pvs"_a, "sample_every"_a, "dump_every"_a,
+          "compute_task"_a, "state"_a, "name"_a, "pvs"_a, "sample_every"_a, "dump_every"_a,
           "bin_size"_a = PyTypes::float3{1.0, 1.0, 1.0}, "channels"_a, "path"_a = "xdmf/", R"(
         Create :any:`Average3D` plugin
         
@@ -313,7 +324,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createDumpAverageRelative", &PluginFactory::createDumpAverageRelativePlugin, 
-          "compute_task"_a, "name"_a, "pvs"_a,
+          "compute_task"_a, "state"_a, "name"_a, "pvs"_a,
           "relative_to_ov"_a, "relative_to_id"_a,
           "sample_every"_a, "dump_every"_a,
           "bin_size"_a = PyTypes::float3{1.0, 1.0, 1.0}, "channels"_a, "path"_a = "xdmf/",
@@ -329,7 +340,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createDumpMesh", &PluginFactory::createDumpMeshPlugin, 
-          "compute_task"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, R"(
         Create :any:`MeshPlugin` plugin
         
         Args:
@@ -340,7 +351,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createDumpObjectStats", &PluginFactory::createDumpObjPosition, 
-          "compute_task"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, R"(
         Create :any:`ObjPositions` plugin
         
         Args:
@@ -351,7 +362,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createDumpParticles", &PluginFactory::createDumpParticlesPlugin, 
-          "compute_task"_a, "name"_a, "pv"_a, "dump_every"_a,
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "dump_every"_a,
           "channels"_a, "path"_a, R"(
         Create :any:`ParticleSenderPlugin` plugin
         
@@ -362,7 +373,7 @@ void exportPlugins(py::module& m)
             path: Path and filename prefix for the dumps. For every dump two files will be created: <path>_NNNNN.xmf and <path>_NNNNN.h5
             channels: list of pairs name - type.
                 Name is the channel (per particle) name.
-                The "velocity" channel is always activated by default.
+                The "velocity" and "id" channels are always activated.
                 Type is to provide the type of quantity to extract from the channel.                                            
                 Available types are:                                                                             
                                                                                                                 
@@ -373,7 +384,7 @@ void exportPlugins(py::module& m)
     )");
     
     m.def("__createDumpParticlesWithMesh", &PluginFactory::createDumpParticlesWithMeshPlugin, 
-          "compute_task"_a, "name"_a, "ov"_a, "dump_every"_a,
+          "compute_task"_a, "state"_a, "name"_a, "ov"_a, "dump_every"_a,
           "channels"_a, "path"_a, R"(
         Create :any:`ParticleWithMeshSenderPlugin` plugin
         
@@ -384,7 +395,7 @@ void exportPlugins(py::module& m)
             path: Path and filename prefix for the dumps. For every dump two files will be created: <path>_NNNNN.xmf and <path>_NNNNN.h5
             channels: list of pairs name - type.
                 Name is the channel (per particle) name.
-                The "velocity" channel is always activated by default.
+                The "velocity" and "id" channels are always activated.
                 Type is to provide the type of quantity to extract from the channel.                                            
                 Available types are:                                                                             
                                                                                                                 
@@ -395,7 +406,7 @@ void exportPlugins(py::module& m)
     )");
     
     m.def("__createDumpXYZ", &PluginFactory::createDumpXYZPlugin, 
-          "compute_task"_a, "name"_a, "pv"_a, "dump_every"_a, "path"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "dump_every"_a, "path"_a, R"(
         Create :any:`XYZPlugin` plugin
         
         Args:
@@ -406,7 +417,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createExchangePVSFluxPlane", &PluginFactory::createExchangePVSFluxPlanePlugin,
-          "compute_task"_a, "name"_a, "pv1"_a, "pv2"_a, "plane"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv1"_a, "pv2"_a, "plane"_a, R"(
         Create :any:`ExchangePVSFluxPlane` plugin
         
         Args:
@@ -417,7 +428,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createForceSaver", &PluginFactory::createForceSaverPlugin, 
-          "compute_task"_a, "name"_a, "pv"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, R"(
         Create :any:`ForceSaver` plugin
         
         Args:
@@ -426,7 +437,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createImposeProfile", &PluginFactory::createImposeProfilePlugin, 
-          "compute_task"_a, "name"_a, "pv"_a, "low"_a, "high"_a, "velocity"_a, "kbt"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "low"_a, "high"_a, "velocity"_a, "kbt"_a, R"(
         Create :any:`ImposeProfile` plugin
         
         Args:
@@ -439,7 +450,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createImposeVelocity", &PluginFactory::createImposeVelocityPlugin,
-        "compute_task"_a, "name"_a, "pvs"_a, "every"_a, "low"_a, "high"_a, "velocity"_a, R"(
+        "compute_task"_a, "state"_a, "name"_a, "pvs"_a, "every"_a, "low"_a, "high"_a, "velocity"_a, R"(
         Create :any:`ImposeVelocity` plugin
         
         Args:
@@ -452,7 +463,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createMagneticOrientation", &PluginFactory::createMagneticOrientationPlugin,
-          "compute_task"_a, "name"_a, "rov"_a, "moment"_a, "magneticFunction"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "rov"_a, "moment"_a, "magneticFunction"_a, R"(
         Create :any:`MagneticOrientation` plugin
         
         Args:
@@ -463,7 +474,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createMembraneExtraForce", &PluginFactory::createMembraneExtraForcePlugin,
-          "compute_task"_a, "name"_a, "pv"_a, "forces"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "forces"_a, R"(
         Create :any:`MembraneExtraForce` plugin
         
         Args:
@@ -473,7 +484,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createPinObject", &PluginFactory::createPinObjPlugin, 
-          "compute_task"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, "velocity"_a, "angular_velocity"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, "velocity"_a, "angular_velocity"_a, R"(
         Create :any:`PinObject` plugin
         
         Args:
@@ -488,7 +499,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createStats", &PluginFactory::createStatsPlugin,
-          "compute_task"_a, "name"_a, "filename"_a="", "every"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "filename"_a="", "every"_a, R"(
         Create :any:`SimulationStats` plugin
         
         Args:
@@ -498,7 +509,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createTemperaturize", &PluginFactory::createTemperaturizePlugin,
-          "compute_task"_a, "name"_a, "pv"_a, "kbt"_a, "keepVelocity"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "kbt"_a, "keepVelocity"_a, R"(
         Create :any:`Temperaturize` plugin
 
         Args:
@@ -509,7 +520,7 @@ void exportPlugins(py::module& m)
     )");
 
     m.def("__createVelocityControl", &PluginFactory::createSimulationVelocityControlPlugin,
-          "compute_task"_a, "name"_a, "filename"_a, "pvs"_a, "low"_a, "high"_a,
+          "compute_task"_a, "state"_a, "name"_a, "filename"_a, "pvs"_a, "low"_a, "high"_a,
           "sample_every"_a, "tune_every"_a, "dump_every"_a, "target_vel"_a, "Kp"_a, "Ki"_a, "Kd"_a, R"(
         Create :any:`VelocityControl` plugin
         
@@ -525,8 +536,20 @@ void exportPlugins(py::module& m)
             Kp, Ki, Kd: PID controller coefficients
     )");
 
+    m.def("__createVirialPressurePlugin", &PluginFactory::createVirialPressurePlugin,
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "stress_mame"_a, "dump_every"_a, "path"_a, R"(
+        Create :any:`VirialPressure` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: concerned :class:`ParticleVector`
+            stress_name: the extraData entry name of the stress per particle
+            dump_every: report total pressure every this many time-steps
+            path: the folder name in which the file will be dumped
+    )");
+
     m.def("__createWallRepulsion", &PluginFactory::createWallRepulsionPlugin, 
-          "compute_task"_a, "name"_a, "pv"_a, "wall"_a, "C"_a, "h"_a, "max_force"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "wall"_a, "C"_a, "h"_a, "max_force"_a, R"(
         Create :any:`WallRepulsion` plugin
         
         Args:

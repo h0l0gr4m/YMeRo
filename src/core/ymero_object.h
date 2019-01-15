@@ -3,7 +3,7 @@
 #include <string>
 #include <mpi.h>
 
-class Simulation;
+#include "ymero_state.h"
 
 /**
  * Base class for all the objects of YMeRo
@@ -24,17 +24,14 @@ public:
 
 /**
  * Base class for the objects of YMeRo simulation task
- * Additionally stores pointer to the managing Simulation
- * Since the objects may be used within different Simulations,
- * need to be able to change the pointer accordingly.
+ * may additionally store global quantities in the future
  */
 class YmrSimulationObject : public YmrObject
 {
 public:
-    YmrSimulationObject(std::string name) : YmrObject(name) {};
-    
-    void setSimulation(Simulation* simulation) { this->simulation = simulation; }
-    
-protected:
-    Simulation* simulation;
+    YmrSimulationObject(const YmrState *state, std::string name) :
+        YmrObject(name), state(state)
+    {}
+
+    const YmrState *state;
 };

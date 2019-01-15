@@ -1,11 +1,12 @@
 #include <mpi.h>
 
-#include "core/utils/folders.h"
-#include "core/xdmf/xdmf.h"
+#include <core/xdmf/typeMap.h>
+#include <core/utils/folders.h>
+#include <core/xdmf/xdmf.h>
+
 #include "particle_vector.h"
 #include "restart_helpers.h"
 
-// Local coordinate system; (0,0,0) is center of the local domain
 LocalParticleVector::LocalParticleVector(ParticleVector* pv, int n) : pv(pv)
 {
     resize_anew(n);
@@ -14,10 +15,6 @@ LocalParticleVector::LocalParticleVector(ParticleVector* pv, int n) : pv(pv)
 void LocalParticleVector::resize(const int n, cudaStream_t stream)
 {
     if (n < 0) die("Tried to resize PV to %d < 0 particles", n);
-    
-    //debug4("Resizing PV '%s' (%s) from %d particles to %d particles",
-    //        pv->name.c_str(), this == pv->local() ? "local" : "halo",
-    //        np, n);
     
     coosvels.        resize(n, stream);
     forces.          resize(n, stream);
@@ -44,12 +41,11 @@ LocalParticleVector::~LocalParticleVector() = default;
 // Particle Vector
 //============================================================================
 
-ParticleVector::ParticleVector(std::string name, float mass, int n) :
-    ParticleVector(
-                   name, mass,
+ParticleVector::ParticleVector(const YmrState *state, std::string name, float mass, int n) :
+    ParticleVector(state, name, mass,
                    new LocalParticleVector(this, n),
                    new LocalParticleVector(this, 0) )
-{ }
+{}
 
 
 std::vector<int> ParticleVector::getIndices_vector()
@@ -72,7 +68,7 @@ PyTypes::VectorOfFloat3 ParticleVector::getCoordinates_vector()
     PyTypes::VectorOfFloat3 res(coosvels.size());
     for (int i = 0; i < coosvels.size(); i++)
     {
-        float3 r = domain.local2global(coosvels[i].r);
+        float3 r = state->domain.local2global(coosvels[i].r);
         res[i] = { r.x, r.y, r.z };
     }
     
@@ -159,7 +155,7 @@ void ParticleVector::setCoordinates_vector(PyTypes::VectorOfFloat3& coordinates)
     for (int i = 0; i < coordinates.size(); i++)
     {
         auto& r = coordinates[i];
-        coosvels[i].r = domain.global2local( float3{ r[0], r[1], r[2] } );
+        coosvels[i].r = state->domain.global2local( float3{ r[0], r[1], r[2] } );
     }
     
     coosvels.uploadToDevice(0);
@@ -209,11 +205,14 @@ ParticleVector::~ParticleVector()
     
 }
 
-ParticleVector::ParticleVector( std::string name, float mass, LocalParticleVector *local, LocalParticleVector *halo ) :
-    YmrSimulationObject(name), mass(mass), _local(local), _halo(halo)
+ParticleVector::ParticleVector(const YmrState *state, std::string name,  float mass, LocalParticleVector *local, LocalParticleVector *halo) :
+    YmrSimulationObject(state, name),
+    mass(mass),
+    _local(local),
+    _halo(halo)
 {
     // usually old positions and velocities don't need to exchanged
-    requireDataPerParticle<Particle> ("old_particles", false);
+    requireDataPerParticle<Particle> ("old_particles", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 }
 
 static void splitPV(DomainInfo domain, LocalParticleVector *local,
@@ -235,6 +234,47 @@ static void splitPV(DomainInfo domain, LocalParticleVector *local,
     }
 }
 
+void ParticleVector::_extractPersistentExtraData(ExtraDataManager& extraData, std::vector<XDMF::Channel>& channels,
+                                                 const std::set<std::string>& blackList)
+{
+    for (auto& namedChannelDesc : extraData.getSortedChannels())
+    {        
+        auto channelName = namedChannelDesc.first;
+        auto channelDesc = namedChannelDesc.second;        
+        
+        if (channelDesc->persistence != ExtraDataManager::PersistenceMode::Persistent)
+            continue;
+
+        if (blackList.find(channelName) != blackList.end())
+            continue;
+
+        switch(channelDesc->dataType) {
+
+#define SWITCH_ENTRY(ctype)                                             \
+            case DataType::TOKENIZE(ctype):                             \
+            {                                                           \
+                auto buffer   = extraData.getData<ctype>(channelName);  \
+                buffer->downloadFromDevice(0, ContainersSynch::Synch);  \
+                auto type       = XDMF::getDataForm<ctype>();           \
+                auto numbertype = XDMF::getNumberType<ctype>();         \
+                auto datatype   = typeTokenize<ctype>();                \
+                channels.push_back(XDMF::Channel(channelName, buffer->data(), type, numbertype, datatype )); \
+            }                                                           \
+            break;
+
+            TYPE_TABLE(SWITCH_ENTRY);
+
+#undef SWITCH_ENTRY
+        };
+    }
+}
+
+void ParticleVector::_extractPersistentExtraParticleData(std::vector<XDMF::Channel>& channels, const std::set<std::string>& blackList)
+{
+    auto& extraData = local()->extraPerParticle;
+    _extractPersistentExtraData(extraData, channels, blackList);
+}
+
 void ParticleVector::_checkpointParticleData(MPI_Comm comm, std::string path)
 {
     CUDA_Check( cudaDeviceSynchronize() );
@@ -247,13 +287,17 @@ void ParticleVector::_checkpointParticleData(MPI_Comm comm, std::string path)
     auto positions = std::make_shared<std::vector<float>>();
     std::vector<float> velocities;
     std::vector<int> ids;
-    splitPV(domain, local(), *positions, velocities, ids);
+    splitPV(state->domain, local(), *positions, velocities, ids);
 
     XDMF::VertexGrid grid(positions, comm);
 
     std::vector<XDMF::Channel> channels;
-    channels.push_back(XDMF::Channel("velocity", velocities.data(), XDMF::Channel::Type::Vector));
-    channels.push_back(XDMF::Channel( "ids", ids.data(), XDMF::Channel::Type::Scalar, XDMF::Channel::Datatype::Int ));
+    channels.push_back(XDMF::Channel("velocity", velocities.data(),
+                                     XDMF::Channel::DataForm::Vector, XDMF::Channel::NumberType::Float, typeTokenize<float>() ));
+    channels.push_back(XDMF::Channel("ids", ids.data(),
+                                     XDMF::Channel::DataForm::Scalar, XDMF::Channel::NumberType::Int, typeTokenize<int>() ));
+
+    _extractPersistentExtraParticleData(channels);
     
     XDMF::write(filename, &grid, channels, comm);
 
@@ -271,7 +315,7 @@ void ParticleVector::_getRestartExchangeMap(MPI_Comm comm, const std::vector<Par
     
     for (int i = 0; i < parts.size(); ++i) {
         const auto& p = parts[i];
-        int3 procId3 = make_int3(floorf(p.r / domain.localSize));
+        int3 procId3 = make_int3(floorf(p.r / state->domain.localSize));
 
         if (procId3.x >= dims[0] || procId3.y >= dims[1] || procId3.z >= dims[2]) {
             map[i] = -1;
@@ -298,7 +342,7 @@ std::vector<int> ParticleVector::_restartParticleData(MPI_Comm comm, std::string
     
     _getRestartExchangeMap(comm, parts, map);
     restart_helpers::exchangeData(comm, map, parts, 1);    
-    restart_helpers::copyShiftCoordinates(domain, parts, local());
+    restart_helpers::copyShiftCoordinates(state->domain, parts, local());
 
     local()->coosvels.uploadToDevice(0);
     CUDA_Check( cudaDeviceSynchronize() );

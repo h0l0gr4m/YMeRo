@@ -201,6 +201,11 @@ class ObjectVector(ParticleVector):
         Basic Object Vector
     
     """
+    def __init__():
+        r"""Initialize self.  See help(type(self)) for accurate signature.
+        """
+        pass
+
     def getCoordinates():
         r"""getCoordinates(self: ParticleVectors.ParticleVector) -> List[List[float[3]]]
 

@@ -12,16 +12,17 @@ template<class InsideWallChecker>
 class SimpleStationaryWall : public SDF_basedWall
 {
 public:
-    SimpleStationaryWall(std::string name, InsideWallChecker&& insideWallChecker) :
-        SDF_basedWall(name), insideWallChecker(std::move(insideWallChecker))
-    {    }
+    SimpleStationaryWall(std::string name, const YmrState *state, InsideWallChecker&& insideWallChecker) :
+        SDF_basedWall(state, name),
+        insideWallChecker(std::move(insideWallChecker))
+    {}
 
     void setup(MPI_Comm& comm, float t, DomainInfo domain) override;
     void attachFrozen(ParticleVector* pv) override;
 
     void removeInner(ParticleVector* pv) override;
     void attach(ParticleVector* pv, CellList* cl) override;
-    void bounce(float t, float dt, cudaStream_t stream) override;
+    void bounce(cudaStream_t stream) override;
     void check(cudaStream_t stream) override;
 
     void sdfPerParticle(LocalParticleVector* pv,

@@ -5,23 +5,24 @@
 #include "pairwise_interactions/lj_object_aware.h"
 
 
-InteractionLJ::InteractionLJ(std::string name, float rc, float epsilon, float sigma, float maxForce, bool objectAware, bool allocate) :
-    Interaction(name, rc), objectAware(objectAware)
+InteractionLJ::InteractionLJ(const YmrState *state, std::string name, float rc, float epsilon, float sigma, float maxForce, bool objectAware, bool allocate) :
+    Interaction(state, name, rc),
+    objectAware(objectAware)
 {
     if (!allocate) return;
 
     if (objectAware) {
         Pairwise_LJObjectAware lj(rc, epsilon, sigma, maxForce);
-        impl = std::make_unique<InteractionPair<Pairwise_LJObjectAware>> (name, rc, lj);
+        impl = std::make_unique<InteractionPair<Pairwise_LJObjectAware>> (state, name, rc, lj);
     }
     else {
         Pairwise_LJ lj(rc, epsilon, sigma, maxForce);
-        impl = std::make_unique<InteractionPair<Pairwise_LJ>> (name, rc, lj);
+        impl = std::make_unique<InteractionPair<Pairwise_LJ>> (state, name, rc, lj);
     }
 }
 
-InteractionLJ::InteractionLJ(std::string name, float rc, float epsilon, float sigma, float maxForce, bool objectAware) :
-    InteractionLJ(name, rc, epsilon, sigma, maxForce, objectAware, true)
+InteractionLJ::InteractionLJ(const YmrState *state, std::string name, float rc, float epsilon, float sigma, float maxForce, bool objectAware) :
+    InteractionLJ(state, name, rc, epsilon, sigma, maxForce, objectAware, true)
 {}
 
 InteractionLJ::~InteractionLJ() = default;
@@ -31,18 +32,23 @@ void InteractionLJ::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2)
     impl->setPrerequisites(pv1, pv2);
 }
 
-void InteractionLJ::regular(ParticleVector* pv1, ParticleVector* pv2,
-                             CellList* cl1, CellList* cl2,
-                             const float t, cudaStream_t stream)
+void InteractionLJ::initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream)
 {
-    impl->regular(pv1, pv2, cl1, cl2, t, stream);
+    impl->initStep(pv1, pv2, stream);
 }
 
-void InteractionLJ::halo   (ParticleVector* pv1, ParticleVector* pv2,
-                             CellList* cl1, CellList* cl2,
-                             const float t, cudaStream_t stream)
+void InteractionLJ::regular(ParticleVector *pv1, ParticleVector *pv2,
+                            CellList *cl1, CellList *cl2,
+                            cudaStream_t stream)
 {
-    impl->halo   (pv1, pv2, cl1, cl2, t, stream);
+    impl->regular(pv1, pv2, cl1, cl2, stream);
+}
+
+void InteractionLJ::halo(ParticleVector *pv1, ParticleVector *pv2,
+                         CellList *cl1, CellList *cl2,
+                         cudaStream_t stream)
+{
+    impl->halo(pv1, pv2, cl1, cl2, stream);
 }
 
 void InteractionLJ::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2, 

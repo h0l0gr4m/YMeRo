@@ -26,7 +26,7 @@ public:
         std::vector<DeviceBuffer<float>> average;
     };
 
-    Average3D(std::string name,
+    Average3D(const YmrState *state, std::string name,
               std::vector<std::string> pvNames,
               std::vector<std::string> channelNames, std::vector<Average3D::ChannelType> channelTypes,
               int sampleEvery, int dumpEvery, float3 binSize);
@@ -54,8 +54,6 @@ protected:
     HostChannelsInfo channelsInfo;
     std::vector<PinnedBuffer<double>> accumulated_average;
     
-    DomainInfo domain;
-
     int getNcomponents(ChannelType type) const;
     void accumulateSampledAndClear(cudaStream_t stream);
     void scaleSampled(cudaStream_t stream);

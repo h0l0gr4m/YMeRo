@@ -17,7 +17,7 @@ axes = (1, 2, 3)
 ranks  = tuple(args.nranks)
 domain = (31, 18, 59)
 
-u = ymr.ymero(ranks, domain, debug_level=3, log_filename='log')
+u = ymr.ymero(ranks, domain, dt, debug_level=3, log_filename='log')
 
 np.random.seed(84)
 com_q = np.random.rand(args.nobjects, 7)
@@ -29,7 +29,7 @@ coords = np.loadtxt(args.coords).tolist()
 
 pvEllipsoid = ymr.ParticleVectors.RigidEllipsoidVector('ellipsoid', mass=1, object_size=len(coords), semi_axes=axes)
 icEllipsoid = ymr.InitialConditions.Rigid(com_q=com_q.tolist(), coords=coords, init_vels=vels.tolist())
-vvEllipsoid = ymr.Integrators.RigidVelocityVerlet("ellvv", dt)
+vvEllipsoid = ymr.Integrators.RigidVelocityVerlet("ellvv")
 
 u.registerParticleVector(pv=pvEllipsoid, ic=icEllipsoid)
 u.registerIntegrator(vvEllipsoid)
@@ -46,7 +46,7 @@ u.run(1000)
 # rm -rf stats freefly.out.txt $f
 # ymr.run --runargs "-n 2"  ./createEllipsoid.py --axes 1.0 2.0 3.0 --density 4 --out $f --niter 1000  > /dev/null
 # ymr.run --runargs "-n 2" ./many_random_flying.py --nranks 1 1 1 --nobjects 55  $f > /dev/null
-# sort -g -k1 -k2 stats/ellipsoid.txt > freefly.out.txt
+# LC_ALL=en_US.utf8 sort -g -k1 -k2 stats/ellipsoid.txt > freefly.out.txt
 
 # nTEST: freefly.manyranks
 # set -eu
@@ -55,4 +55,4 @@ u.run(1000)
 # rm -rf stats freefly.out.txt $f
 # ymr.run --runargs "-n 2"  ./createEllipsoid.py --axes 1.0 2.0 3.0 --density 4 --out $f --niter 1000  > /dev/null
 # ymr.run --runargs "-n 12" ./many_random_flying.py --nranks 1 2 3 --nobjects 123  $f > /dev/null
-# sort -g -k1 -k2 stats/ellipsoid.txt > freefly.out.txt
+# LC_ALL=en_US.utf8 sort -g -k1 -k2 stats/ellipsoid.txt > freefly.out.txt

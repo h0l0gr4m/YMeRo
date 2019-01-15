@@ -9,9 +9,7 @@ class MembraneVector;
 struct MembraneParameters
 {
     float x0, ks, ka, kd, kv, gammaC, gammaT, kbT, mpow, totArea0, totVolume0;
-
     bool fluctuationForces;
-    float dt;
 };
 
 /**
@@ -21,15 +19,15 @@ class InteractionMembrane : public Interaction
 {
 public:
 
-    InteractionMembrane(std::string name, MembraneParameters parameters, bool stressFree, float growUntil);
+    InteractionMembrane(const YmrState *state, std::string name, MembraneParameters parameters, bool stressFree, float growUntil);
     ~InteractionMembrane();
     
     void setPrerequisites(ParticleVector* pv1, ParticleVector* pv2) override;
 
-    void regular(ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, const float t, cudaStream_t stream) override;
-    void halo   (ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, const float t, cudaStream_t stream) override;    
+    void regular(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream) override;
+    void halo   (ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream) override;
 
-protected:
+  protected:
 
     bool stressFree;
     std::function< float(float) > scaleFromTime;

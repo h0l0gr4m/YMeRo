@@ -77,7 +77,7 @@ void ObjectVector::_getRestartExchangeMap(MPI_Comm comm, const std::vector<Parti
 
         com /= objSize;
 
-        int3 procId3 = make_int3(floorf(com / domain.localSize));
+        int3 procId3 = make_int3(floorf(com / state->domain.localSize));
 
         if (procId3.x >= dims[0] || procId3.y >= dims[1] || procId3.z >= dims[2]) {
             map[i] = -1;
@@ -105,7 +105,7 @@ std::vector<int> ObjectVector::_restartParticleData(MPI_Comm comm, std::string p
     
     _getRestartExchangeMap(comm, parts, map);
     restart_helpers::exchangeData(comm, map, parts, objSize);    
-    restart_helpers::copyShiftCoordinates(domain, parts, local());
+    restart_helpers::copyShiftCoordinates(state->domain, parts, local());
 
     local()->coosvels.uploadToDevice(0);
     
@@ -136,6 +136,12 @@ static void splitCom(DomainInfo domain, const PinnedBuffer<LocalObjectVector::CO
     }
 }
 
+void ObjectVector::_extractPersistentExtraObjectData(std::vector<XDMF::Channel>& channels, const std::set<std::string>& blackList)
+{
+    auto& extraData = local()->extraPerObject;
+    _extractPersistentExtraData(extraData, channels, blackList);
+}
+
 void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
 {
     CUDA_Check( cudaDeviceSynchronize() );
@@ -144,20 +150,18 @@ void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     info("Checkpoint for object vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
     auto coms_extents = local()->extraPerObject.getData<LocalObjectVector::COMandExtent>("com_extents");
-    auto ids          = local()->extraPerObject.getData<int>("ids");
 
     coms_extents->downloadFromDevice(0, ContainersSynch::Synch);
-    ids         ->downloadFromDevice(0, ContainersSynch::Synch);
-
     
     auto positions = std::make_shared<std::vector<float>>();
 
-    splitCom(domain, *coms_extents, *positions);
+    splitCom(state->domain, *coms_extents, *positions);
 
     XDMF::VertexGrid grid(positions, comm);
 
     std::vector<XDMF::Channel> channels;
-    channels.push_back(XDMF::Channel( "ids", ids->data(), XDMF::Channel::Type::Scalar, XDMF::Channel::Datatype::Int ));
+
+    _extractPersistentExtraObjectData(channels);
     
     XDMF::write(filename, &grid, channels, comm);
 

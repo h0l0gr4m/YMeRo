@@ -7,10 +7,10 @@
 #include "utils/xyz.h"
 
 
-XYZPlugin::XYZPlugin(std::string name, std::string pvName, int dumpEvery) :
-    SimulationPlugin(name), pvName(pvName),
+XYZPlugin::XYZPlugin(const YmrState *state, std::string name, std::string pvName, int dumpEvery) :
+    SimulationPlugin(state, name), pvName(pvName),
     dumpEvery(dumpEvery)
-{ }
+{}
 
 void XYZPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
 {
@@ -35,7 +35,7 @@ void XYZPlugin::serializeAndSend(cudaStream_t stream)
     debug2("Plugin %s is sending now data", name.c_str());
 
     for (auto& p : downloaded)
-        p.r = simulation->domain.local2global(p.r);
+        p.r = state->domain.local2global(p.r);
 
     waitPrevSend();
     SimpleSerializer::serialize(data, pv->name, downloaded);

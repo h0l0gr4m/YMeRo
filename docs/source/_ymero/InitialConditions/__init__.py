@@ -3,6 +3,11 @@ class InitialConditions:
             Base class for initial conditions
         
     """
+    def __init__():
+        r"""Initialize self.  See help(type(self)) for accurate signature.
+        """
+        pass
+
 class FromArray(InitialConditions):
     r"""
         Set particles according to given position and velocity arrays.
@@ -144,6 +149,45 @@ class Uniform(InitialConditions):
 
             Args:
                 density: target density
+        
+
+        """
+        pass
+
+class UniformFiltered(InitialConditions):
+    r"""
+        The particles will be generated with the desired number density uniformly at random in all the domain and then filtered out by the given filter.
+        These IC may be used with any Particle Vector, but only make sense for regular PV.            
+    
+    """
+    def __init__():
+        r"""__init__(density: float, filter: Callable[[Tuple[float, float, float]], bool]) -> None
+
+
+            Args:
+                density: target density
+                filter: given position, returns True if the particle should be kept 
+        
+
+        """
+        pass
+
+class UniformSphere(InitialConditions):
+    r"""
+        The particles will be generated with the desired number density uniformly at random inside or outside a given sphere.
+        These IC may be used with any Particle Vector, but only make sense for regular PV.
+            
+    
+    """
+    def __init__():
+        r"""__init__(density: float, center: Tuple[float, float, float], radius: float, inside: bool) -> None
+
+
+            Args:
+                density: target density
+                center: center of the sphere
+                radius: radius of the sphere
+                inside: whether the particles should be inside or outside the sphere
         
 
         """

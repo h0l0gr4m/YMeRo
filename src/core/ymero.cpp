@@ -1,38 +1,41 @@
-#include "ymero.h"
-
 #include <mpi.h>
 #include <cuda_runtime.h>
 
-#include <core/logger.h>
-#include <core/simulation.h>
-#include <core/postproc.h>
-#include <plugins/interface.h>
-
-#include <core/utils/make_unique.h>
-#include <core/utils/folders.h>
-#include <core/utils/cuda_common.h>
-#include <cuda_runtime.h>
-
+#include <core/bouncers/interface.h>
+#include <core/initial_conditions/interface.h>
+#include <core/initial_conditions/uniform_ic.h>
 #include <core/integrators/interface.h>
 #include <core/interactions/interface.h>
-#include <core/walls/interface.h>
-#include <core/bouncers/interface.h>
+#include <core/logger.h>
 #include <core/object_belonging/interface.h>
-#include <plugins/interface.h>
-#include <core/initial_conditions/interface.h>
-#include <core/pvs/particle_vector.h>
+#include <core/postproc.h>
 #include <core/pvs/object_vector.h>
-
+#include <core/pvs/particle_vector.h>
+#include <core/simulation.h>
+#include <core/utils/cuda_common.h>
+#include <core/utils/folders.h>
+#include <core/utils/make_unique.h>
+#include <core/version.h>
+#include <core/walls/interface.h>
 #include <core/walls/simple_stationary_wall.h>
 #include <core/walls/wall_helpers.h>
-#include <core/initial_conditions/uniform_ic.h>
+#include <plugins/interface.h>
 
-#include "version.h"
+#include "ymero.h"
 
-void YMeRo::init(int3 nranks3D, float3 globalDomainSize, std::string logFileName, int verbosity,
-                    int checkpointEvery, std::string checkpointFolder, bool gpuAwareMPI)
+static void createCartComm(MPI_Comm comm, int3 nranks3D, MPI_Comm *cartComm)
+{
+    int ranksArr[] = {nranks3D.x, nranks3D.y, nranks3D.z};
+    int periods[] = {1, 1, 1};
+    int reorder = 1;
+    MPI_Check(MPI_Cart_create(comm, 3, ranksArr, periods, reorder, cartComm));
+}
+
+void YMeRo::init(int3 nranks3D, float3 globalDomainSize, float dt, std::string logFileName, int verbosity,
+                 int checkpointEvery, std::string checkpointFolder, bool gpuAwareMPI)
 {
     int nranks;
+    MPI_Comm cartComm;
     
     initLogger(comm, logFileName, verbosity);   
 
@@ -52,8 +55,9 @@ void YMeRo::init(int3 nranks3D, float3 globalDomainSize, std::string logFileName
     if (noPostprocess) {
         warn("No postprocess will be started now, use this mode for debugging. All the joint plugins will be turned off too.");
 
-        sim = std::make_unique<Simulation> (nranks3D, globalDomainSize,
-                                            comm, MPI_COMM_NULL,
+        createCartComm(comm, nranks3D, &cartComm);
+        state = std::make_shared<YmrState> (createDomainInfo(cartComm, globalDomainSize), dt);
+        sim = std::make_unique<Simulation> (cartComm, MPI_COMM_NULL, getState(),
                                             checkpointEvery, checkpointFolder, gpuAwareMPI);
         computeTask = 0;
         return;
@@ -71,8 +75,9 @@ void YMeRo::init(int3 nranks3D, float3 globalDomainSize, std::string logFileName
 
         MPI_Check( MPI_Comm_rank(compComm, &rank) );
 
-        sim = std::make_unique<Simulation> (nranks3D, globalDomainSize,
-                                            compComm, interComm,
+        createCartComm(compComm, nranks3D, &cartComm);
+        state = std::make_shared<YmrState> (createDomainInfo(cartComm, globalDomainSize), dt);
+        sim = std::make_unique<Simulation> (cartComm, interComm, getState(),
                                             checkpointEvery, checkpointFolder, gpuAwareMPI);
     }
     else
@@ -93,36 +98,36 @@ void YMeRo::initLogger(MPI_Comm comm, std::string logFileName, int verbosity)
     else                               logger.init(comm, logFileName+".log", verbosity);
 }
 
-YMeRo::YMeRo(PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize,
-                   std::string logFileName, int verbosity, int checkpointEvery,
-                   std::string checkpointFolder, bool gpuAwareMPI, bool noSplash) :
-                   noSplash(noSplash)
+YMeRo::YMeRo(PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize, float dt,
+             std::string logFileName, int verbosity, int checkpointEvery,
+             std::string checkpointFolder, bool gpuAwareMPI, bool noSplash) :
+    noSplash(noSplash)
 {
     MPI_Init(nullptr, nullptr);
     MPI_Comm_dup(MPI_COMM_WORLD, &comm);
     initializedMpi = true;
 
-    init( make_int3(nranks3D), make_float3(globalDomainSize), logFileName, verbosity, checkpointEvery, checkpointFolder, gpuAwareMPI);
+    init( make_int3(nranks3D), make_float3(globalDomainSize), dt, logFileName, verbosity, checkpointEvery, checkpointFolder, gpuAwareMPI);
 }
 
-YMeRo::YMeRo(long commAdress, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize,
-                   std::string logFileName, int verbosity, int checkpointEvery, 
-                   std::string checkpointFolder, bool gpuAwareMPI, bool noSplash) :
-                   noSplash(noSplash)
+YMeRo::YMeRo(long commAdress, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize, float dt,
+             std::string logFileName, int verbosity, int checkpointEvery, 
+             std::string checkpointFolder, bool gpuAwareMPI, bool noSplash) :
+    noSplash(noSplash)
 {
     // see https://stackoverflow.com/questions/49259704/pybind11-possible-to-use-mpi4py
     MPI_Comm comm = *((MPI_Comm*) commAdress);
     MPI_Comm_dup(comm, &this->comm);
-    init( make_int3(nranks3D), make_float3(globalDomainSize), logFileName, verbosity, checkpointEvery, checkpointFolder, gpuAwareMPI);    
+    init( make_int3(nranks3D), make_float3(globalDomainSize), dt, logFileName, verbosity, checkpointEvery, checkpointFolder, gpuAwareMPI);    
 }
 
-YMeRo::YMeRo(MPI_Comm comm, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize,
-                   std::string logFileName, int verbosity, int checkpointEvery,
-                   std::string checkpointFolder, bool gpuAwareMPI, bool noSplash) :
-                   noSplash(noSplash)
+YMeRo::YMeRo(MPI_Comm comm, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize, float dt,
+             std::string logFileName, int verbosity, int checkpointEvery,
+             std::string checkpointFolder, bool gpuAwareMPI, bool noSplash) :
+    noSplash(noSplash)
 {
     MPI_Comm_dup(comm, &this->comm);
-    init( make_int3(nranks3D), make_float3(globalDomainSize), logFileName, verbosity, checkpointEvery, checkpointFolder, gpuAwareMPI);
+    init( make_int3(nranks3D), make_float3(globalDomainSize), dt, logFileName, verbosity, checkpointEvery, checkpointFolder, gpuAwareMPI);
 }
 
 YMeRo::~YMeRo()
@@ -206,6 +211,21 @@ void YMeRo::setWallBounce(Wall* wall, ParticleVector* pv)
         sim->setWallBounce(wall->name, pv->name);
 }
 
+YmrState* YMeRo::getState()
+{
+    return state.get();
+}
+
+const YmrState* YMeRo::getState() const
+{
+    return state.get();
+}
+
+std::shared_ptr<YmrState> YMeRo::getYmrState()
+{
+    return state;
+}
+
 void YMeRo::dumpWalls2XDMF(std::vector<std::shared_ptr<Wall>> walls, PyTypes::float3 h, std::string filename)
 {
     if (!isComputeTask()) return;
@@ -228,7 +248,7 @@ void YMeRo::dumpWalls2XDMF(std::vector<std::shared_ptr<Wall>> walls, PyTypes::fl
     auto path = parentPath(filename);
     if (path != filename)
         createFoldersCollective(sim->cartComm, path);
-    ::dumpWalls2XDMF(sdfWalls, make_float3(h), sim->domain, filename, sim->cartComm);
+    ::dumpWalls2XDMF(sdfWalls, make_float3(h), state->domain, filename, sim->cartComm);
 }
 
 double YMeRo::computeVolumeInsideWalls(std::vector<std::shared_ptr<Wall>> walls, long nSamplesPerRank)
@@ -250,7 +270,7 @@ double YMeRo::computeVolumeInsideWalls(std::vector<std::shared_ptr<Wall>> walls,
         sim->getWallByNameOrDie(wall->name);
     }
 
-    return volumeInsideWalls(sdfWalls, sim->domain, sim->cartComm, nSamplesPerRank);
+    return volumeInsideWalls(sdfWalls, state->domain, sim->cartComm, nSamplesPerRank);
 }
 
 std::shared_ptr<ParticleVector> YMeRo::makeFrozenWallParticles(std::string pvName,
@@ -284,10 +304,10 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenWallParticles(std::string pvNam
         info("Working with wall '%s'", wall->name.c_str());   
     }
     
-    Simulation wallsim(sim->nranks3D, sim->domain.globalSize, sim->cartComm, MPI_COMM_NULL, false);
+    Simulation wallsim(sim->cartComm, MPI_COMM_NULL, getState(), false);
 
     float mass = 1.0;
-    auto pv = std::make_shared<ParticleVector>(pvName, mass);
+    auto pv = std::make_shared<ParticleVector>(getState(), pvName, mass);
     auto ic = std::make_shared<UniformIC>(density);
     
     wallsim.registerParticleVector(pv, ic, 0);
@@ -313,11 +333,11 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenWallParticles(std::string pvNam
 }
 
 std::shared_ptr<ParticleVector> YMeRo::makeFrozenRigidParticles(std::shared_ptr<ObjectBelongingChecker> checker,
-                                                                   std::shared_ptr<ObjectVector> shape,
-                                                                   std::shared_ptr<InitialConditions> icShape,
-                                                                   std::shared_ptr<Interaction> interaction,
-                                                                   std::shared_ptr<Integrator>   integrator,
-                                                                   float density, int nsteps)
+                                                                std::shared_ptr<ObjectVector> shape,
+                                                                std::shared_ptr<InitialConditions> icShape,
+                                                                std::shared_ptr<Interaction> interaction,
+                                                                std::shared_ptr<Integrator>   integrator,
+                                                                float density, int nsteps)
 {
     if (!isComputeTask()) return nullptr;
 
@@ -328,12 +348,13 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenRigidParticles(std::shared_ptr<
     if (shape->local()->nObjects > 1)
         die("expected no more than one object vector; given %d", shape->local()->nObjects);
     
-    
-    auto pv = std::make_shared<ParticleVector>("outside__" + shape->name, 1.0);
+
+    float mass = 1.0;
+    auto pv = std::make_shared<ParticleVector>(getState(), "outside__" + shape->name, mass);
     auto ic = std::make_shared<UniformIC>(density);
 
     {
-        Simulation eqsim(sim->nranks3D, sim->domain.globalSize, sim->cartComm, MPI_COMM_NULL, false);
+        Simulation eqsim(sim->cartComm, MPI_COMM_NULL, getState(), false);
     
         eqsim.registerParticleVector(pv, ic, 0);
         eqsim.registerInteraction(interaction);
@@ -346,7 +367,7 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenRigidParticles(std::shared_ptr<
         eqsim.run(nsteps);
     }
     
-    Simulation freezesim(sim->nranks3D, sim->domain.globalSize, sim->cartComm, MPI_COMM_NULL, false);
+    Simulation freezesim(sim->cartComm, MPI_COMM_NULL, getState(), false);
 
     freezesim.registerParticleVector(pv, nullptr, 0);
     freezesim.registerParticleVector(shape, icShape, 0);

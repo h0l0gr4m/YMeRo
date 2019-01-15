@@ -20,7 +20,7 @@ public:
         Scalar, Vector, Tensor6
     };
     
-    ParticleSenderPlugin(std::string name, std::string pvName, int dumpEvery,
+    ParticleSenderPlugin(const YmrState *state, std::string name, std::string pvName, int dumpEvery,
                          std::vector<std::string> channelNames,
                          std::vector<ChannelType> channelTypes);
 
@@ -65,6 +65,7 @@ protected:
 
     std::vector<Particle> particles;
     std::vector<float> velocities;
+    std::vector<int> ids;
     std::shared_ptr<std::vector<float>> positions;
 
     std::vector<XDMF::Channel> channels;

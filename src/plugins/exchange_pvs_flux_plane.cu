@@ -50,9 +50,9 @@ __global__ void moveParticles(DomainInfo domain, PVview view1, PVview view2, flo
 }
 
 
-ExchangePVSFluxPlanePlugin::ExchangePVSFluxPlanePlugin(std::string name, std::string pv1Name, std::string pv2Name, float4 plane) :
-    SimulationPlugin(name), pv1Name(pv1Name), pv2Name(pv2Name), plane(plane), numberCrossedParticles(1)
-{ }
+ExchangePVSFluxPlanePlugin::ExchangePVSFluxPlanePlugin(const YmrState *state, std::string name, std::string pv1Name, std::string pv2Name, float4 plane) :
+    SimulationPlugin(state, name), pv1Name(pv1Name), pv2Name(pv2Name), plane(plane), numberCrossedParticles(1)
+{}
 
 
 void ExchangePVSFluxPlanePlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
@@ -65,7 +65,7 @@ void ExchangePVSFluxPlanePlugin::setup(Simulation* simulation, const MPI_Comm& c
 
 void ExchangePVSFluxPlanePlugin::beforeParticleDistribution(cudaStream_t stream)
 {
-    DomainInfo domain = pv1->domain;
+    DomainInfo domain = state->domain;
     PVview view1(pv1, pv1->local());
     PVview view2(pv2, pv2->local());
     const int nthreads = 128;

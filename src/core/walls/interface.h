@@ -15,14 +15,16 @@ class GPUcontainer;
 class Wall : public YmrSimulationObject
 {
 public:
-    Wall(std::string name) : YmrSimulationObject(name) {};
+    Wall(const YmrState *state, std::string name);
+    
+    virtual ~Wall();
 
     virtual void setup(MPI_Comm& comm, float t, DomainInfo domain) = 0;
     virtual void attachFrozen(ParticleVector* pv) = 0;
 
     virtual void removeInner(ParticleVector* pv) = 0;
     virtual void attach(ParticleVector* pv, CellList* cl) = 0;
-    virtual void bounce(float t, float dt, cudaStream_t stream) = 0;
+    virtual void bounce(cudaStream_t stream) = 0;
 
     /**
      * Ask ParticleVectors which the class will be working with to have specific properties
@@ -47,5 +49,5 @@ public:
     virtual void sdfOnGrid(float3 gridH, GPUcontainer* sdfs, cudaStream_t stream) = 0;
 
 
-    ~SDF_basedWall() = default;
+    ~SDF_basedWall();
 };

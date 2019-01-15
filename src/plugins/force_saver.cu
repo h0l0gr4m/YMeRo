@@ -16,8 +16,8 @@ __global__ void copyForces(PVview view, float3 *savedForces)
     savedForces[pid] = f;
 }
 
-ForceSaverPlugin::ForceSaverPlugin(std::string name, std::string pvName) :
-    SimulationPlugin(name), pvName(pvName), pv(nullptr)
+ForceSaverPlugin::ForceSaverPlugin(const YmrState *state, std::string name, std::string pvName) :
+    SimulationPlugin(state, name), pvName(pvName), pv(nullptr)
 {}
 
 void ForceSaverPlugin::beforeIntegration(cudaStream_t stream)
@@ -43,7 +43,7 @@ void ForceSaverPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const
 
     pv = simulation->getPVbyNameOrDie(pvName);
 
-    pv->requireDataPerParticle<float3>(fieldName, false);
+    pv->requireDataPerParticle<float3>(fieldName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 }
 
     

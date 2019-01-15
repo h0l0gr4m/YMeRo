@@ -3,6 +3,11 @@ class Wall:
         Base wall class.
     
     """
+    def __init__():
+        r"""Initialize self.  See help(type(self)) for accurate signature.
+        """
+        pass
+
     def attachFrozenParticles():
         r"""attachFrozenParticles(arg0: ParticleVectors.ParticleVector) -> None
 

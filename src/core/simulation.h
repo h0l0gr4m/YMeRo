@@ -15,6 +15,7 @@
 #include <memory>
 
 // Some forward declarations
+class YmrState;
 class ParticleVector;
 class ObjectVector;
 class CellList;
@@ -38,12 +39,12 @@ public:
     MPI_Comm cartComm;
     MPI_Comm interComm;
 
-    DomainInfo domain;
+    YmrState *state;
 
-    Simulation(int3 nranks3D, float3 globalDomainSize,
-               const MPI_Comm& comm, const MPI_Comm& interComm,
-               int globalCheckpointEvery = 0,
-               std::string restartFolder = "restart/", bool gpuAwareMPI = false);
+    Simulation(const MPI_Comm &cartComm, const MPI_Comm &interComm, YmrState *state,
+               int globalCheckpointEvery = 0, std::string checkpointFolder = "restart/",
+               bool gpuAwareMPI = false);
+
     ~Simulation();
     
     void restart(std::string folder);
@@ -108,11 +109,7 @@ private:
     std::string restartFolder, checkpointFolder;
     int globalCheckpointEvery;
 
-    float dt;
     int rank;
-
-    double currentTime{0};
-    int currentStep{0};
 
     std::unique_ptr<TaskScheduler> scheduler;
 
@@ -178,6 +175,12 @@ private:
         ObjectBelongingChecker *checker;
         ParticleVector *pvSrc, *pvIn, *pvOut;
     };
+
+    struct PvsCheckPointPrototype
+    {
+        ParticleVector *pv;
+        int checkpointEvery;
+    };
     
     std::vector<InteractionPrototype>         interactionPrototypes;
     std::vector<WallPrototype>                wallPrototypes;
@@ -185,11 +188,11 @@ private:
     std::vector<BouncerPrototype>             bouncerPrototypes;
     std::vector<BelongingCorrectionPrototype> belongingCorrectionPrototypes;
     std::vector<SplitterPrototype>            splitterPrototypes;
+    std::vector<PvsCheckPointPrototype>       pvsCheckPointPrototype;
 
-
-    std::vector<std::function<void(float, cudaStream_t)>> regularInteractions, haloInteractions;
-    std::vector<std::function<void(float, cudaStream_t)>> integratorsStage1, integratorsStage2;
-    std::vector<std::function<void(float, cudaStream_t)>> regularBouncers, haloBouncers;
+    std::vector<std::function<void(cudaStream_t)>> initInteractions, regularInteractions, haloInteractions;
+    std::vector<std::function<void(cudaStream_t)>> integratorsStage1, integratorsStage2;
+    std::vector<std::function<void(cudaStream_t)>> regularBouncers, haloBouncers;
 
     std::map<std::string, std::string> pvsIntegratorMap;
     
@@ -206,9 +209,4 @@ private:
     
     void assemble();
 };
-
-
-
-
-
 

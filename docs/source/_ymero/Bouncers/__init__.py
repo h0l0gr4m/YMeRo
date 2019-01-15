@@ -3,6 +3,11 @@ class Bouncer:
         Base class for bouncing particles off the objects
     
     """
+    def __init__():
+        r"""Initialize self.  See help(type(self)) for accurate signature.
+        """
+        pass
+
 class Ellipsoid(Bouncer):
     r"""
         This bouncer will use the analytical ellipsoid representation to perform the bounce.

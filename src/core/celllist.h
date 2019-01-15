@@ -8,6 +8,8 @@
 #include <core/utils/cuda_common.h>
 
 class ParticleVector;
+class LocalParticleVector;
+struct PVview;
 
 enum class CellListsProjection
 {
@@ -91,37 +93,32 @@ protected:
     int changedStamp{-1};
 
     DeviceBuffer<char> scanBuffer;
-    PinnedBuffer<Particle> particlesContainer = {};
-    DeviceBuffer<Force>    forcesContainer = {};
-
-    ParticleVector* pv;
-
-    void _build(cudaStream_t stream);
-
-public:
-
     DeviceBuffer<int> cellStarts, cellSizes, order;
 
-    // TODO: hide this?
-    PinnedBuffer<Particle>* particles;
-    DeviceBuffer<Force>*    forces;
+    std::unique_ptr<LocalParticleVector> particlesDataContainer;
+    LocalParticleVector *localPV; // will point to particlesDataContainer or pv->local() if Primary
+    
+    ParticleVector* pv;
+
+    void _computeCellSizes(cudaStream_t stream);
+    void _computeCellStarts(cudaStream_t stream);
+    void _reorderData(cudaStream_t stream);
+    void _reorderExtraData(cudaStream_t stream);
+    
+    void _build(cudaStream_t stream);    
+
+public:    
 
     CellList(ParticleVector* pv, float rc, float3 localDomainSize);
     CellList(ParticleVector* pv, int3 resolution, float3 localDomainSize);
 
-    inline CellListInfo cellInfo()
-    {
-        CellListInfo::particles  = reinterpret_cast<float4*>(particles->devPtr());
-        CellListInfo::forces     = reinterpret_cast<float4*>(forces->devPtr());
-        CellListInfo::cellSizes  = cellSizes.devPtr();
-        CellListInfo::cellStarts = cellStarts.devPtr();
-        CellListInfo::order      = order.devPtr();
-
-        return *((CellListInfo*)this);
-    }
+    CellListInfo cellInfo();
 
     virtual void build(cudaStream_t stream);
     virtual void addForces(cudaStream_t stream);
+    void clearForces(cudaStream_t stream);
+
+    void setViewPtrs(PVview& view);
 
     virtual ~CellList() = default;
 };

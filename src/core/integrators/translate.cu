@@ -10,11 +10,14 @@
 /**
  * @param vel Move with this velocity
  */
-IntegratorTranslate::IntegratorTranslate(std::string name, float dt, float3 vel) :
-    Integrator(name, dt), vel(vel)
-{    }
+IntegratorTranslate::IntegratorTranslate(const YmrState *state, std::string name, float3 vel) :
+    Integrator(state, name),
+    vel(vel)
+{}
 
-void IntegratorTranslate::stage2(ParticleVector* pv, float t, cudaStream_t stream)
+IntegratorTranslate::~IntegratorTranslate() = default;
+
+void IntegratorTranslate::stage2(ParticleVector *pv, cudaStream_t stream)
 {
     const auto _vel = vel;
 

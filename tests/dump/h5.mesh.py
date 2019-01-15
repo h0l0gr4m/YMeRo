@@ -11,7 +11,7 @@ args = parser.parse_args()
 ranks  = (1, 1, 1)
 domain = (12, 8, 10)
 
-u = ymr.ymero(ranks, domain, debug_level=8, log_filename='log')
+u = ymr.ymero(ranks, domain, dt=0, debug_level=8, log_filename='log')
 
 m = trimesh.load(args.mesh);
 mesh = ymr.ParticleVectors.MembraneMesh(m.vertices.tolist(), m.faces.tolist())
@@ -31,4 +31,4 @@ u.run(2)
 # rm -rf h5
 # mesh="../../data/rbc_mesh.off"
 # ymr.run --runargs "-n 2" ./h5.mesh.py --mesh $mesh > /dev/null
-# ymr.post h5dump -d position h5/rbc-00000.h5 | awk '{print $2, $3, $4}' | sort > h5.mesh.out.txt
+# ymr.post h5dump -d position h5/rbc-00000.h5 | awk '{print $2, $3, $4}' | LC_ALL=en_US.utf8 sort > h5.mesh.out.txt

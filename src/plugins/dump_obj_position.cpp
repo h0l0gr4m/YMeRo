@@ -5,10 +5,11 @@
 #include <core/simulation.h>
 #include <core/pvs/rigid_object_vector.h>
 
-ObjPositionsPlugin::ObjPositionsPlugin(std::string name, std::string ovName, int dumpEvery) :
-    SimulationPlugin(name), ovName(ovName),
+ObjPositionsPlugin::ObjPositionsPlugin(const YmrState *state, std::string name, std::string ovName, int dumpEvery) :
+    SimulationPlugin(state, name),
+    ovName(ovName),
     dumpEvery(dumpEvery)
-{    }
+{}
 
 void ObjPositionsPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
 {
@@ -48,7 +49,7 @@ void ObjPositionsPlugin::serializeAndSend(cudaStream_t stream)
     debug2("Plugin %s is sending now data", name.c_str());
 
     waitPrevSend();
-    SimpleSerializer::serialize(sendBuffer, savedTime, ov->domain, ids, coms, motions);
+    SimpleSerializer::serialize(sendBuffer, savedTime, state->domain, ids, coms, motions);
     send(sendBuffer);
     
     needToSend=false;
@@ -128,8 +129,9 @@ void writePositions(MPI_Comm comm, DomainInfo domain, MPI_File& fout, float curT
 
 
 ObjPositionsDumper::ObjPositionsDumper(std::string name, std::string path) :
-        PostprocessPlugin(name), path(path)
-{    }
+    PostprocessPlugin(name),
+    path(path)
+{}
 
 void ObjPositionsDumper::setup(const MPI_Comm& comm, const MPI_Comm& interComm)
 {

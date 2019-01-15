@@ -47,22 +47,21 @@ void exportInteractions(py::module& m)
             J. Chem. Phys., 107(11), 4423–4435. `doi <https://doi.org/10.1063/1.474784>`_
     )");
 
-    pyIntDPD.def(py::init<std::string, float, float, float, float, float, float>(),
-         "name"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, R"(
+    pyIntDPD.def(py::init<const YmrState*, std::string, float, float, float, float, float>(),
+                 "state"_a, "name"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
             Args:
             name: name of the interaction
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 a: :math:`a`
                 gamma: :math:`\gamma`
                 kbt: :math:`k_B T`
-                dt: time-step, that for consistency has to be the same as the integration time-step for the corresponding particle vectors
                 power: :math:`p` in the weight function
     )");
 
     pyIntDPD.def("setSpecificPair", &InteractionDPD::setSpecificPair,
          "pv1"_a, "pv2"_a,
          "a"_a=InteractionDPD::Default, "gamma"_a=InteractionDPD::Default,
-         "kbt"_a=InteractionDPD::Default, "dt"_a=InteractionDPD::Default, "power"_a=InteractionDPD::Default,
+         "kbt"_a=InteractionDPD::Default, "power"_a=InteractionDPD::Default,
          R"(
             Override some of the interaction parameters for a specific pair of Particle Vectors
          )");
@@ -71,8 +70,8 @@ void exportInteractions(py::module& m)
         wrapper of :any:`DPD` with, in addition, stress computation
     )");
 
-    pyIntDPDWithStress.def(py::init<std::string, std::string, float, float, float, float, float, float, float>(),
-                           "name"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, "stressPeriod"_a, R"(
+    pyIntDPDWithStress.def(py::init<const YmrState*, std::string, std::string, float, float, float, float, float, float>(),
+                           "state"_a, "name"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, "stressPeriod"_a, R"(
             Args:
                 name: name of the interaction
                 stressName: name of the stress entry
@@ -80,7 +79,6 @@ void exportInteractions(py::module& m)
                 a: :math:`a`
                 gamma: :math:`\gamma`
                 kbt: :math:`k_B T`
-                dt: time-step, that for consistency has to be the same as the integration time-step for the corresponding particle vectors
                 power: :math:`p` in the weight function
                 stressPeriod: compute the stresses every this period (in simulation time units)
     )");
@@ -95,8 +93,8 @@ void exportInteractions(py::module& m)
 
     )");
 
-    pyIntLJ.def(py::init<std::string, float, float, float, float, bool>(),
-         "name"_a, "rc"_a, "epsilon"_a, "sigma"_a, "max_force"_a=1000.0, "object_aware"_a, R"(
+    pyIntLJ.def(py::init<const YmrState*, std::string, float, float, float, float, bool>(),
+                "state"_a, "name"_a, "rc"_a, "epsilon"_a, "sigma"_a, "max_force"_a=1000.0, "object_aware"_a, R"(
             Args:
                 name: name of the interaction
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
@@ -117,8 +115,8 @@ void exportInteractions(py::module& m)
         wrapper of :any:`LJ` with, in addition, stress computation
     )");
 
-    pyIntLJWithStress.def(py::init<std::string, std::string, float, float, float, float, bool, float>(),
-                          "name"_a, "stressName"_a, "rc"_a, "epsilon"_a, "sigma"_a, "max_force"_a=1000.0,
+    pyIntLJWithStress.def(py::init<const YmrState*, std::string, std::string, float, float, float, float, bool, float>(),
+                          "state"_a, "name"_a, "stressName"_a, "rc"_a, "epsilon"_a, "sigma"_a, "max_force"_a=1000.0,
                           "object_aware"_a, "stressPeriod"_a, R"(
             Args:
                 name: name of the interaction
@@ -150,8 +148,7 @@ void exportInteractions(py::module& m)
         .def_readwrite("mpow",      &MembraneParameters::mpow)
         .def_readwrite("totArea",   &MembraneParameters::totArea0)
         .def_readwrite("totVolume", &MembraneParameters::totVolume0)
-        .def_readwrite("rnd",       &MembraneParameters::fluctuationForces)
-        .def_readwrite("dt",        &MembraneParameters::dt);
+        .def_readwrite("rnd",       &MembraneParameters::fluctuationForces);
 
     py::handlers_class<InteractionMembrane> pyMembraneForces(m, "MembraneForces", pyInt, R"(
         Abstract class for membrane interactions.
@@ -223,8 +220,8 @@ void exportInteractions(py::module& m)
                              Biophysical journal, Elsevier, 2010, 98, 2215-2225
 
     )")
-        .def(py::init<std::string, MembraneParameters, KantorBendingParameters, bool, float>(),
-             "name"_a, "params"_a, "params_bending"_a, "stressFree"_a, "grow_until"_a=0, R"(
+        .def(py::init<const YmrState*, std::string, MembraneParameters, KantorBendingParameters, bool, float>(),
+             "state"_a, "name"_a, "params"_a, "params_bending"_a, "stressFree"_a, "grow_until"_a=0, R"(
              Args:
                  name: name of the interaction
                  params: instance of :any: `MembraneParameters`
@@ -253,8 +250,8 @@ void exportInteractions(py::module& m)
                            Shape transformations of vesicles with intramembrane domains.
                            Physical Review E 53.3 (1996): 2670.
     )")
-        .def(py::init<std::string, MembraneParameters, JuelicherBendingParameters, bool, float>(),
-             "name"_a, "params"_a, "params_bending"_a, "stressFree"_a, "grow_until"_a=0, R"(
+        .def(py::init<const YmrState*, std::string, MembraneParameters, JuelicherBendingParameters, bool, float>(),
+             "state"_a, "name"_a, "params"_a, "params_bending"_a, "stressFree"_a, "grow_until"_a=0, R"(
              Args:
                  name: name of the interaction
                  params: instance of :any: `MembraneParameters`
@@ -292,8 +289,9 @@ void exportInteractions(py::module& m)
             J. Chem. Phys., 107(11), 4423–4435. `doi <https://doi.org/10.1063/1.474784>`_
     )");
 
-    pyIntSmartDPD.def(py::init<std::string,std::string, float, float, float, float, float, float>(),
-         "name"_a,"parameterName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, R"(
+
+    pyIntDPD.def(py::init<const YmrState*, std::string, float, float, float, float, float>(),
+                 "state"_a, "name"_a,"parameterName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
             Args:
             name: name of the interaction
             parameterName: Name of the parameters
@@ -301,7 +299,6 @@ void exportInteractions(py::module& m)
                 a: :math:`a`
                 gamma: :math:`\gamma`
                 kbt: :math:`k_B T`
-                dt: time-step, that for consistency has to be the same as the integration time-step for the corresponding particle vectors
                 power: :math:`p` in the weight function
     )");
 
@@ -318,8 +315,8 @@ void exportInteractions(py::module& m)
         wrapper of :any:`SmartDPD` with, in addition, stress computation
     )");
 
-    pyIntSmartDPDWithStress.def(py::init<std::string, std::string,std::string, float, float, float, float, float, float, float>(),
-                                "name"_a,"parameterName"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, "stressPeriod"_a, R"(
+    pyIntSmartDPDWithStress.def(py::init<const YmrState*,std::string, std::string,std::string, float, float, float, float, float, float, float>(),
+                                "state"_a,"name"_a,"parameterName"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, "stressPeriod"_a, R"(
                  Args:
                      name: name of the interaction
                      parametName: name of the dpd parameter

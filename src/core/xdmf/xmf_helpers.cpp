@@ -11,13 +11,14 @@ namespace XDMF
         {            
             auto attrNode = node.append_child("Attribute");
             attrNode.append_attribute("Name") = channel.name.c_str();
-            attrNode.append_attribute("AttributeType") = typeToXDMFAttribute(channel.type).c_str();
+            attrNode.append_attribute("AttributeType") = dataFormToXDMFAttribute(channel.dataForm).c_str();
             attrNode.append_attribute("Center") = grid->getCentering().c_str();
             
             // Write type information
             auto infoNode = attrNode.append_child("Information");
             infoNode.append_attribute("Name") = "Typeinfo";
-            infoNode.append_attribute("Value") = typeToDescription(channel.type).c_str();
+            infoNode.append_attribute("Value") = dataFormToDescription(channel.dataForm).c_str();
+            infoNode.append_attribute("Datatype") = dataTypeToString(channel.dataType).c_str();
             
             // Add one more dimension: number of floats per data item
             auto globalSize = grid->getGridDims()->getGlobalSize();
@@ -25,8 +26,8 @@ namespace XDMF
             
             auto dataNode = attrNode.append_child("DataItem");
             dataNode.append_attribute("Dimensions") = ::to_string(globalSize).c_str();
-            dataNode.append_attribute("NumberType") = datatypeToString(channel.datatype).c_str();
-            dataNode.append_attribute("Precision") = std::to_string(datatypeToPrecision(channel.datatype)).c_str();
+            dataNode.append_attribute("NumberType") = numberTypeToString(channel.numberType).c_str();
+            dataNode.append_attribute("Precision") = std::to_string(numberTypeToPrecision(channel.numberType)).c_str();
             dataNode.append_attribute("Format") = "HDF";
             dataNode.text() = (h5filename + ":/" + channel.name).c_str();
         }
@@ -69,18 +70,20 @@ namespace XDMF
             auto dataNode = node.child("DataItem");
 
             std::string name            = node.attribute("Name").value();
-            std::string typeDescription = infoNode.attribute("Value").value();
+            std::string formDescription = infoNode.attribute("Value").value();
+            std::string typeDescription = infoNode.attribute("Datatype").value();
 
-            auto type = descriptionToType(typeDescription);
+            auto dataForm = descriptionToDataForm(formDescription);
+            auto dataType =      stringToDataType(typeDescription);
 
-            std::string channelDatatype = dataNode.attribute("NumberType").value();
+            std::string channelNumberType = dataNode.attribute("NumberType").value();
             int precision = dataNode.attribute("Precision").as_int();
-            auto datatype = infoToDatatype(channelDatatype, precision);
+            auto numberType = infoToNumberType(channelNumberType, precision);
 
-            if (type == Channel::Type::Other)
-                die("Unrecognised type %s", typeDescription.c_str());
+            if (dataForm == Channel::DataForm::Other)
+                die("Unrecognised form %s", formDescription.c_str());
             
-            return Channel(name, nullptr, type, datatype);
+            return Channel(name, nullptr, dataForm, numberType, dataType);
         }
         
         static void readData(pugi::xml_node node, std::vector<Channel>& channels)

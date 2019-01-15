@@ -1,8 +1,11 @@
 #pragma once
 
+#include "fragments_mapping.h"
+
 #include <mpi.h>
 #include <core/containers.h>
 #include <string>
+#include <vector>
 
 
 /// Structure with information about exchange buffers,
@@ -24,7 +27,8 @@ class ExchangeHelper
 {
 public:
     int datumSize;             ///< size in bytes on a single datum in a message, e.g. Particle size or size of packed object
-    const int nBuffers = 27;   ///< equal to number of neighbours + 1, for now fixed
+    const int nBuffers = FragmentMapping::numFragments;   ///< equal to number of neighbours + 1, for now fixed
+    const int bulkId   = FragmentMapping::bulkId;
 
     std::string name;  ///< corresponding ParticleVector name
 
@@ -49,6 +53,8 @@ public:
         sendOffsets.resize_anew(nBuffers+1);
     }
 
+    ~ExchangeHelper() = default;
+
     /**
      * Set the #datumSize. This is made as a separate function
      * because ParticleVectors may get additional data channels
@@ -61,13 +67,13 @@ public:
      * Compute #recvOffsets from #recvSizes by explicit scan.
      * Only use and update CPU part of the PinnedBuffer
      */
-    inline void makeRecvOffsets() { makeOffsets(recvSizes, recvOffsets); }
+    inline void computeRecvOffsets() { computeOffsets(recvSizes, recvOffsets); }
 
     /**
      * Compute #sendOffsets from #sendSizes by explicit scan.
      * Only use and update CPU part of the PinnedBuffer
      */
-    inline void makeSendOffsets() { makeOffsets(sendSizes, sendOffsets); }
+    inline void computeSendOffsets() { computeOffsets(sendSizes, sendOffsets); }
 
     /**
      * Compute #sendOffsets from #sendSizes by explicit scan.
@@ -75,10 +81,10 @@ public:
      * to the CPU, them update accordingly CPU and GPU data
      * of the #sendOffsets
      */
-    inline void makeSendOffsets_Dev2Dev(cudaStream_t stream)
+    inline void computeSendOffsets_Dev2Dev(cudaStream_t stream)
     {
         sendSizes.downloadFromDevice(stream);
-        makeSendOffsets();
+        computeSendOffsets();
         sendOffsets.uploadToDevice(stream);
     }
 
@@ -96,7 +102,7 @@ public:
     }
 
 private:
-    void makeOffsets(const PinnedBuffer<int>& sz, PinnedBuffer<int>& of)
+    void computeOffsets(const PinnedBuffer<int>& sz, PinnedBuffer<int>& of)
     {
         int n = sz.size();
         if (n == 0) return;

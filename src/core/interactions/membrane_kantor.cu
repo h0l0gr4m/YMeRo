@@ -6,11 +6,11 @@
 #include "membrane_kantor.h"
 #include "membrane/bending_kantor.h"
 
-InteractionMembraneKantor::InteractionMembraneKantor(std::string name,
+InteractionMembraneKantor::InteractionMembraneKantor(const YmrState *state, std::string name,
                                                      MembraneParameters parameters,
                                                      KantorBendingParameters bendingParameters,
                                                      bool stressFree, float growUntil) :
-    InteractionMembrane(name, parameters, stressFree, growUntil),
+    InteractionMembrane(state, name, parameters, stressFree, growUntil),
     bendingParameters(bendingParameters)
 {}
 

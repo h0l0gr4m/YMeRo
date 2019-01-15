@@ -55,6 +55,15 @@ __global__ void averageVelocity(PVview view, DomainInfo domain, float3 low, floa
     }
 }
 
+ImposeVelocityPlugin::ImposeVelocityPlugin(const YmrState *state, std::string name, std::vector<std::string> pvNames,
+                                           float3 low, float3 high, float3 targetVel, int every) :
+    SimulationPlugin(state, name),
+    pvNames(pvNames),
+    low(low),
+    high(high),
+    targetVel(targetVel),
+    every(every)
+{}
 
 void ImposeVelocityPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
 {
@@ -77,7 +86,7 @@ void ImposeVelocityPlugin::afterIntegration(cudaStream_t stream)
             SAFE_KERNEL_LAUNCH(
                     averageVelocity,
                     getNblocks(pv->local()->size(), nthreads), nthreads, 0, stream,
-                    PVview(pv, pv->local()), pv->domain, low, high, totVel.devPtr(), nSamples.devPtr() );
+                    PVview(pv, pv->local()), state->domain, low, high, totVel.devPtr(), nSamples.devPtr() );
 
         totVel.downloadFromDevice(stream, ContainersSynch::Asynch);
         nSamples.downloadFromDevice(stream);
@@ -91,7 +100,7 @@ void ImposeVelocityPlugin::afterIntegration(cudaStream_t stream)
             SAFE_KERNEL_LAUNCH(
                     addVelocity,
                     getNblocks(pv->local()->size(), nthreads), nthreads, 0, stream,
-                    PVview(pv, pv->local()), pv->domain, low, high, targetVel - avgVel);
+                    PVview(pv, pv->local()), state->domain, low, high, targetVel - avgVel);
     }
 }
 

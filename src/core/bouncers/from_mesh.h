@@ -14,9 +14,9 @@ class RigidObjectVector;
 class BounceFromMesh : public Bouncer
 {
 public:
-    BounceFromMesh(std::string name, float kbT);
 
-    ~BounceFromMesh() = default;
+    BounceFromMesh(const YmrState *state, std::string name, float kbT);
+    ~BounceFromMesh();
 
 private:
     template<typename T>
@@ -38,8 +38,8 @@ private:
 
     float kbT;
 
-    RigidObjectVector* rov;
+    RigidObjectVector *rov;
 
-    void exec(ParticleVector* pv, CellList* cl, float dt, bool local, cudaStream_t stream) override;
-    void setup(ObjectVector* ov) override;
+    void exec(ParticleVector *pv, CellList *cl, bool local, cudaStream_t stream) override;
+    void setup(ObjectVector *ov) override;
 };

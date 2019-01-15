@@ -12,7 +12,8 @@ class CellList;
 class ObjectBelongingChecker : public YmrSimulationObject
 {
 public:
-    ObjectBelongingChecker(std::string name) : YmrSimulationObject(name) { }
+    ObjectBelongingChecker(const YmrState *state, std::string name);
+    virtual ~ObjectBelongingChecker();
 
     virtual void splitByBelonging(ParticleVector* src, ParticleVector* pvIn, ParticleVector* pvOut, cudaStream_t stream) = 0;
     virtual void checkInner(ParticleVector* pv, CellList* cl, cudaStream_t stream) = 0;

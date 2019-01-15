@@ -5,15 +5,17 @@
 #include <core/utils/folders.h>
 #include <core/rigid_kernels/integration.h>
 #include <core/xdmf/xdmf.h>
+#include <core/xdmf/typeMap.h>
+
 #include "restart_helpers.h"
 
-RigidObjectVector::RigidObjectVector(std::string name, float partMass,
+RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, float partMass,
                                      float3 J, const int objSize,
                                      std::shared_ptr<Mesh> mesh, const int nObjects) :
-        ObjectVector( name, partMass, objSize,
-                      new LocalRigidObjectVector(this, objSize, nObjects),
-                      new LocalRigidObjectVector(this, objSize, 0) ),
-        J(J)
+    ObjectVector( state, name, partMass, objSize,
+                  new LocalRigidObjectVector(this, objSize, nObjects),
+                  new LocalRigidObjectVector(this, objSize, 0) ),
+    J(J)
 {
     this->mesh = std::move(mesh);
 
@@ -23,15 +25,22 @@ RigidObjectVector::RigidObjectVector(std::string name, float partMass,
     if (J.x < 0 || J.y < 0 || J.z < 0)
         die("Inertia tensor must be positive; got [%f %f %f]", J.x, J.y, J.z);
 
+
     // rigid motion must be exchanged and shifted
-    requireDataPerObject<RigidMotion>("motions", true, sizeof(RigidReal));
-    requireDataPerObject<RigidMotion>("old_motions", false);
+    requireDataPerObject<RigidMotion>("motions",
+                                      ExtraDataManager::CommunicationMode::NeedExchange,
+                                      ExtraDataManager::PersistenceMode::Persistent,
+                                      sizeof(RigidReal));
+
+    requireDataPerObject<RigidMotion>("old_motions",
+                                      ExtraDataManager::CommunicationMode::None,
+                                      ExtraDataManager::PersistenceMode::None);
 }
 
-RigidObjectVector::RigidObjectVector(std::string name, float partMass,
+RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, float partMass,
                                      PyTypes::float3 J, const int objSize,
                                      std::shared_ptr<Mesh> mesh, const int nObjects) :
-        RigidObjectVector( name, partMass, make_float3(J), objSize, mesh, nObjects )
+    RigidObjectVector( state, name, partMass, make_float3(J), objSize, mesh, nObjects )
 {}
 
 PinnedBuffer<Particle>* LocalRigidObjectVector::getMeshVertices(cudaStream_t stream)
@@ -115,34 +124,29 @@ void RigidObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     std::string filename = path + "/" + name + ".obj-" + getStrZeroPadded(restartIdx);
     info("Checkpoint for rigid object vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
-    auto ids          = local()->extraPerObject.getData<int>("ids");
-    auto motions      = local()->extraPerObject.getData<RigidMotion>("motions");
+    auto motions = local()->extraPerObject.getData<RigidMotion>("motions");
 
-    ids         ->downloadFromDevice(0, ContainersSynch::Asynch);
-    motions     ->downloadFromDevice(0, ContainersSynch::Synch);
+    motions->downloadFromDevice(0, ContainersSynch::Synch);
     
     auto positions = std::make_shared<std::vector<float>>();
     std::vector<RigidReal4> quaternion;
     std::vector<RigidReal3> vel, omega, force, torque;
     
-    splitMotions(domain, *motions, *positions, quaternion, vel, omega, force, torque);
+    splitMotions(state->domain, *motions, *positions, quaternion, vel, omega, force, torque);
 
     XDMF::VertexGrid grid(positions, comm);    
 
-#ifdef RIGID_MOTIONS_DOUBLE
-    auto rigidType = XDMF::Channel::Datatype::Double;
-#else
-    auto rigidType = XDMF::Channel::Datatype::Float;
-#endif
+    auto rigidType = XDMF::getNumberType<RigidReal>();
 
     std::vector<XDMF::Channel> channels = {
-        XDMF::Channel( "ids",        ids       ->data(), XDMF::Channel::Type::Scalar,     XDMF::Channel::Datatype::Int ),
-        XDMF::Channel( "quaternion", quaternion .data(), XDMF::Channel::Type::Quaternion, rigidType ),
-        XDMF::Channel( "velocity",   vel        .data(), XDMF::Channel::Type::Vector,     rigidType ),
-        XDMF::Channel( "omega",      omega      .data(), XDMF::Channel::Type::Vector,     rigidType ),
-        XDMF::Channel( "force",      force      .data(), XDMF::Channel::Type::Vector,     rigidType ),
-        XDMF::Channel( "torque",     torque     .data(), XDMF::Channel::Type::Vector,     rigidType )
+        XDMF::Channel( "quaternion", quaternion .data(), XDMF::Channel::DataForm::Quaternion, rigidType, typeTokenize<RigidReal4>() ),
+        XDMF::Channel( "velocity",   vel        .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() ),
+        XDMF::Channel( "omega",      omega      .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() ),
+        XDMF::Channel( "force",      force      .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() ),
+        XDMF::Channel( "torque",     torque     .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() )
     };         
+
+    _extractPersistentExtraObjectData(channels, /* blacklist */ {"motions"} );
     
     XDMF::write(filename, &grid, channels, comm);
 
@@ -175,7 +179,7 @@ void RigidObjectVector::_restartObjectData(MPI_Comm comm, std::string path, cons
     restart_helpers::exchangeData(comm, map, ids, 1);
     restart_helpers::exchangeData(comm, map, motions, 1);
 
-    shiftCoordinates(domain, motions);
+    shiftCoordinates(state->domain, motions);
     
     loc_ids->resize_anew(ids.size());
     loc_motions->resize_anew(motions.size());

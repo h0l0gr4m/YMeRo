@@ -1,11 +1,14 @@
 #include <pybind11/stl.h>
+#include <pybind11/functional.h>
 
-#include <core/initial_conditions/interface.h>
-#include <core/initial_conditions/uniform_ic.h>
-#include <core/initial_conditions/rigid_ic.h>
-#include <core/initial_conditions/restart.h>
-#include <core/initial_conditions/membrane_ic.h>
 #include <core/initial_conditions/from_array.h>
+#include <core/initial_conditions/interface.h>
+#include <core/initial_conditions/membrane_ic.h>
+#include <core/initial_conditions/restart.h>
+#include <core/initial_conditions/rigid_ic.h>
+#include <core/initial_conditions/uniform_ic.h>
+#include <core/initial_conditions/uniform_filtered_ic.h>
+#include <core/initial_conditions/uniform_sphere_ic.h>
 
 #include <core/utils/pytypes.h>
 
@@ -119,5 +122,30 @@ void exportInitialConditions(py::module& m)
         .def(py::init<float>(), "density"_a, R"(
             Args:
                 density: target density
+        )");
+
+    py::handlers_class<UniformFilteredIC>(m, "UniformFiltered", pyic, R"(
+        The particles will be generated with the desired number density uniformly at random in all the domain and then filtered out by the given filter.
+        These IC may be used with any Particle Vector, but only make sense for regular PV.            
+    )")
+        .def(py::init<float, std::function<bool(PyTypes::float3)>>(),
+             "density"_a, "filter"_a, R"(
+            Args:
+                density: target density
+                filter: given position, returns True if the particle should be kept 
+        )");
+
+    py::handlers_class<UniformSphereIC>(m, "UniformSphere", pyic, R"(
+        The particles will be generated with the desired number density uniformly at random inside or outside a given sphere.
+        These IC may be used with any Particle Vector, but only make sense for regular PV.
+            
+    )")
+        .def(py::init<float, PyTypes::float3, float, bool>(),
+             "density"_a, "center"_a, "radius"_a, "inside"_a, R"(
+            Args:
+                density: target density
+                center: center of the sphere
+                radius: radius of the sphere
+                inside: whether the particles should be inside or outside the sphere
         )");
 }

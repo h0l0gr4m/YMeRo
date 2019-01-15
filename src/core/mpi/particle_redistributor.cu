@@ -1,5 +1,6 @@
 #include "particle_redistributor.h"
 #include "exchange_helpers.h"
+#include "fragments_mapping.h"
 
 #include <core/utils/kernel_launch.h>
 #include <core/celllist.h>
@@ -11,9 +12,9 @@
 #include <core/mpi/valid_cell.h>
 
 static __device__ int encodeCellId1d(int cid, int ncells) {
-    if (cid < 0)            return 0;
-    else if (cid >= ncells) return 2;
-    else                    return 1;
+    if (cid < 0)            return -1;
+    else if (cid >= ncells) return 1;
+    else                    return 0;
 }
 
 static __device__ int3 encodeCellId(int3 cid, int3 ncells) {
@@ -23,19 +24,24 @@ static __device__ int3 encodeCellId(int3 cid, int3 ncells) {
     return cid;
 }
 
-static __device__ bool hasToLeave(int3 code) {
-    return code.x*code.y*code.z != 1;
+static __device__ bool hasToLeave(int3 dir) {
+    return dir.x != 0 || dir.y != 0 || dir.z != 0;
 }
 
-template<bool QUERY=false>
+enum class PackMode
+{
+    Querry, Pack
+};
+
+template <PackMode packMode>
 __global__ void getExitingParticles(const CellListInfo cinfo, ParticlePacker packer, BufferOffsetsSizesWrap dataWrap)
 {
     const int gid = blockIdx.x*blockDim.x + threadIdx.x;
     int cid;
-    int cx, cy, cz;
+    int dx, dy, dz;
     const int3 ncells = cinfo.ncells;
 
-    bool valid = isValidCell(cid, cx, cy, cz, gid, blockIdx.y, cinfo);
+    bool valid = isValidCell(cid, dx, dy, dz, gid, blockIdx.y, cinfo);
 
     if (!valid) return;
 
@@ -52,21 +58,21 @@ __global__ void getExitingParticles(const CellListInfo cinfo, ParticlePacker pac
         const int srcId = pstart + i;
         Particle p(cinfo.particles, srcId);
 
-        int3 code = cinfo.getCellIdAlongAxes<CellListsProjection::NoClamp>(make_float3(p.r));
+        int3 dir = cinfo.getCellIdAlongAxes<CellListsProjection::NoClamp>(make_float3(p.r));
 
-        code = encodeCellId(code, ncells);
+        dir = encodeCellId(dir, ncells);
 
         if (p.isMarked()) continue;
         
-        if (hasToLeave(code)) {
-            const int bufId = (code.z*3 + code.y)*3 + code.x;
-            const float3 shift{ cinfo.localDomainSize.x*(code.x-1),
-                                cinfo.localDomainSize.y*(code.y-1),
-                                cinfo.localDomainSize.z*(code.z-1) };
+        if (hasToLeave(dir)) {
+            const int bufId = FragmentMapping::getId(dir);
+            const float3 shift{ cinfo.localDomainSize.x * dir.x,
+                                cinfo.localDomainSize.y * dir.y,
+                                cinfo.localDomainSize.z * dir.z };
 
             int myid = atomicAdd(dataWrap.sizes + bufId, 1);
 
-            if (QUERY) {
+            if (packMode == PackMode::Querry) {
                 continue;
             }
             else {
@@ -107,8 +113,8 @@ void ParticleRedistributor::attach(ParticleVector* pv, CellList* cl)
     if (dynamic_cast<PrimaryCellList*>(cl) == nullptr)
         die("Redistributor (for %s) should be used with the primary cell-lists only!", pv->name.c_str());
 
-    auto helper = new ExchangeHelper(pv->name, sizeof(Particle));
-    helpers.push_back(helper);
+    auto helper = std::make_unique<ExchangeHelper>(pv->name, sizeof(Particle));
+    helpers.push_back(std::move(helper));
 
     info("Particle redistributor takes pv '%s'", pv->name.c_str());
 }
@@ -117,7 +123,7 @@ void ParticleRedistributor::prepareSizes(int id, cudaStream_t stream)
 {
     auto pv = particles[id];
     auto cl = cellLists[id];
-    auto helper = helpers[id];
+    auto helper = helpers[id].get();
 
     debug2("Counting leaving particles of '%s'", pv->name.c_str());
 
@@ -132,11 +138,11 @@ void ParticleRedistributor::prepareSizes(int id, cudaStream_t stream)
         helper->setDatumSize(packer.packedSize_byte);
 
         SAFE_KERNEL_LAUNCH(
-                getExitingParticles<true>,
+                getExitingParticles<PackMode::Querry>,
                 nblocks, nthreads, 0, stream,
                 cl->cellInfo(), packer, helper->wrapSendData() );
 
-        helper->makeSendOffsets_Dev2Dev(stream);
+        helper->computeSendOffsets_Dev2Dev(stream);
     }
 }
 
@@ -144,9 +150,10 @@ void ParticleRedistributor::prepareData(int id, cudaStream_t stream)
 {
     auto pv = particles[id];
     auto cl = cellLists[id];
-    auto helper = helpers[id];
+    auto helper = helpers[id].get();
 
-    debug2("Downloading %d leaving particles of '%s'", helper->sendOffsets[27], pv->name.c_str());
+    debug2("Downloading %d leaving particles of '%s'",
+           helper->sendOffsets[FragmentMapping::numFragments], pv->name.c_str());
 
     if (pv->local()->size() > 0)
     {
@@ -160,7 +167,7 @@ void ParticleRedistributor::prepareData(int id, cudaStream_t stream)
         // Sizes will still remain on host, no need to download again
         helper->sendSizes.clearDevice(stream);
         SAFE_KERNEL_LAUNCH(
-                getExitingParticles<false>,
+                getExitingParticles<PackMode::Pack>,
                 nblocks, nthreads, 0, stream,
                 cl->cellInfo(), packer, helper->wrapSendData() );
     }
@@ -169,7 +176,7 @@ void ParticleRedistributor::prepareData(int id, cudaStream_t stream)
 void ParticleRedistributor::combineAndUploadData(int id, cudaStream_t stream)
 {
     auto pv = particles[id];
-    auto helper = helpers[id];
+    auto helper = helpers[id].get();
 
     int oldsize = pv->local()->size();
     int totalRecvd = helper->recvOffsets[helper->nBuffers];
@@ -182,11 +189,6 @@ void ParticleRedistributor::combineAndUploadData(int id, cudaStream_t stream)
                 unpackParticles,
                 getNblocks(totalRecvd, nthreads), nthreads, 0, stream,
                 ParticlePacker(pv, pv->local(), stream), oldsize, helper->recvBuf.devPtr(), totalRecvd );
-
-//        CUDA_Check( cudaMemcpyAsync(
-//                pv->local()->coosvels.devPtr() + oldsize,
-//                helper->recvBuf.devPtr(),
-//                helper->recvBuf.size(), cudaMemcpyDeviceToDevice, stream) );
     }
 
     pv->redistValid = true;

@@ -1,4 +1,5 @@
 #include "mpi_engine.h"
+#include "fragments_mapping.h"
 
 #include <core/utils/timer.h>
 #include <core/logger.h>
@@ -15,9 +16,11 @@ MPIExchangeEngine::MPIExchangeEngine(std::unique_ptr<ParticleExchanger> exchange
     MPI_Check( MPI_Cart_get (haloComm, 3, dims, periods, coords) );
     MPI_Check( MPI_Comm_rank(haloComm, &myrank));
 
-    for(int i = 0; i < 27; ++i)
+    for (int i = 0; i < FragmentMapping::numFragments; ++i)
     {
-        int d[3] = { i%3 - 1, (i/3) % 3 - 1, i/9 - 1 };
+        int d[3] = { FragmentMapping::getDirx(i),
+                     FragmentMapping::getDiry(i),
+                     FragmentMapping::getDirz(i) };
 
         int coordsNeigh[3];
         for(int c = 0; c < 3; ++c)
@@ -26,11 +29,7 @@ MPIExchangeEngine::MPIExchangeEngine(std::unique_ptr<ParticleExchanger> exchange
         MPI_Check( MPI_Cart_rank(haloComm, coordsNeigh, dir2rank + i) );
 
         dir2sendTag[i] = i;
-
-        int cx = -( i%3 - 1 ) + 1;
-        int cy = -( (i/3)%3 - 1 ) + 1;
-        int cz = -( i/9 - 1 ) + 1;
-        dir2recvTag[i] = (cz*3 + cy)*3 + cx;
+        dir2recvTag[i] = FragmentMapping::getId(-d[0], -d[1], -d[2]);
     }
 }
 
@@ -43,7 +42,7 @@ void MPIExchangeEngine::init(cudaStream_t stream)
     
     // Post irecv for sizes
     for (int i=0; i<helpers.size(); i++)
-        if (exchanger->needExchange(i)) postRecvSize(helpers[i]);
+        if (exchanger->needExchange(i)) postRecvSize(helpers[i].get());
 
     // Derived class determines what to send
     for (int i=0; i<helpers.size(); i++)
@@ -51,7 +50,7 @@ void MPIExchangeEngine::init(cudaStream_t stream)
 
     // Send sizes
     for (int i=0; i<helpers.size(); i++)
-        if (exchanger->needExchange(i)) sendSizes(helpers[i]);
+        if (exchanger->needExchange(i)) sendSizes(helpers[i].get());
 
     // Derived class determines what to send
     for (int i=0; i<helpers.size(); i++)
@@ -59,11 +58,11 @@ void MPIExchangeEngine::init(cudaStream_t stream)
 
     // Post big data irecv (after prepereData cause it waits for the sizes)
     for (int i=0; i<helpers.size(); i++)
-        if (exchanger->needExchange(i)) postRecv(helpers[i]);
+        if (exchanger->needExchange(i)) postRecv(helpers[i].get());
 
     // Send
     for (int i=0; i<helpers.size(); i++)
-        if (exchanger->needExchange(i)) send(helpers[i], stream);
+        if (exchanger->needExchange(i)) send(helpers[i].get(), stream);
 }
 
 void MPIExchangeEngine::finalize(cudaStream_t stream)
@@ -72,7 +71,7 @@ void MPIExchangeEngine::finalize(cudaStream_t stream)
 
     // Wait for the irecvs to finish
     for (int i=0; i<helpers.size(); i++)
-        if (exchanger->needExchange(i)) wait(helpers[i], stream);
+        if (exchanger->needExchange(i)) wait(helpers[i].get(), stream);
 
     // Derived class unpack implementation
     for (int i=0; i<helpers.size(); i++)
@@ -84,7 +83,7 @@ int MPIExchangeEngine::tagByName(std::string name)
 {
     // TODO: better tagging policy (unique id?)
     static std::hash<std::string> nameHash;
-    return (int)( nameHash(name) % (32767 / 27) );
+    return (int)( nameHash(name) % (32767 / FragmentMapping::numFragments) );
 }
 
 
@@ -93,6 +92,7 @@ void MPIExchangeEngine::postRecvSize(ExchangeHelper* helper)
     std::string pvName = helper->name;
 
     auto nBuffers = helper->nBuffers;
+    auto bulkId   = helper->bulkId;
     auto rSizes   = helper->recvSizes.  hostPtr();
     auto rOffsets = helper->recvOffsets.hostPtr();
 
@@ -101,7 +101,7 @@ void MPIExchangeEngine::postRecvSize(ExchangeHelper* helper)
     helper->recvSizes.clearHost();
 
     for (int i=0; i < nBuffers; i++)
-        if (i != 13 && dir2rank[i] >= 0)
+        if (i != bulkId && dir2rank[i] >= 0)
         {
             MPI_Request req;
             const int tag = nBuffers * tagByName(pvName) + dir2recvTag[i];
@@ -119,11 +119,12 @@ void MPIExchangeEngine::sendSizes(ExchangeHelper* helper)
     std::string pvName = helper->name;
 
     auto nBuffers = helper->nBuffers;
+    auto bulkId   = helper->bulkId;
     auto sSizes   = helper->sendSizes.hostPtr();
 
     // Do blocking send in hope that it will be immediate due to small size
     for (int i=0; i < nBuffers; i++)
-        if (i != 13 && dir2rank[i] >= 0)
+        if (i != bulkId && dir2rank[i] >= 0)
         {
             const int tag = nBuffers * tagByName(pvName) + dir2sendTag[i];
             MPI_Check( MPI_Send(sSizes+i, 1, MPI_INT, dir2rank[i], tag, haloComm) );
@@ -135,6 +136,7 @@ void MPIExchangeEngine::postRecv(ExchangeHelper* helper)
     std::string pvName = helper->name;
 
     auto nBuffers = helper->nBuffers;
+    auto bulkId   = helper->bulkId;
     auto rSizes   = helper->recvSizes.  hostPtr();
     auto rOffsets = helper->recvOffsets.hostPtr();
 
@@ -144,7 +146,7 @@ void MPIExchangeEngine::postRecv(ExchangeHelper* helper)
     debug("Waiting for sizes of '%s' took %f ms", pvName.c_str(), tm.elapsed());
 
     // Prepare offsets and resize
-    helper->makeRecvOffsets();
+    helper->computeRecvOffsets();
     int totalRecvd = rOffsets[nBuffers];
     helper->resizeRecvBuf();
 
@@ -152,7 +154,7 @@ void MPIExchangeEngine::postRecv(ExchangeHelper* helper)
     helper->requests.clear();
     helper->reqIndex.clear();
     for (int i=0; i < nBuffers; i++)
-        if (i != 13 && dir2rank[i] >= 0)
+        if (i != bulkId && dir2rank[i] >= 0)
         {
             MPI_Request req;
             const int tag = nBuffers * tagByName(pvName) + dir2recvTag[i];
@@ -186,7 +188,7 @@ void MPIExchangeEngine::wait(ExchangeHelper* helper, cudaStream_t stream)
 
     auto rSizes   = helper->recvSizes.  hostPtr();
     auto rOffsets = helper->recvOffsets.hostPtr();
-    bool singleCopy = helper->recvOffsets[27]*helper->datumSize < singleCopyThreshold;
+    bool singleCopy = helper->recvOffsets[FragmentMapping::numFragments] * helper->datumSize < singleCopyThreshold;
     
     debug("Waiting to receive '%s' entities, single copy is %s, GPU aware MPI is %s",
         pvName.c_str(), singleCopy ? "on" : "off", gpuAwareMPI ? "on" : "off");
@@ -236,6 +238,7 @@ void MPIExchangeEngine::send(ExchangeHelper* helper, cudaStream_t stream)
     std::string pvName = helper->name;
 
     auto nBuffers = helper->nBuffers;
+    auto bulkId   = helper->bulkId;
     auto sSizes   = helper->sendSizes.  hostPtr();
     auto sOffsets = helper->sendOffsets.hostPtr();
     bool singleCopy = helper->sendBuf.size() < singleCopyThreshold;
@@ -249,10 +252,10 @@ void MPIExchangeEngine::send(ExchangeHelper* helper, cudaStream_t stream)
     MPI_Request req;
     int totSent = 0;
     for (int i=0; i < nBuffers; i++)
-        if (i != 13 && dir2rank[i] >= 0)
+        if (i != bulkId && dir2rank[i] >= 0)
         {
             debug3("Sending %s entities to rank %d in dircode %d [%2d %2d %2d], %d entities",
-                    pvName.c_str(), dir2rank[i], i, i%3 - 1, (i/3)%3 - 1, i/9 - 1, sSizes[i]);
+                   pvName.c_str(), dir2rank[i], i, FragmentMapping::getDirx(i), FragmentMapping::getDiry(i), FragmentMapping::getDirz(i), sSizes[i]);
 
             const int tag = nBuffers * tagByName(pvName) + dir2sendTag[i];
 

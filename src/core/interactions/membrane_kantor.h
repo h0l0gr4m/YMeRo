@@ -11,7 +11,8 @@ class InteractionMembraneKantor : public InteractionMembrane
 {
 public:
 
-    InteractionMembraneKantor(std::string name, MembraneParameters parameters, KantorBendingParameters bendingParameters, bool stressFree, float growUntil);
+    InteractionMembraneKantor(const YmrState *state, std::string name, MembraneParameters parameters,
+                              KantorBendingParameters bendingParameters, bool stressFree, float growUntil);
     ~InteractionMembraneKantor();
 
 protected:

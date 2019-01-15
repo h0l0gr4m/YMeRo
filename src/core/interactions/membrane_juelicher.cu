@@ -6,11 +6,11 @@
 #include "membrane_juelicher.h"
 #include "membrane/bending_juelicher.h"
 
-InteractionMembraneJuelicher::InteractionMembraneJuelicher(std::string name,
+InteractionMembraneJuelicher::InteractionMembraneJuelicher(const YmrState *state, std::string name,
                                                            MembraneParameters parameters,
                                                            JuelicherBendingParameters bendingParameters,
                                                            bool stressFree, float growUntil) :
-    InteractionMembrane(name, parameters, stressFree, growUntil),
+    InteractionMembrane(state, name, parameters, stressFree, growUntil),
     bendingParameters(bendingParameters)
 {}
 
@@ -23,10 +23,10 @@ void InteractionMembraneJuelicher::setPrerequisites(ParticleVector* pv1, Particl
 
     auto ov = dynamic_cast<MembraneVector*>(pv1);
     
-    ov->requireDataPerObject<float>("lenThetaTot", false);
+    ov->requireDataPerObject<float>("lenThetaTot", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
-    ov->requireDataPerParticle<float>("areas", false);
-    ov->requireDataPerParticle<float>("meanCurvatures", false);    
+    ov->requireDataPerParticle<float>("areas", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    ov->requireDataPerParticle<float>("meanCurvatures", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 }
 
 

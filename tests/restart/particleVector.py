@@ -13,13 +13,14 @@ args = parser.parse_args()
 
 ranks  = args.ranks
 domain = (4, 6, 8)
+dt = 0
 
 comm = MPI.COMM_WORLD
 
 if args.restart:
-    u = ymr.ymero(MPI._addressof(comm), ranks, domain, debug_level=3, log_filename='log', checkpoint_every=0)
+    u = ymr.ymero(MPI._addressof(comm), ranks, domain, dt, debug_level=3, log_filename='log', checkpoint_every=0)
 else:
-    u = ymr.ymero(MPI._addressof(comm), ranks, domain, debug_level=3, log_filename='log', checkpoint_every=5)
+    u = ymr.ymero(MPI._addressof(comm), ranks, domain, dt, debug_level=3, log_filename='log', checkpoint_every=5)
 
 pv = ymr.ParticleVectors.ParticleVector('pv', mass = 1)
 
@@ -59,12 +60,12 @@ if args.restart and pv:
 # rm -rf restart parts.out.txt parts.txt
 # ymr.run --runargs "-n 1" ./particleVector.py --ranks 1 1 1           > /dev/null
 # ymr.run --runargs "-n 1" ./particleVector.py --ranks 1 1 1 --restart > /dev/null
-# cat parts.txt | sort > parts.out.txt
+# cat parts.txt | LC_ALL=en_US.utf8 sort > parts.out.txt
 
 # TEST: restart.particleVector.mpi
 # cd restart
 # rm -rf restart parts.out.txt parts.txt
 # ymr.run --runargs "-n 4" ./particleVector.py --ranks 1 2 2           > /dev/null
 # ymr.run --runargs "-n 4" ./particleVector.py --ranks 1 2 2 --restart > /dev/null
-# cat parts.txt | sort > parts.out.txt
+# cat parts.txt | LC_ALL=en_US.utf8 sort > parts.out.txt
 

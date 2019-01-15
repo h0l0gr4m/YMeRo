@@ -6,9 +6,10 @@
 #include <memory>
 #include <mpi.h>
 
+class YmrState;
+
 class Simulation;
 class Postprocess;
-
 
 class ParticleVector;
 class ObjectVector;
@@ -24,18 +25,20 @@ class PostprocessPlugin;
 class YMeRo
 {
 public:
-    YMeRo(PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize,
+    YMeRo(PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize, float dt,
           std::string logFileName, int verbosity, int checkpointEvery=0,
           std::string checkpointFolder="restart/", bool gpuAwareMPI=false, bool noSplash=false);
 
-    YMeRo(long commAddress, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize,
+    YMeRo(long commAddress, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize, float dt,
           std::string logFileName, int verbosity, int checkpointEvery=0,
           std::string checkpointFolder="restart/", bool gpuAwareMPI=false, bool noSplash=false);
 
-    YMeRo(MPI_Comm comm, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize,
+    YMeRo(MPI_Comm comm, PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize, float dt,
           std::string logFileName, int verbosity, int checkpointEvery=0,
           std::string checkpointFolder="restart/", bool gpuAwareMPI=false, bool noSplash=false);
 
+    ~YMeRo();
+    
     void restart(std::string folder="restart/");
     bool isComputeTask() const;
     bool isMasterTask() const;
@@ -61,7 +64,10 @@ public:
     void setInteraction (Interaction* interaction, ParticleVector* pv1, ParticleVector* pv2);
     void setBouncer     (Bouncer* bouncer, ObjectVector* ov, ParticleVector* pv);
     void setWallBounce  (Wall* wall, ParticleVector* pv);
-    
+
+    YmrState* getState();
+    const YmrState* getState() const;
+    std::shared_ptr<YmrState> getYmrState();
 
     void dumpWalls2XDMF(std::vector<std::shared_ptr<Wall>> walls, PyTypes::float3 h, std::string filename);
     double computeVolumeInsideWalls(std::vector<std::shared_ptr<Wall>> walls, long nSamplesPerRank = 100000);
@@ -86,11 +92,10 @@ public:
                                                                 std::string outside = "",
                                                                 int checkpointEvery=0);    
     
-    ~YMeRo();
-
 private:
     std::unique_ptr<Simulation> sim;
     std::unique_ptr<Postprocess> post;
+    std::shared_ptr<YmrState> state;
     
     int rank;
     int computeTask;
@@ -102,7 +107,7 @@ private:
 
     MPI_Comm comm;
 
-    void init(int3 nranks3D, float3 globalDomainSize, std::string logFileName, int verbosity,
+    void init(int3 nranks3D, float3 globalDomainSize, float dt, std::string logFileName, int verbosity,
               int checkpointEvery, std::string restartFolder, bool gpuAwareMPI);
     void initLogger(MPI_Comm comm, std::string logFileName, int verbosity);
     void sayHello();

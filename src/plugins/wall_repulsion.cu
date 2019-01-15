@@ -28,6 +28,17 @@ __global__ void forceFromSDF(PVview view, float* sdfs, float3* gradients, float 
 }
 
 
+WallRepulsionPlugin::WallRepulsionPlugin(const YmrState *state, std::string name,
+                                         std::string pvName, std::string wallName,
+                                         float C, float h, float maxForce) :
+    SimulationPlugin(state, name),
+    pvName(pvName),
+    wallName(wallName),
+    C(C),
+    h(h),
+    maxForce(maxForce)
+{}
+
 void WallRepulsionPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
 {
     SimulationPlugin::setup(simulation, comm, interComm);
@@ -35,8 +46,8 @@ void WallRepulsionPlugin::setup(Simulation* simulation, const MPI_Comm& comm, co
     pv = simulation->getPVbyNameOrDie(pvName);
     wall = dynamic_cast<SDF_basedWall*>(simulation->getWallByNameOrDie(wallName));
     
-    pv->requireDataPerParticle<float>("sdf", false);
-    pv->requireDataPerParticle<float3>("grad_sdf", false);
+    pv->requireDataPerParticle<float>("sdf", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv->requireDataPerParticle<float3>("grad_sdf", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
     if (wall == nullptr)
         die("Wall repulsion plugin '%s' can only work with SDF-based walls, but got wall '%s'",

@@ -7,19 +7,19 @@
 #include <core/pvs/views/pv.h>
 
 
-IntegratorConstOmega::IntegratorConstOmega(std::string name, float dt, float3 center, float3 omega) :
-    Integrator(name, dt),
+IntegratorConstOmega::IntegratorConstOmega(const YmrState *state, std::string name, float3 center, float3 omega) :
+    Integrator(state, name),
     center(center), omega(omega)
-{   }
+{}
 
 IntegratorConstOmega::~IntegratorConstOmega() = default;
 
-void IntegratorConstOmega::stage1(ParticleVector* pv, float t, cudaStream_t stream)
-{   }
+void IntegratorConstOmega::stage1(ParticleVector *pv, cudaStream_t stream)
+{}
 
-void IntegratorConstOmega::stage2(ParticleVector* pv, float t, cudaStream_t stream)
+void IntegratorConstOmega::stage2(ParticleVector *pv, cudaStream_t stream)
 {
-    const auto domain = pv->domain;
+    const auto domain = state->domain;
     const auto _center = center;
     const auto _omega = omega;
 

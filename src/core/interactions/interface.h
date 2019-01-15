@@ -22,14 +22,23 @@ public:
     /// Cut-off raduis
     float rc;
 
-    Interaction(std::string name, float rc) : YmrSimulationObject(name), rc(rc) {}
+    Interaction(const YmrState *state, std::string name, float rc);
+
+    virtual ~Interaction();
 
     /**
      * Ask ParticleVectors which the class will be working with to have specific properties
      * Default: ask nothing
      * Called from Simulation right after setup
      */
-    virtual void setPrerequisites(ParticleVector* pv1, ParticleVector* pv2) {}
+    virtual void setPrerequisites(ParticleVector *pv1, ParticleVector *pv2);
+
+    /**
+     * Init fields in particle vectors reuired before interaction
+     * Default: do nothing
+     * Called from Simulation at every step
+     */
+    virtual void initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream);
 
     /**
      * Interface to compute local interactions.
@@ -41,9 +50,9 @@ public:
      *            the \p pv1, self interactions will be computed
      * @param cl1 cell-list built for the appropriate cut-off raduis #rc for \p pv1
      * @param cl2 cell-list built for the appropriate cut-off raduis #rc for \p pv2
-     * @param t current simulation time
      */
-    virtual void regular(ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, const float t, cudaStream_t stream) = 0;
+    virtual void regular(ParticleVector *pv1, ParticleVector *pv2,
+                         CellList *cl1, CellList *cl2, cudaStream_t stream) = 0;
 
     /**
      * Interface to compute halo interactions. It principle it has to compute
@@ -54,7 +63,7 @@ public:
      * @param pv2 second interacting ParticleVector
      * @param cl1 cell-list built for the appropriate cut-off raduis #rc for \p pv1
      * @param cl2 cell-list built for the appropriate cut-off raduis #rc for \p pv2
-     * @param t current simulation time
      */
-    virtual void halo   (ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, const float t, cudaStream_t stream) = 0;
+    virtual void halo(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1,
+                      CellList *cl2, cudaStream_t stream) = 0;
 };

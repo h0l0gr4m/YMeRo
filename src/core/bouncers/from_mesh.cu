@@ -17,10 +17,12 @@
  * @param kbT temperature which will be used to create a particle
  * velocity after the bounce, @see performBouncing()
  */
-BounceFromMesh::BounceFromMesh(std::string name, float kbT) :
-    Bouncer(name), kbT(kbT)
-{    }
+BounceFromMesh::BounceFromMesh(const YmrState *state, std::string name, float kbT) :
+    Bouncer(state, name),
+    kbT(kbT)
+{}
 
+BounceFromMesh::~BounceFromMesh() = default;
 
 /**
  * @param ov will need an 'old_particles' per PARTICLE channel keeping positions
@@ -43,15 +45,15 @@ void BounceFromMesh::setup(ObjectVector* ov)
     // old motions HAVE to be there and communicated and shifted
 
     if (rov == nullptr)
-        ov->requireDataPerParticle<Particle> ("old_particles", true, sizeof(float));
+        ov->requireDataPerParticle<Particle> ("old_particles", ExtraDataManager::CommunicationMode::NeedExchange, ExtraDataManager::PersistenceMode::None, sizeof(float));
     else
-        ov->requireDataPerObject<RigidMotion> ("old_motions", true, sizeof(RigidReal));
+        ov->requireDataPerObject<RigidMotion> ("old_motions", ExtraDataManager::CommunicationMode::NeedExchange, ExtraDataManager::PersistenceMode::None, sizeof(RigidReal));
 }
 
 /**
  * Bounce particles from objects with meshes
  */
-void BounceFromMesh::exec(ParticleVector* pv, CellList* cl, float dt, bool local, cudaStream_t stream)
+void BounceFromMesh::exec(ParticleVector *pv, CellList *cl, bool local, cudaStream_t stream)
 {
     auto activeOV = local ? ov->local() : ov->halo();
 
@@ -133,7 +135,7 @@ void BounceFromMesh::exec(ParticleVector* pv, CellList* cl, float dt, bool local
             getNblocks(fineTable.nCollisions[0], nthreads), nthreads, 0, stream,
             vertexView, pvView, ov->mesh.get(),
             fineTable.nCollisions[0], devFineTable.indices, collisionTimes.devPtr(),
-            dt, kbT, drand48(), drand48() );
+            state->dt, kbT, drand48(), drand48() );
 
     if (rov != nullptr)
     {
