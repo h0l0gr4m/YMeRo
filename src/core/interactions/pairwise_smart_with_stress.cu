@@ -11,8 +11,9 @@ template<class PairwiseInteraction>
 void SmartInteractionPair_withStress<PairwiseInteraction>::regular(
         ParticleVector* pv1, ParticleVector* pv2,
         CellList* cl1, CellList* cl2,
-        const float t, cudaStream_t stream)
+       cudaStream_t stream)
 {
+    float t = state->currentTime;
     if (lastStressTime+stressPeriod <= t || lastStressTime == t)
     {
         debug("Executing interaction '%s' with stress", name.c_str());
@@ -29,19 +30,20 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::regular(
             pv2lastStressTime[pv2] = t;
         }
 
-        interactionWithStress.regular(pv1, pv2, cl1, cl2, t, stream);
+        interactionWithStress.regular(pv1, pv2, cl1, cl2,  stream);
         lastStressTime = t;
     }
     else
-        interaction.regular(pv1, pv2, cl1, cl2, t, stream);
+        interaction.regular(pv1, pv2, cl1, cl2, stream);
 }
 
 template<class PairwiseInteraction>
 void SmartInteractionPair_withStress<PairwiseInteraction>::halo   (
         ParticleVector* pv1, ParticleVector* pv2,
         CellList* cl1, CellList* cl2,
-        const float t, cudaStream_t stream)
+        cudaStream_t stream)
 {
+    float t = state->currentTime;
     if (lastStressTime+stressPeriod <= t || lastStressTime == t)
     {
         debug("Executing interaction '%s' with stress", name.c_str());
@@ -58,11 +60,11 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::halo   (
             pv2lastStressTime[pv2] = t;
         }
 
-        interactionWithStress.halo(pv1, pv2, cl1, cl2, t, stream);
+        interactionWithStress.halo(pv1, pv2, cl1, cl2, stream);
         lastStressTime = t;
     }
     else
-        interaction.halo(pv1, pv2, cl1, cl2, t, stream);
+        interaction.halo(pv1, pv2, cl1, cl2,stream);
 }
 
 template<class PairwiseInteraction>
@@ -71,14 +73,14 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::setPrerequisites(Part
     info("Interaction '%s' requires channel 'parameterName' from PVs '%s' and '%s'",
          name.c_str(), pv1->name.c_str(), pv2->name.c_str());
 
-    pv1->requireDataPerParticle<DPDparameter>(parameterName, true);
-    pv2->requireDataPerParticle<DPDparameter>(parameterName, true);
+    pv1->requireDataPerParticle<DPDparameter>(parameterName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle<DPDparameter>(parameterName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
     info("Interaction '%s' requires channel 'stress' from PVs '%s' and '%s'",
          name.c_str(), pv1->name.c_str(), pv2->name.c_str());
 
-    pv1->requireDataPerParticle<Stress>(stressName, false);
-    pv2->requireDataPerParticle<Stress>(stressName, false);
+    pv1->requireDataPerParticle<Stress>(stressName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle<Stress>(stressName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
     pv2lastStressTime[pv1] = -1;
     pv2lastStressTime[pv2] = -1;
@@ -86,15 +88,15 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::setPrerequisites(Part
 
 template<class PairwiseInteraction>
 SmartInteractionPair_withStress<PairwiseInteraction>::SmartInteractionPair_withStress(
-    std::string name,std::string parameterName,float a,float gamma,std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
+    const YmrState *state,std::string name,std::string parameterName,float a,float gamma,std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
     a(a),
     gamma(gamma),
     parameterName(parameterName),
-    Interaction(name, rc),
+    Interaction(state,name, rc),
     stressName(stressName),
     stressPeriod(stressPeriod),
-    interaction(name,parameterName,a,gamma,rc, pair),
-    interactionWithStress(name,parameterName,a,gamma,rc, PairwiseStressWrapper<PairwiseInteraction>(stressName, pair))
+    interaction(state,name,parameterName,a,gamma,rc, pair),
+    interactionWithStress(state,name,parameterName,a,gamma,rc, PairwiseStressWrapper<PairwiseInteraction>(stressName, pair))
 { }
 
 template<class PairwiseInteraction>

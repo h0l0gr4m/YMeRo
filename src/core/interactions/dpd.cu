@@ -13,7 +13,7 @@ InteractionDPD::InteractionDPD(const YmrState *state, std::string name, float rc
 {
     if (allocateImpl) {
         Pairwise_DPD dpd(rc, a, gamma, kbt, state->dt, power);
-        impl = std::make_unique<InteractionPair<Pairwise_DPD>> (state, name, rc, dpd);
+        impl = std::make_unique<InteractionPair<Pairwise_DPD>> (state,  name, rc, dpd);
     }
 }
 
@@ -47,7 +47,7 @@ void InteractionDPD::halo(ParticleVector *pv1, ParticleVector *pv2,
     impl->halo(pv1, pv2, cl1, cl2, stream);
 }
 
-void InteractionDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2, 
+void InteractionDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
         float a, float gamma, float kbt, float power)
 {
     if (a     == Default) a     = this->a;
@@ -57,8 +57,6 @@ void InteractionDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
 
     Pairwise_DPD dpd(this->rc, a, gamma, kbt, state->dt, power);
     auto ptr = static_cast< InteractionPair<Pairwise_DPD>* >(impl.get());
-    
+
     ptr->setSpecificPair(pv1->name, pv2->name, dpd);
 }
-
-

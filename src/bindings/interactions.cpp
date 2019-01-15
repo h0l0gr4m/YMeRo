@@ -19,69 +19,70 @@ using namespace pybind11::literals;
 
 void exportInteractions(py::module& m)
 {
-    py::handlers_class<Interaction> pyInt(m, "Interaction", "Base interaction class");
+  py::handlers_class<Interaction> pyInt(m, "Interaction", "Base interaction class");
 
-    py::handlers_class<InteractionDPD> pyIntDPD(m, "DPD", pyInt, R"(
-        Pairwise interaction with conservative part and dissipative + random part acting as a thermostat, see [Groot1997]_
+ py::handlers_class<InteractionDPD> pyIntDPD(m, "DPD", pyInt, R"(
+     Pairwise interaction with conservative part and dissipative + random part acting as a thermostat, see [Groot1997]_
 
-        .. math::
+     .. math::
 
-            \mathbf{F}_{ij} &= \mathbf{F}^C(\mathbf{r}_{ij}) + \mathbf{F}^D(\mathbf{r}_{ij}, \mathbf{u}_{ij}) + \mathbf{F}^R(\mathbf{r}_{ij}) \\
-            \mathbf{F}^C(\mathbf{r}) &= \begin{cases} a(1-\frac{r}{r_c}) \mathbf{\hat r}, & r < r_c \\ 0, & r \geqslant r_c \end{cases} \\
-            \mathbf{F}^D(\mathbf{r}, \mathbf{u}) &= \gamma w^2(\frac{r}{r_c}) (\mathbf{r} \cdot \mathbf{u}) \mathbf{\hat r} \\
-            \mathbf{F}^R(\mathbf{r}) &= \sigma w(\frac{r}{r_c}) \, \theta \sqrt{\Delta t} \, \mathbf{\hat r}
+         \mathbf{F}_{ij} &= \mathbf{F}^C(\mathbf{r}_{ij}) + \mathbf{F}^D(\mathbf{r}_{ij}, \mathbf{u}_{ij}) + \mathbf{F}^R(\mathbf{r}_{ij}) \\
+         \mathbf{F}^C(\mathbf{r}) &= \begin{cases} a(1-\frac{r}{r_c}) \mathbf{\hat r}, & r < r_c \\ 0, & r \geqslant r_c \end{cases} \\
+         \mathbf{F}^D(\mathbf{r}, \mathbf{u}) &= \gamma w^2(\frac{r}{r_c}) (\mathbf{r} \cdot \mathbf{u}) \mathbf{\hat r} \\
+         \mathbf{F}^R(\mathbf{r}) &= \sigma w(\frac{r}{r_c}) \, \theta \sqrt{\Delta t} \, \mathbf{\hat r}
 
-        where bold symbol means a vector, its regular counterpart means vector length:
-        :math:`x = \left\lVert \mathbf{x} \right\rVert`, hat-ed symbol is the normalized vector:
-        :math:`\mathbf{\hat x} = \mathbf{x} / \left\lVert \mathbf{x} \right\rVert`. Moreover, :math:`\theta` is the random variable with zero mean
-        and unit variance, that is distributed independently of the interacting pair *i*-*j*, dissipation and random forces
-        are related by the fluctuation-dissipation theorem: :math:`\sigma^2 = 2 \gamma \, k_B T`; and :math:`w(r)` is the weight function
-        that we define as follows:
+     where bold symbol means a vector, its regular counterpart means vector length:
+     :math:`x = \left\lVert \mathbf{x} \right\rVert`, hat-ed symbol is the normalized vector:
+     :math:`\mathbf{\hat x} = \mathbf{x} / \left\lVert \mathbf{x} \right\rVert`. Moreover, :math:`\theta` is the random variable with zero mean
+     and unit variance, that is distributed independently of the interacting pair *i*-*j*, dissipation and random forces
+     are related by the fluctuation-dissipation theorem: :math:`\sigma^2 = 2 \gamma \, k_B T`; and :math:`w(r)` is the weight function
+     that we define as follows:
 
-        .. math::
+     .. math::
 
-            w(r) = \begin{cases} (1-r)^{p}, & r < 1 \\ 0, & r \geqslant 1 \end{cases}
+         w(r) = \begin{cases} (1-r)^{p}, & r < 1 \\ 0, & r \geqslant 1 \end{cases}
 
-        .. [Groot1997] Groot, R. D., & Warren, P. B. (1997).
-            Dissipative particle dynamics: Bridging the gap between atomistic and mesoscopic simulations.
-            J. Chem. Phys., 107(11), 4423–4435. `doi <https://doi.org/10.1063/1.474784>`_
-    )");
+     .. [Groot1997] Groot, R. D., & Warren, P. B. (1997).
+         Dissipative particle dynamics: Bridging the gap between atomistic and mesoscopic simulations.
+         J. Chem. Phys., 107(11), 4423–4435. `doi <https://doi.org/10.1063/1.474784>`_
+ )");
 
-    pyIntDPD.def(py::init<const YmrState*, std::string, float, float, float, float, float>(),
-                 "state"_a, "name"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
-            Args:
-            name: name of the interaction
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                a: :math:`a`
-                gamma: :math:`\gamma`
-                kbt: :math:`k_B T`
-                power: :math:`p` in the weight function
-    )");
+ pyIntDPD.def(py::init<const YmrState*, std::string, float, float, float, float, float>(),
+              "state"_a, "name"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
+         Args:
+         name: name of the interaction
+             rc: interaction cut-off (no forces between particles further than **rc** apart)
+             a: :math:`a`
+             gamma: :math:`\gamma`
+             kbt: :math:`k_B T`
+             power: :math:`p` in the weight function
+ )");
 
-    pyIntDPD.def("setSpecificPair", &InteractionDPD::setSpecificPair,
-         "pv1"_a, "pv2"_a,
-         "a"_a=InteractionDPD::Default, "gamma"_a=InteractionDPD::Default,
-         "kbt"_a=InteractionDPD::Default, "power"_a=InteractionDPD::Default,
-         R"(
-            Override some of the interaction parameters for a specific pair of Particle Vectors
-         )");
+ pyIntDPD.def("setSpecificPair", &InteractionDPD::setSpecificPair,
+      "pv1"_a, "pv2"_a,
+      "a"_a=InteractionDPD::Default, "gamma"_a=InteractionDPD::Default,
+      "kbt"_a=InteractionDPD::Default, "power"_a=InteractionDPD::Default,
+      R"(
+         Override some of the interaction parameters for a specific pair of Particle Vectors
+      )");
 
-    py::handlers_class<InteractionDPDWithStress> pyIntDPDWithStress(m, "DPDWithStress", pyIntDPD, R"(
-        wrapper of :any:`DPD` with, in addition, stress computation
-    )");
+ py::handlers_class<InteractionDPDWithStress> pyIntDPDWithStress(m, "DPDWithStress", pyIntDPD, R"(
+     wrapper of :any:`DPD` with, in addition, stress computation
+ )");
 
-    pyIntDPDWithStress.def(py::init<const YmrState*, std::string, std::string, float, float, float, float, float, float>(),
-                           "state"_a, "name"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, "stressPeriod"_a, R"(
-            Args:
-                name: name of the interaction
-                stressName: name of the stress entry
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                a: :math:`a`
-                gamma: :math:`\gamma`
-                kbt: :math:`k_B T`
-                power: :math:`p` in the weight function
-                stressPeriod: compute the stresses every this period (in simulation time units)
-    )");
+ pyIntDPDWithStress.def(py::init<const YmrState*, std::string, std::string, float, float, float, float, float, float>(),
+                        "state"_a, "name"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, "stressPeriod"_a, R"(
+         Args:
+             name: name of the interaction
+             stressName: name of the stress entry
+             rc: interaction cut-off (no forces between particles further than **rc** apart)
+             a: :math:`a`
+             gamma: :math:`\gamma`
+             kbt: :math:`k_B T`
+             power: :math:`p` in the weight function
+             stressPeriod: compute the stresses every this period (in simulation time units)
+ )");
+
 
     py::handlers_class<InteractionLJ> pyIntLJ (m, "LJ", pyInt, R"(
         Pairwise interaction according to the classical `Lennard-Jones potential <https://en.wikipedia.org/wiki/Lennard-Jones_potential>`_
@@ -290,7 +291,7 @@ void exportInteractions(py::module& m)
     )");
 
 
-    pyIntDPD.def(py::init<const YmrState*, std::string, float, float, float, float, float>(),
+    pyIntSmartDPD.def(py::init<const YmrState*, std::string, std::string,float, float, float, float, float>(),
                  "state"_a, "name"_a,"parameterName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
             Args:
             name: name of the interaction
@@ -305,7 +306,7 @@ void exportInteractions(py::module& m)
     pyIntSmartDPD.def("setSpecificPair", &InteractionSmartDPD::setSpecificPair,
          "pv1"_a, "pv2"_a,
          "a"_a=InteractionSmartDPD::Default, "gamma"_a=InteractionSmartDPD::Default,
-         "kbt"_a=InteractionSmartDPD::Default, "dt"_a=InteractionSmartDPD::Default, "power"_a=InteractionSmartDPD::Default,
+         "kbt"_a=InteractionSmartDPD::Default,"power"_a=InteractionSmartDPD::Default,
          R"(
             Override some of the interaction parameters for a specific pair of Particle Vectors
     )");
@@ -315,8 +316,8 @@ void exportInteractions(py::module& m)
         wrapper of :any:`SmartDPD` with, in addition, stress computation
     )");
 
-    pyIntSmartDPDWithStress.def(py::init<const YmrState*,std::string, std::string,std::string, float, float, float, float, float, float, float>(),
-                                "state"_a,"name"_a,"parameterName"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "dt"_a, "power"_a, "stressPeriod"_a, R"(
+    pyIntSmartDPDWithStress.def(py::init<const YmrState*,std::string, std::string,std::string, float, float, float, float, float, float>(),
+                                "state"_a,"name"_a,"parameterName"_a, "stressName"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, "stressPeriod"_a, R"(
                  Args:
                      name: name of the interaction
                      parametName: name of the dpd parameter
@@ -325,7 +326,6 @@ void exportInteractions(py::module& m)
                      a: :math:`a`
                      gamma: :math:`\gamma`
                      kbt: :math:`k_B T`
-                     dt: time-step, that for consistency has to be the same as the integration time-step for the corresponding particle vectors
                      power: :math:`p` in the weight function
                      stressPeriod: compute the stresses every this period (in simulation time units)
     )");

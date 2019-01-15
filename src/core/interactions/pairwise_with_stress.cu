@@ -98,31 +98,6 @@ void InteractionPair_withStress<PairwiseInteraction>::halo   (
 }
 
 template<class PairwiseInteraction>
-void InteractionPair_withStress<PairwiseInteraction>::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2)
-{
-
-    info("Interaction '%s' requires channel 'stress' from PVs '%s' and '%s'",
-         name.c_str(), pv1->name.c_str(), pv2->name.c_str());
-
-    pv1->requireDataPerParticle<Stress>(stressName, false);
-    pv2->requireDataPerParticle<Stress>(stressName, false);
-
-    pv2lastStressTime[pv1] = -1;
-    pv2lastStressTime[pv2] = -1;
-}
-
-template<class PairwiseInteraction>
-InteractionPair_withStress<PairwiseInteraction>::InteractionPair_withStress(
-    std::string name, std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
-
-    Interaction(name, rc),
-    stressName(stressName),
-    stressPeriod(stressPeriod),
-    interaction(name, rc, pair),
-    interactionWithStress(name, rc, PairwiseStressWrapper<PairwiseInteraction>(stressName, pair))
-{ }
-
-template<class PairwiseInteraction>
 void InteractionPair_withStress<PairwiseInteraction>::setSpecificPair(
         std::string pv1name, std::string pv2name, PairwiseInteraction pair)
 {
