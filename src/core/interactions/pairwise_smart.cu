@@ -9,13 +9,16 @@
 
 #include "pairwise_kernels.h"
 
+
 #include "pairwise_interactions/stress_wrapper.h"
 #include "pairwise_interactions/smartdpd.h"
 #include "pairwise_interactions/dpd.h"
 #include "pairwise_interactions/lj.h"
 #include "pairwise_interactions/lj_object_aware.h"
-
 #include "pairwise_interactions/norandom_dpd.h"
+
+#include "calculations/FlowProperties.h"
+#include "calculations/NNInputs.h"
 
 __global__ void copy_kernel(DPDparameter* devPointer ,int np, float a, float gamma)
 {
@@ -140,7 +143,8 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
     if (type == InteractionType::Regular)
     {
         pair.setup(pv1->local(), pv2->local(), cl1, cl2, t);
-
+        calculation_FlowProperties.setup(pv1->local(), pv2->local(), cl1, cl2, t);
+        calculation_NNInputs.setup(pv1->local(), pv2->local(), cl1, cl2, t);
         /*  Self interaction */
         if (pv1 == pv2)
         {
@@ -162,7 +166,8 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
             SAFE_KERNEL_LAUNCH(
                     computeSelfInteractions,
                     getNblocks(np, nth), nth, 0, stream,
-                    np, cinfo, rc*rc, pair);
+                    np, cinfo, rc*rc, pair,calculation_FlowProperties,calculation_NNInputs);
+
         }
         else /*  External interaction */
         {
@@ -182,6 +187,8 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
     if (type == InteractionType::Halo)
     {
         pair.setup(pv1->halo(), pv2->local(), cl1, cl2, t);
+        calculation_FlowProperties.setup(pv1->halo(), pv2->local(), cl1, cl2, t);
+        calculation_NNInputs.setup(pv1->halo(), pv2->local(), cl1, cl2, t);
 
         const int np1 = pv1->halo()->size();  // note halo here
         const int np2 = pv2->local()->size();
@@ -208,6 +215,37 @@ void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector*
     pv2->requireDataPerParticle<DPDparameter>(parameterName,ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
 
+    pv1->requireDataPerParticle<Divergence>("div_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle<Divergence>("div_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    pv1->requireDataPerParticle<Vorticity>("vorticity_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle<Vorticity>("vorticity_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    pv1->requireDataPerParticle<Velocity_Gradient>("v_grad_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle<Velocity_Gradient>("v_grad_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    pv1->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+}
+
+template<class PairwiseInteraction>
+void InteractionPairSmart<PairwiseInteraction>::initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream)
+{
+
+    pv1->local()->extraPerParticle.getData<Divergence>("div_name")->clear(stream);
+    pv2->local()->extraPerParticle.getData<Divergence>("div_name")->clear(stream);
+
+    pv1->local()->extraPerParticle.getData<Vorticity>("vorticity_name")->clear(stream);
+    pv2->local()->extraPerParticle.getData<Vorticity>("vorticity_name")->clear(stream);
+
+    pv1->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
+    pv2->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
+
+    pv1->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
+    pv2->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
+
+    pv1->local()->extraPerParticle.getData<Velocity_Gradient>("NNInputs")->clear(stream);
+    pv2->local()->extraPerParticle.getData<Velocity_Gradient>("NNInputs")->clear(stream);
 }
 
 template<class PairwiseInteraction>

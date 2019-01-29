@@ -312,6 +312,9 @@ __device__ inline float fastPower(const float x, const float k)
     return powf(fabsf(x), k);
 }
 
+
+
+
 #endif
 
 

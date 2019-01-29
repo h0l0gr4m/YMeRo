@@ -21,13 +21,13 @@ public:
 
         pv1Stress = lpv1->extraPerParticle.getData<Stress>(stressName)->devPtr();
         pv2Stress = lpv2->extraPerParticle.getData<Stress>(stressName)->devPtr();
+
     }
 
     __device__ inline float3 operator()(const Particle dst, int dstId, const Particle src, int srcId) const
     {
         const float3 dr = dst.r - src.r;
         float3 f = basicForce(dst, dstId, src, srcId);
-
         const float sxx = 0.5f * dr.x * f.x;
         const float sxy = 0.5f * dr.x * f.y;
         const float sxz = 0.5f * dr.x * f.z;

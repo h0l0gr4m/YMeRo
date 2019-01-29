@@ -25,6 +25,7 @@ class LocalParticleVector
 public:
     ParticleVector* pv;
 
+ 
     PinnedBuffer<Particle> coosvels;
     DeviceBuffer<Force> forces;
     ExtraDataManager extraPerParticle;
@@ -34,7 +35,7 @@ public:
     int size() { return np; }
     virtual void resize(const int n, cudaStream_t stream);
     virtual void resize_anew(const int n);
-    
+
     virtual ~LocalParticleVector();
 
 protected:
@@ -47,9 +48,9 @@ class ParticleVector : public YmrSimulationObject
 protected:
 
     LocalParticleVector *_local, *_halo;
-    
+
 public:
-    
+
     float mass;
 
     bool haloValid = false;
@@ -65,30 +66,30 @@ public:
     void checkpoint(MPI_Comm comm, std::string path) override;
     void restart(MPI_Comm comm, std::string path) override;
 
-    
+
     // Python getters / setters
     // Use default blocking stream
     std::vector<int> getIndices_vector();
     PyTypes::VectorOfFloat3 getCoordinates_vector();
     PyTypes::VectorOfFloat3 getVelocities_vector();
     PyTypes::VectorOfFloat3 getForces_vector();
-    
+
     void setCoosVels_globally(PyTypes::VectorOfFloat6& coosvels, cudaStream_t stream=0);
     void createIndicesHost();
 
     void setCoordinates_vector(PyTypes::VectorOfFloat3& coordinates);
     void setVelocities_vector(PyTypes::VectorOfFloat3& velocities);
     void setForces_vector(PyTypes::VectorOfFloat3& forces);
-    
-    
+
+
     ~ParticleVector() override;
-    
+
     template<typename T>
     void requireDataPerParticle(std::string name, ExtraDataManager::CommunicationMode communication, ExtraDataManager::PersistenceMode persistence)
     {
         requireDataPerParticle<T>(name, communication, persistence, 0);
     }
-    
+
     template<typename T>
     void requireDataPerParticle(std::string name, ExtraDataManager::CommunicationMode communication, ExtraDataManager::PersistenceMode persistence, size_t shiftDataSize)
     {
@@ -104,9 +105,9 @@ protected:
 
     void _extractPersistentExtraData(ExtraDataManager& extraData, std::vector<XDMF::Channel>& channels, const std::set<std::string>& blackList);
     void _extractPersistentExtraParticleData(std::vector<XDMF::Channel>& channels, const std::set<std::string>& blackList = {});
-    
+
     virtual void _checkpointParticleData(MPI_Comm comm, std::string path);
-    virtual std::vector<int> _restartParticleData(MPI_Comm comm, std::string path);    
+    virtual std::vector<int> _restartParticleData(MPI_Comm comm, std::string path);
 
     void advanceRestartIdx();
     int restartIdx = 0;
@@ -123,7 +124,3 @@ private:
         if (shiftDataSize != 0) lpv->extraPerParticle.requireShift(name, shiftDataSize);
     }
 };
-
-
-
-

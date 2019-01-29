@@ -255,3 +255,29 @@ struct Stress
 {
     float xx, xy, xz, yy, yz, zz;
 };
+
+struct Divergence
+{
+   float div;
+};
+
+struct Vorticity
+{
+   float x,y,z;
+};
+
+struct Velocity_Gradient
+{
+   float xx,xy,xz,yx,yy,yz,zx,zy,zz;
+};
+
+struct NNInput
+{
+   float d,g1,g2,g3,g4,g5,g6,v1,v2,v3;
+};
+
+
+
+
+
+

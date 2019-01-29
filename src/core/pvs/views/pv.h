@@ -11,7 +11,7 @@ struct PVview
     int size = 0;
     float4 *particles = nullptr;
     float4 *forces = nullptr;
-
+  
     float mass = 0, invMass = 0;
 
     PVview(ParticleVector* pv = nullptr, LocalParticleVector* lpv = nullptr)

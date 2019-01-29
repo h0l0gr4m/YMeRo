@@ -1,6 +1,9 @@
 #pragma once
 #include "interface.h"
 #include "pairwise_interactions/smartdpd.h"
+#include "calculations/FlowProperties.h"
+#include "calculations/NNInputs.h"
+
 
 
 #include <map>
@@ -25,6 +28,7 @@ public:
     { }
 
     void setSpecificPair(std::string pv1name, std::string pv2name, PairwiseInteraction pair);
+    void initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream) override;
 
 
 
@@ -37,4 +41,6 @@ private:
     std::string parameterName;
     PairwiseInteraction defaultPair;
     DPDparameter *pv1DPDparameter, *pv2DPDparameter;
+    FlowProperties calculation_FlowProperties;
+    NNInputs calculation_NNInputs;
 };

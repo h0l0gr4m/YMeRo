@@ -113,7 +113,7 @@ CellList::CellList(ParticleVector* pv, float rc, float3 localDomainSize) :
         particlesDataContainer(new LocalParticleVector(nullptr))
 {
     localPV = particlesDataContainer.get();
-    
+
     cellSizes. resize_anew(totcells + 1);
     cellStarts.resize_anew(totcells + 1);
 
@@ -129,7 +129,7 @@ CellList::CellList(ParticleVector* pv, int3 resolution, float3 localDomainSize) 
         particlesDataContainer(new LocalParticleVector(nullptr))
 {
     localPV = particlesDataContainer.get();
-    
+
     cellSizes. resize_anew(totcells + 1);
     cellStarts.resize_anew(totcells + 1);
 
@@ -205,7 +205,7 @@ void CellList::_reorderExtraData(cudaStream_t stream)
     auto dstExtraData = &particlesDataContainer->extraPerParticle;
 
     int np = pv->local()->size();
-    
+
     for (auto& namedChannel : srcExtraData->getSortedChannels())
     {
         auto channelName = namedChannel.first;
@@ -242,17 +242,17 @@ void CellList::_build(cudaStream_t stream)
     _computeCellStarts(stream);
     _reorderData(stream);
     _reorderExtraData(stream);
-    
+
     changedStamp = pv->cellListStamp;
 }
 
 CellListInfo CellList::cellInfo()
 {
-    CellListInfo::particles  = reinterpret_cast<float4*>(localPV->coosvels.devPtr());
-    CellListInfo::forces     = reinterpret_cast<float4*>(localPV->forces.devPtr());
-    CellListInfo::cellSizes  = cellSizes.devPtr();
-    CellListInfo::cellStarts = cellStarts.devPtr();
-    CellListInfo::order      = order.devPtr();
+    CellListInfo::particles      = reinterpret_cast<float4*>(localPV->coosvels.devPtr());
+    CellListInfo::forces         = reinterpret_cast<float4*>(localPV->forces.devPtr());
+    CellListInfo::cellSizes      = cellSizes.devPtr();
+    CellListInfo::cellStarts     = cellStarts.devPtr();
+    CellListInfo::order          = order.devPtr();
 
     return *((CellListInfo*)this);
 }
@@ -333,4 +333,3 @@ void PrimaryCellList::build(cudaStream_t stream)
     std::swap(pv->local()->coosvels, particlesDataContainer->coosvels);
     pv->local()->resize(newSize, stream);
 }
-

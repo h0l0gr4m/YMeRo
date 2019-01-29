@@ -24,6 +24,7 @@ public:
     SmartInteractionPair_withStress(const YmrState *state,std::string name,std::string parameterName,float a,float gamma, std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair);
 
     void setSpecificPair(std::string pv1name, std::string pv2name, PairwiseInteraction pair);
+    void initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream) override;
 
     ~SmartInteractionPair_withStress() = default;
 

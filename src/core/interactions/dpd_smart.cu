@@ -42,6 +42,11 @@ void InteractionSmartDPD::halo   (ParticleVector* pv1, ParticleVector* pv2,
     impl->halo   (pv1, pv2, cl1, cl2,stream);
 }
 
+void InteractionSmartDPD::initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream)
+{
+    impl->initStep(pv1, pv2, stream);
+}
+
 void InteractionSmartDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
         float a, float gamma, float kbt, float power)
 {

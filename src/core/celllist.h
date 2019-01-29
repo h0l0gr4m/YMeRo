@@ -97,17 +97,17 @@ protected:
 
     std::unique_ptr<LocalParticleVector> particlesDataContainer;
     LocalParticleVector *localPV; // will point to particlesDataContainer or pv->local() if Primary
-    
+
     ParticleVector* pv;
 
     void _computeCellSizes(cudaStream_t stream);
     void _computeCellStarts(cudaStream_t stream);
     void _reorderData(cudaStream_t stream);
     void _reorderExtraData(cudaStream_t stream);
-    
-    void _build(cudaStream_t stream);    
 
-public:    
+    void _build(cudaStream_t stream);
+
+public:
 
     CellList(ParticleVector* pv, float rc, float3 localDomainSize);
     CellList(ParticleVector* pv, int3 resolution, float3 localDomainSize);
@@ -135,5 +135,3 @@ public:
 
     ~PrimaryCellList() = default;
 };
-
-
