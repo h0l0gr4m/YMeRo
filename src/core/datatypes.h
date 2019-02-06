@@ -175,7 +175,7 @@ struct __align__(16) Particle
     {
         return Float3_int{r, i1};
     }
-    
+
     /**
      * Helps writing particles back to \e float4 array
      *
@@ -256,9 +256,10 @@ struct Stress
     float xx, xy, xz, yy, yz, zz;
 };
 
-struct Divergence
+
+struct Aprox_Density
 {
-   float div;
+  float x;
 };
 
 struct Vorticity
@@ -273,11 +274,5 @@ struct Velocity_Gradient
 
 struct NNInput
 {
-   float d,g1,g2,g3,g4,g5,g6,v1,v2,v3;
+   float g1,g2,g3,v1,d1,d2;
 };
-
-
-
-
-
-

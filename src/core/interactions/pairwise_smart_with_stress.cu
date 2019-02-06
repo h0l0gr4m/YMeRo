@@ -72,30 +72,15 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::halo   (
 template<class PairwiseInteraction>
 void SmartInteractionPair_withStress<PairwiseInteraction>::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2)
 {
-    info("Interaction '%s' requires channel 'parameterName' from PVs '%s' and '%s'",
-         name.c_str(), pv1->name.c_str(), pv2->name.c_str());
 
-
-    pv1->requireDataPerParticle<DPDparameter>(parameterName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-    pv2->requireDataPerParticle<DPDparameter>(parameterName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-
+    interaction.setPrerequisites(pv1,pv2);
     info("Interaction '%s' requires channel 'stress' from PVs '%s' and '%s'",
          name.c_str(), pv1->name.c_str(), pv2->name.c_str());
 
     pv1->requireDataPerParticle<Stress>(stressName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<Stress>(stressName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
-    pv1->requireDataPerParticle<Divergence>("div_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-    pv2->requireDataPerParticle<Divergence>("div_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
-    pv1->requireDataPerParticle<Vorticity>("vorticity_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-    pv2->requireDataPerParticle<Vorticity>("vorticity_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-
-    pv1->requireDataPerParticle<Velocity_Gradient>("v_grad_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-    pv2->requireDataPerParticle<Velocity_Gradient>("v_grad_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-
-    pv1->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-    pv2->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
     pv2lastStressTime[pv1] = -1;
     pv2lastStressTime[pv2] = -1;
@@ -118,18 +103,7 @@ template<class PairwiseInteraction>
 void SmartInteractionPair_withStress<PairwiseInteraction>::initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream)
 {
     float t = state->currentTime;
-    pv1->local()->extraPerParticle.getData<Divergence>("div_name")->clear(stream);
-    pv2->local()->extraPerParticle.getData<Divergence>("div_name")->clear(stream);
-
-    pv1->local()->extraPerParticle.getData<Vorticity>("vorticity_name")->clear(stream);
-    pv2->local()->extraPerParticle.getData<Vorticity>("vorticity_name")->clear(stream);
-
-    pv1->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
-    pv2->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
-
-    pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->clear(stream);
-    pv2->local()->extraPerParticle.getData<NNInput>("NNInputs")->clear(stream);
-
+    interaction.initStep(pv1,pv2,stream);
     if (lastStressTime+stressPeriod <= t || lastStressTime == t) {
 
         if (pv2lastStressTime[pv1] != t)
@@ -138,6 +112,9 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::initStep(ParticleVect
         if (pv2lastStressTime[pv2] != t)
             pv2->local()->extraPerParticle.getData<Stress>(stressName)->clear(stream);
     }
+
+
+
 }
 
 

@@ -43,31 +43,39 @@ public:
     {
       pv1NNInput= lpv1->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
       pv2NNInput = lpv2->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
-      pv1Div = lpv1->extraPerParticle.getData<Divergence>("div_name")->devPtr();
-      pv2Div = lpv2->extraPerParticle.getData<Divergence>("div_name")->devPtr();
       pv1Vorticity = lpv1->extraPerParticle.getData<Vorticity>("vorticity_name")->devPtr();
       pv2Vorticity = lpv2->extraPerParticle.getData<Vorticity>("vorticity_name")->devPtr();
       pv1Velocity_Gradient = lpv1->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->devPtr();
       pv2Velocity_Gradient = lpv2->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->devPtr();
     }
 
-    __D__ inline void operator()(const Particle dst, int dstId, const Particle src, int srcId) const
+    __D__ inline void operator()(const Particle dst, int dstId) const
     {
-      pv1NNInput[dstId].d = pv1Div[dstId].div;
-      pv1NNInput[dstId].g1 = pv1Div[dstId].div;
-      pv1NNInput[dstId].g2 = pv1Div[dstId].div;
-      pv1NNInput[dstId].g3 = pv1Div[dstId].div;
-      pv1NNInput[dstId].g4 = pv1Div[dstId].div;
-      pv1NNInput[dstId].g5 = pv1Div[dstId].div;
-      pv1NNInput[dstId].g6 = pv1Div[dstId].div;
-      pv1NNInput[dstId].v1 = pv1Div[dstId].div;
-      pv1NNInput[dstId].v2 = pv1Div[dstId].div;
-      pv1NNInput[dstId].v3 = pv1Div[dstId].div;
+      pv1NNInput[dstId].g1 = pv1Velocity_Gradient[dstId].xx+pv1Velocity_Gradient[dstId].yy+pv1Velocity_Gradient[dstId].zz;
+      const float A11A22 = pv1Velocity_Gradient[dstId].xx*pv1Velocity_Gradient[dstId].yy;
+      const float A11A33 = pv1Velocity_Gradient[dstId].xx*pv1Velocity_Gradient[dstId].zz;
+      const float A33A22 = pv1Velocity_Gradient[dstId].zz*pv1Velocity_Gradient[dstId].yy;
+      const float A12A21 = pv1Velocity_Gradient[dstId].xy*pv1Velocity_Gradient[dstId].yx;
+      const float A23A32 = pv1Velocity_Gradient[dstId].yz*pv1Velocity_Gradient[dstId].zy;
+      const float A13A31 = pv1Velocity_Gradient[dstId].xz*pv1Velocity_Gradient[dstId].zx;
+      const float A13A22A31 = A13A31*pv1Velocity_Gradient[dstId].yy;
+      const float A12A23A31 = pv1Velocity_Gradient[dstId].xy*pv1Velocity_Gradient[dstId].yz*pv1Velocity_Gradient[dstId].zx;
+      const float A13A21A32 = pv1Velocity_Gradient[dstId].xz*pv1Velocity_Gradient[dstId].yx*pv1Velocity_Gradient[dstId].zy;
+      const float A11A23A32 = pv1Velocity_Gradient[dstId].xx * A23A32;
+      const float A12A21A33 = A12A21 * pv1Velocity_Gradient[dstId].zz;
+      const float A11A22A33 = A11A22*pv1Velocity_Gradient[dstId].zz;
+      pv1NNInput[dstId].g2 = A11A22+A11A33+A33A22-A12A21-A23A32-A13A31;
+      pv1NNInput[dstId].g3 = -A13A22A31+A12A23A31+A13A21A32-A11A23A32-A12A21A33+A11A22A33;
+      float3 vor = make_float3(0.0f);
+      vor.x = pv1Vorticity[dstId].x;
+      vor.y =pv1Vorticity[dstId].y;
+      vor.z = pv1Vorticity[dstId].z;
+      pv1NNInput[dstId].v1 = length(vor);
+
 
    }
 private:
       NNInput *pv1NNInput, *pv2NNInput;
-      Divergence *pv1Div, *pv2Div;
       Vorticity *pv1Vorticity, *pv2Vorticity;
       Velocity_Gradient *pv1Velocity_Gradient, *pv2Velocity_Gradient;
       std::string nninputs_name;

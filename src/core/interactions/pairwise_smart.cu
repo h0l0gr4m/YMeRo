@@ -214,15 +214,14 @@ void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector*
     pv1->requireDataPerParticle<DPDparameter>(parameterName,ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<DPDparameter>(parameterName,ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
-
-    pv1->requireDataPerParticle<Divergence>("div_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-    pv2->requireDataPerParticle<Divergence>("div_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-
     pv1->requireDataPerParticle<Vorticity>("vorticity_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<Vorticity>("vorticity_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
     pv1->requireDataPerParticle<Velocity_Gradient>("v_grad_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<Velocity_Gradient>("v_grad_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    pv1->requireDataPerParticle<Aprox_Density>("aprox_density_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle<Aprox_Density>("aprox_density_name", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
     pv1->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
@@ -232,20 +231,17 @@ template<class PairwiseInteraction>
 void InteractionPairSmart<PairwiseInteraction>::initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream)
 {
 
-    pv1->local()->extraPerParticle.getData<Divergence>("div_name")->clear(stream);
-    pv2->local()->extraPerParticle.getData<Divergence>("div_name")->clear(stream);
-
     pv1->local()->extraPerParticle.getData<Vorticity>("vorticity_name")->clear(stream);
     pv2->local()->extraPerParticle.getData<Vorticity>("vorticity_name")->clear(stream);
 
     pv1->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
     pv2->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
 
-    pv1->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
-    pv2->local()->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->clear(stream);
+    pv1->local()->extraPerParticle.getData<Aprox_Density>("aprox_density_name")->clear(stream);
+    pv2->local()->extraPerParticle.getData<Aprox_Density>("aprox_density_name")->clear(stream);
 
-    pv1->local()->extraPerParticle.getData<Velocity_Gradient>("NNInputs")->clear(stream);
-    pv2->local()->extraPerParticle.getData<Velocity_Gradient>("NNInputs")->clear(stream);
+    pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->clear(stream);
+    pv2->local()->extraPerParticle.getData<NNInput>("NNInputs")->clear(stream);
 }
 
 template<class PairwiseInteraction>

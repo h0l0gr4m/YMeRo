@@ -68,6 +68,9 @@ __device__ inline float distance2(const Ta a, const Tb b)
  * forces, such that either p1 \<-\> p2 or p2 \<-\> p1 is ignored
  * based on particle ids
  */
+
+
+
  template<InteractionOut NeedDstAcc, InteractionOut NeedSrcAcc, InteractionWith InteractWith, typename Calculation>
  __device__ inline void compute_calculation(
          int pstart, int pend,
@@ -213,7 +216,7 @@ __global__ void computeSelfInteractions(
                     computeCell<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Other> (pstart, pend, dstP, dstId, dstFrc, cinfo, rc2, interaction);
                 if (true == true)
                     compute_calculation<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Self> (pstart, pend, dstP, dstId, cinfo, rc2, calculation_FP);
-                    compute_calculation<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Self> (pstart, pend, dstP, dstId, cinfo, rc2, calculation_NNInputs);
+                    calculation_NNInputs(dstP, dstId);
 
             }
 
