@@ -47,6 +47,9 @@ public:
       pv2Vorticity = lpv2->extraPerParticle.getData<Vorticity>("vorticity_name")->devPtr();
       pv1Velocity_Gradient = lpv1->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->devPtr();
       pv2Velocity_Gradient = lpv2->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->devPtr();
+      pv1Aprox_Density = lpv1->extraPerParticle.getData<Aprox_Density>("aprox_density_name")->devPtr();
+      pv2Aprox_Density = lpv2->extraPerParticle.getData<Aprox_Density>("aprox_density_name")->devPtr();
+
     }
 
     __D__ inline void operator()(const Particle dst, int dstId) const
@@ -71,12 +74,13 @@ public:
       vor.y =pv1Vorticity[dstId].y;
       vor.z = pv1Vorticity[dstId].z;
       pv1NNInput[dstId].v1 = length(vor);
-
-
+      pv1NNInput[dstId].d1 = pv1Aprox_Density[dstId].x;
+      pv1NNInput[dstId].d2 = pv1Aprox_Density[dstId].y;
    }
 private:
       NNInput *pv1NNInput, *pv2NNInput;
       Vorticity *pv1Vorticity, *pv2Vorticity;
+      Aprox_Density *pv1Aprox_Density, *pv2Aprox_Density;
       Velocity_Gradient *pv1Velocity_Gradient, *pv2Velocity_Gradient;
       std::string nninputs_name;
 };

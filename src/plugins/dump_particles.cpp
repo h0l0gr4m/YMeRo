@@ -39,6 +39,9 @@ void ParticleSenderPlugin::handshake()
         case ChannelType::Tensor6:
             sizes.push_back(6);
             break;
+        case ChannelType::Tensor9:
+            sizes.push_back(9);
+            break;
         }
 
     waitPrevSend();
@@ -55,7 +58,7 @@ void ParticleSenderPlugin::beforeForces(cudaStream_t stream)
     for (int i = 0; i < channelNames.size(); ++i) {
         auto name = channelNames[i];
         auto srcContainer = pv->local()->extraPerParticle.getGenericData(name);
-        channelData[i].genericCopy(srcContainer, stream); 
+        channelData[i].genericCopy(srcContainer, stream);
     }
 }
 
@@ -64,7 +67,7 @@ void ParticleSenderPlugin::serializeAndSend(cudaStream_t stream)
     if (currentTimeStep % dumpEvery != 0 || currentTimeStep == 0) return;
 
     debug2("Plugin %s is sending now data", name.c_str());
-    
+
     for (auto& p : particles)
         p.r = state->domain.local2global(p.r);
 
@@ -90,7 +93,7 @@ void ParticleDumperPlugin::handshake()
     std::vector<int> sizes;
     std::vector<std::string> names;
     SimpleSerializer::deserialize(data, sizes, names);
-    
+
     auto init_channel = [] (XDMF::Channel::DataForm dataForm, int sz, const std::string& str,
                             XDMF::Channel::NumberType numberType = XDMF::Channel::NumberType::Float, DataType datatype = typeTokenize<float>()) {
         return XDMF::Channel(str, nullptr, dataForm, numberType, datatype);
@@ -109,12 +112,13 @@ void ParticleDumperPlugin::handshake()
             case 1: channels.push_back(init_channel(XDMF::Channel::DataForm::Scalar,  sizes[i], names[i])); break;
             case 3: channels.push_back(init_channel(XDMF::Channel::DataForm::Vector,  sizes[i], names[i])); break;
             case 6: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor6, sizes[i], names[i])); break;
+            case 9: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor9, sizes[i], names[i])); break;
 
             default:
                 die("Plugin '%s' got %d as a channel '%s' size, expected 1, 3 or 6", name.c_str(), sizes[i], names[i].c_str());
         }
     }
-    
+
     // Create the required folder
     createFoldersCollective(comm, parentPath(path));
 
@@ -148,14 +152,14 @@ float ParticleDumperPlugin::_recvAndUnpack()
     float t;
     int c = 0;
     SimpleSerializer::deserialize(data, t, particles, channelData);
-        
+
     unpack_particles(particles, *positions, velocities, ids);
 
     channels[c++].data = velocities.data();
     channels[c++].data = ids.data();
-    
+
     for (int i = 0; i < channelData.size(); i++)
-        channels[c++].data = channelData[i].data();    
+        channels[c++].data = channelData[i].data();
 }
 
 void ParticleDumperPlugin::deserialize(MPI_Status& stat)
@@ -163,12 +167,9 @@ void ParticleDumperPlugin::deserialize(MPI_Status& stat)
     debug2("Plugin '%s' will dump right now", name.c_str());
 
     float t = _recvAndUnpack();
-    
+
     std::string fname = path + getStrZeroPadded(timeStamp++, zeroPadding);
-    
+
     XDMF::VertexGrid grid(positions, comm);
     XDMF::write(fname, &grid, channels, t, comm);
 }
-
-
-

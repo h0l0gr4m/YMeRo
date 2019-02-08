@@ -36,7 +36,7 @@ namespace PluginFactory
 {
     template <typename T1, typename T2>
     using pair_shared = std::pair<std::shared_ptr<T1>, std::shared_ptr<T2>>;
-    
+
     static void extractChannelsInfos(const std::vector< std::pair<std::string, std::string> >& channels,
                                      std::vector<std::string>& names, std::vector<Average3D::ChannelType>& types)
     {
@@ -49,6 +49,7 @@ namespace PluginFactory
             else if (typeStr == "vector_from_float4") types.push_back(Average3D::ChannelType::Vector_float4);
             else if (typeStr == "vector_from_float8") types.push_back(Average3D::ChannelType::Vector_2xfloat4);
             else if (typeStr == "tensor6")            types.push_back(Average3D::ChannelType::Tensor6);
+            else if (typeStr == "tensor9")            types.push_back(Average3D::ChannelType::Tensor9);
             else die("Unable to get parse channel type '%s'", typeStr.c_str());
         }
     }
@@ -69,13 +70,14 @@ namespace PluginFactory
             if      (typeStr == "scalar")    types.push_back(ParticleSenderPlugin::ChannelType::Scalar);
             else if (typeStr == "vector")    types.push_back(ParticleSenderPlugin::ChannelType::Vector);
             else if (typeStr == "tensor6")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor6);
+            else if (typeStr == "tensor9")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor9);
             else die("Unable to get parse channel type '%s'", typeStr.c_str());
         }
     }
 
-    
 
-    
+
+
     static pair_shared< AddForcePlugin, PostprocessPlugin >
     createAddForcePlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector* pv, PyTypes::float3 force)
     {
@@ -100,9 +102,9 @@ namespace PluginFactory
         std::vector<Average3D::ChannelType> types;
 
         extractChannelsInfos(channels, names, types);
-        
+
         if (computeTask) extractPVsNames(pvs, pvNames);
-        
+
         auto simPl  = computeTask ?
             std::make_shared<Average3D> (state, name, pvNames, names, types, sampleEvery, dumpEvery, make_float3(binSize)) :
             nullptr;
@@ -125,7 +127,7 @@ namespace PluginFactory
         extractChannelsInfos(channels, names, types);
 
         if (computeTask) extractPVsNames(pvs, pvNames);
-    
+
         auto simPl  = computeTask ?
             std::make_shared<AverageRelative3D> (state, name, pvNames,
                                                  names, types, sampleEvery, dumpEvery,
@@ -154,7 +156,7 @@ namespace PluginFactory
         std::vector<ParticleSenderPlugin::ChannelType> types;
 
         extractChannelInfos(channels, names, types);
-        
+
         auto simPl  = computeTask ? std::make_shared<ParticleSenderPlugin> (state, name, pv->name, dumpEvery, names, types) : nullptr;
         auto postPl = computeTask ? nullptr : std::make_shared<ParticleDumperPlugin> (name, path);
 
@@ -169,7 +171,7 @@ namespace PluginFactory
         std::vector<ParticleSenderPlugin::ChannelType> types;
 
         extractChannelInfos(channels, names, types);
-        
+
         auto simPl  = computeTask ? std::make_shared<ParticleWithMeshSenderPlugin> (state, name, ov->name, dumpEvery, names, types) : nullptr;
         auto postPl = computeTask ? nullptr : std::make_shared<ParticleWithMeshDumperPlugin> (name, path);
 
@@ -199,8 +201,8 @@ namespace PluginFactory
     {
         auto simPl = computeTask ?
             std::make_shared<ExchangePVSFluxPlanePlugin> (state, name, pv1->name, pv2->name, make_float4(plane)) : nullptr;
-        
-        return { simPl, nullptr };    
+
+        return { simPl, nullptr };
     }
 
     static pair_shared< ForceSaverPlugin, PostprocessPlugin >
@@ -211,13 +213,13 @@ namespace PluginFactory
     }
 
     static pair_shared< ImposeProfilePlugin, PostprocessPlugin >
-    createImposeProfilePlugin(bool computeTask,  const YmrState *state, std::string name, ParticleVector* pv, 
+    createImposeProfilePlugin(bool computeTask,  const YmrState *state, std::string name, ParticleVector* pv,
                               PyTypes::float3 low, PyTypes::float3 high, PyTypes::float3 velocity, float kbt)
     {
         auto simPl = computeTask ?
             std::make_shared<ImposeProfilePlugin> (state, name, pv->name, make_float3(low), make_float3(high), make_float3(velocity), kbt) :
             nullptr;
-            
+
         return { simPl, nullptr };
     }
 
@@ -228,11 +230,11 @@ namespace PluginFactory
     {
         std::vector<std::string> pvNames;
         if (computeTask) extractPVsNames(pvs, pvNames);
-            
+
         auto simPl = computeTask ?
             std::make_shared<ImposeVelocityPlugin> (state, name, pvNames, make_float3(low), make_float3(high), make_float3(velocity), every) :
             nullptr;
-                                    
+
         return { simPl, nullptr };
     }
 
@@ -265,7 +267,7 @@ namespace PluginFactory
     {
         auto simPl  = computeTask ? std::make_shared<PinObjectPlugin> (state, name, ov->name,
                                                                        make_float3(velocity), make_float3(omega),
-                                                                       dumpEvery) : 
+                                                                       dumpEvery) :
             nullptr;
         auto postPl = computeTask ? nullptr : std::make_shared<ReportPinObjectPlugin> (name, path);
 
@@ -280,7 +282,7 @@ namespace PluginFactory
     {
         std::vector<std::string> pvNames;
         if (computeTask) extractPVsNames(pvs, pvNames);
-        
+
         auto simPl = computeTask ?
             std::make_shared<SimulationVelocityControl>(state, name, pvNames, make_float3(low), make_float3(high),
                                                         sampleEvery, tuneEvery, dumpEvery,
@@ -318,7 +320,7 @@ namespace PluginFactory
         auto postPl = computeTask ? nullptr : std::make_shared<VirialPressureDumper> (name, path);
         return { simPl, postPl };
     }
-    
+
     static pair_shared< WallRepulsionPlugin, PostprocessPlugin >
     createWallRepulsionPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector* pv, Wall* wall,
                               float C, float h, float maxForce)

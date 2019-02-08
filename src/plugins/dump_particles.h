@@ -17,9 +17,9 @@ class ParticleSenderPlugin : public SimulationPlugin
 public:
 
     enum class ChannelType {
-        Scalar, Vector, Tensor6
+        Scalar, Vector, Tensor6, Tensor9  
     };
-    
+
     ParticleSenderPlugin(const YmrState *state, std::string name, std::string pvName, int dumpEvery,
                          std::vector<std::string> channelNames,
                          std::vector<ChannelType> channelTypes);
@@ -31,11 +31,11 @@ public:
     void serializeAndSend(cudaStream_t stream) override;
 
     bool needPostproc() override { return true; }
-    
+
 protected:
     std::string pvName;
     ParticleVector *pv;
-    
+
     int dumpEvery;
 
     HostBuffer<Particle> particles;
@@ -58,7 +58,7 @@ public:
 protected:
 
     float _recvAndUnpack();
-    
+
     int timeStamp = 0;
     const int zeroPadding = 5;
     std::string path;

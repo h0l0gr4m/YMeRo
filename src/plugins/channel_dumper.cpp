@@ -16,27 +16,27 @@ void UniformCartesianDumper::handshake()
     auto req = waitData();
     MPI_Check( MPI_Wait(&req, MPI_STATUS_IGNORE) );
     recv();
-    
+
     int3 nranks3D, rank3D;
     int3 resolution;
     float3 h;
     std::vector<int> sizes;
     std::vector<std::string> names;
     SimpleSerializer::deserialize(data, nranks3D, rank3D, resolution, h, sizes, names);
-        
+
     int ranksArr[] = {nranks3D.x, nranks3D.y, nranks3D.z};
     int periods[] = {0, 0, 0};
     MPI_Check( MPI_Cart_create(comm, 3, ranksArr, periods, 0, &cartComm) );
     grid = std::make_unique<XDMF::UniformGrid>(resolution, h, cartComm);
-        
+
     auto init_channel = [] (XDMF::Channel::DataForm dataForm, const std::string& str) {
         return XDMF::Channel(str, nullptr, dataForm, XDMF::Channel::NumberType::Float, typeTokenize<float>());
     };
-    
+
     // Density is a special channel which is always present
     std::string allNames = "density";
     channels.push_back(init_channel(XDMF::Channel::DataForm::Scalar, "density"));
-    
+
     for (int i = 0; i < sizes.size(); i++)
     {
         allNames += ", " + names[i];
@@ -45,12 +45,12 @@ void UniformCartesianDumper::handshake()
             case 1: channels.push_back(init_channel(XDMF::Channel::DataForm::Scalar,  names[i])); break;
             case 3: channels.push_back(init_channel(XDMF::Channel::DataForm::Vector,  names[i])); break;
             case 6: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor6, names[i])); break;
-
+            case 9: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor9, names[i])); break;
             default:
                 die("Plugin '%s' got %d as a channel '%s' size, expected 1, 3 or 6", name.c_str(), sizes[i], names[i].c_str());
         }
     }
-    
+
     // Create the required folder
     createFoldersCollective(comm, parentPath(path));
 
@@ -69,15 +69,15 @@ void UniformCartesianDumper::deserialize(MPI_Status& stat)
 {
     float t;
     SimpleSerializer::deserialize(data, t, recv_density, recv_containers);
-    
+
     debug2("Plugin '%s' will dump right now: simulation time %f, time stamp %d",
            name.c_str(), t, timeStamp);
 
-    convert(recv_density, density);    
+    convert(recv_density, density);
     channels[0].data = density.data();
 
     containers.resize(recv_containers.size());
-    
+
     for (int i = 0; i < recv_containers.size(); i++) {
         convert(recv_containers[i], containers[i]);
         channels[i+1].data = containers[i].data();
@@ -85,7 +85,7 @@ void UniformCartesianDumper::deserialize(MPI_Status& stat)
 
     std::string tstr = std::to_string(timeStamp++);
     std::string fname = path + std::string(zeroPadding - tstr.length(), '0') + tstr;
-        
+
     XDMF::write(fname, grid.get(), channels, t, cartComm);
 }
 
@@ -94,9 +94,9 @@ XDMF::Channel UniformCartesianDumper::getChannelOrDie(std::string chname) const
     for (const auto& ch : channels)
         if (ch.name == chname)
             return ch;
-        
+
     die("No such channel in plugin '%s' : '%s'", name.c_str(), chname.c_str());
-   
+
    // Silence the noreturn warning
    return channels[0];
 }
@@ -106,7 +106,6 @@ std::vector<int> UniformCartesianDumper::getLocalResolution() const
     std::vector<int> res;
     for (auto v : grid->getGridDims()->getLocalSize())
         res.push_back(v);
-    
+
     return res;
 }
-

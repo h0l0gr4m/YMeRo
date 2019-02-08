@@ -39,9 +39,9 @@ inline __device__ float eta_kernel(float r)
 
 inline __device__ float symmetry_function(float r, float eta , float R_s)
 {
-  float x = fastPower((r-R_s),2);
-	float q = -eta*x;
-  float y = exp(q);
+  const float x = fastPower((r-R_s),2);
+	const float q = -eta*x;
+  const float y = exp(q);
 	return y;
 }
 
@@ -83,13 +83,13 @@ public:
       	const float dx = dr.x;
       	const float dy = dr.y;
       	const float dz = dr.z;
-      	// float dux = dstu.x-srcu.x;
-      	// float duy = dstu.y-srcu.y;
-        // float duz = dstu.z-srcu.z;
+      	float dux = dstu.x-srcu.x;
+      	float duy = dstu.y-srcu.y;
+        float duz = dstu.z-srcu.z;
 
-        float dux = srcu.x;
-        float duy = srcu.y;
-        float duz = srcu.z;
+        // float dux = srcu.x;
+        // float duy = srcu.y;
+        // float duz = srcu.z;
 
       	const float Vj  = 1.0/6.0;
         const float q = invrij*Vj*der_eta_kernel(rij);
@@ -127,8 +127,12 @@ public:
         atomicAdd(&pv1Vorticity[dstId].z,dstVorticityz);
 
         // calculate density (similar to density) via symmetry functions
-        const float d_particle = symmetry_function(rij,2,0.1)*eta_kernel(rij);
-        atomicAdd(&pv1Aprox_Density[dstId].x,d_particle);
+        const float d1_particle = symmetry_function(rij,0.5,1)*eta_kernel(rij);
+        const float d2_particle = symmetry_function(rij,0.1,1)*eta_kernel(rij);
+        const float d3_particle = symmetry_function(rij,0.9,0)*eta_kernel(rij);
+        atomicAdd(&pv1Aprox_Density[dstId].x,d1_particle);
+        atomicAdd(&pv1Aprox_Density[dstId].y,d2_particle);
+        // atomicAdd(&pv1Aprox_Density[dstId].z,d3_particle);
 
    }
 private:

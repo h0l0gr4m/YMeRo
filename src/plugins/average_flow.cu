@@ -36,6 +36,7 @@ int Average3D::getNcomponents(Average3D::ChannelType type) const
     int components = 3;
     if (type == Average3D::ChannelType::Scalar)  components = 1;
     if (type == Average3D::ChannelType::Tensor6) components = 6;
+    if (type == Average3D::ChannelType::Tensor9) components = 9;
     return components;
 }
 
@@ -76,18 +77,18 @@ void Average3D::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Co
 
     accumulated_density.resize_anew(total);
     accumulated_density.clear(0);
-    
+
     std::string allChannels("density");
 
     for (int i = 0; i < channelsInfo.n; i++) {
         int components = getNcomponents(channelsInfo.types[i]);
-        
+
         channelsInfo.average[i].resize_anew(components * total);
         accumulated_average [i].resize_anew(components * total);
-        
+
         channelsInfo.average[i].clear(0);
         accumulated_average [i].clear(0);
-        
+
         channelsInfo.averagePtrs[i] = channelsInfo.average[i].devPtr();
 
         allChannels += ", " + channelsInfo.names[i];
@@ -131,7 +132,7 @@ void Average3D::accumulateSampledAndClear(cudaStream_t stream)
     const int ncells = density.size();
 
     accumulateOneArray(ncells, 1, density.devPtr(), accumulated_density.devPtr(), stream);
-    density.clear(stream);    
+    density.clear(stream);
 
     for (int i = 0; i < channelsInfo.n; i++) {
 
@@ -156,7 +157,7 @@ void Average3D::afterIntegration(cudaStream_t stream)
     for (auto& pv : pvs) sampleOnePv(pv, stream);
 
     accumulateSampledAndClear(stream);
-    
+
     nSamples++;
 }
 
@@ -195,7 +196,7 @@ void Average3D::serializeAndSend(cudaStream_t stream)
 {
     if (currentTimeStep % dumpEvery != 0 || currentTimeStep == 0) return;
     if (nSamples == 0) return;
-    
+
     scaleSampled(stream);
 
     debug2("Plugin '%s' is now packing the data", name.c_str());
@@ -211,8 +212,7 @@ void Average3D::handshake()
 
     for (auto t : channelsInfo.types)
         sizes.push_back(getNcomponents(t));
-    
+
     SimpleSerializer::serialize(data, simulation->nranks3D, simulation->rank3D, resolution, binSize, sizes, channelsInfo.names);
     send(data);
 }
-

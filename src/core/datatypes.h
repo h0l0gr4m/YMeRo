@@ -259,7 +259,7 @@ struct Stress
 
 struct Aprox_Density
 {
-  float x;
+  float x,y,z;
 };
 
 struct Vorticity
