@@ -122,7 +122,7 @@ public:
         float3 d_particle;
         d_particle.x = symmetry_function(rij,0.5,1)*eta_kernel(rij);
         d_particle.y = symmetry_function(rij,0.1,1)*eta_kernel(rij);
-        d_particle.z = 5;
+        d_particle.z = symmetry_function(rij,0.9,0.5)*eta_kernel(rij);
         atomicAdd(&pv1Aprox_Density[dstId].x,d_particle.x);
         atomicAdd(&pv1Aprox_Density[dstId].y,d_particle.y);
         atomicAdd(&pv1Aprox_Density[dstId].z,d_particle.z);

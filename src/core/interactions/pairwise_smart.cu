@@ -156,8 +156,10 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
             auto cinfo = cl1->cellInfo();
             pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
             NNInput *pv1NNInputs = pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
+            float Weights[16] ={1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
             float *d_Weights;
             cudaMalloc(&d_Weights, 16*sizeof(float));
+            cudaMemcpy(d_Weights,Weights,16*sizeof(float),cudaMemcpyHostToDevice);
 
             pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
             SAFE_KERNEL_LAUNCH(
@@ -176,6 +178,7 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
                     NeuralNet,
                     getNblocks(np, nth), nth, 0, stream,
                     np, 4,pv1DPDparameter, pv1NNInputs,d_Weights);
+            printf("------------------------------------------------------------------------------------------------------------------------------------------");
 
         }
         else /*  External interaction */
@@ -219,6 +222,8 @@ void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector*
 {
     info("Interaction '%s' requires channel 'parameterName' from PVs '%s' and '%s'",
          name.c_str(), pv1->name.c_str(), pv2->name.c_str());
+
+
 
     pv1->requireDataPerParticle<DPDparameter>(parameterName,ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<DPDparameter>(parameterName,ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);

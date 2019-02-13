@@ -76,6 +76,7 @@ public:
       pv1NNInput[dstId].v1 = length(vor);
       pv1NNInput[dstId].d1 = pv1Aprox_Density[dstId].x;
       pv1NNInput[dstId].d2 = pv1Aprox_Density[dstId].y;
+      pv1NNInput[dstId].d3 = pv1Aprox_Density[dstId].z;
    }
 private:
       NNInput *pv1NNInput, *pv2NNInput;
