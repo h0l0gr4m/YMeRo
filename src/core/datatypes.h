@@ -272,7 +272,26 @@ struct Velocity_Gradient
    float xx,xy,xz,yx,yy,yz,zx,zy,zz;
 };
 
+struct DPDparameter
+{
+  float alpha_p, gamma_p,_filler;
+};
+
 struct NNInput
 {
-   float g1,g2,g3,v1,d1,d2;
+   float g1,g2,g3,v1,d1,d2,d3,b1=1;
+   __HD__ float &operator[]( size_t idx )
+   {
+        switch( idx )
+        {
+            case 0 : return g1;
+            case 1 : return g2;
+            case 2 : return g3;
+            case 3 : return v1;
+            case 4 : return d1;
+            case 5 : return d2;
+            case 6 : return d3;
+            case 7 : return b1;
+        }
+    }
 };

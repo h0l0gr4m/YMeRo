@@ -17,6 +17,7 @@
 #include "pairwise_interactions/lj_object_aware.h"
 #include "pairwise_interactions/norandom_dpd.h"
 
+#include "calculations/NeuralNet_kernel.h"
 #include "calculations/FlowProperties.h"
 #include "calculations/NNInputs.h"
 
@@ -154,6 +155,10 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
             const int nth = 128;
             auto cinfo = cl1->cellInfo();
             pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
+            NNInput *pv1NNInputs = pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
+            float *d_Weights;
+            cudaMalloc(&d_Weights, 16*sizeof(float));
+
             pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
             SAFE_KERNEL_LAUNCH(
                     copy_kernel,
@@ -167,6 +172,10 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
                     computeSelfInteractions,
                     getNblocks(np, nth), nth, 0, stream,
                     np, cinfo, rc*rc, pair,calculation_FlowProperties,calculation_NNInputs);
+            SAFE_KERNEL_LAUNCH(
+                    NeuralNet,
+                    getNblocks(np, nth), nth, 0, stream,
+                    np, 4,pv1DPDparameter, pv1NNInputs,d_Weights);
 
         }
         else /*  External interaction */
@@ -225,6 +234,7 @@ void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector*
 
     pv1->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
 }
 
 template<class PairwiseInteraction>

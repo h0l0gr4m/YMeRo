@@ -3,6 +3,7 @@
 #include <tuple>
 #include "helper_math.h"
 
+
 // shuffle instructions wrappers
 #if __CUDACC_VER_MAJOR__ >= 9
 
@@ -81,6 +82,22 @@ __device__ inline  float warpReduce(float val, Operation op)
 {
 #pragma unroll
     for (int offset = warpSize/2; offset > 0; offset /= 2)
+    {
+        val = op(val, warpShflDown(val, offset));
+    }
+    return val;
+}
+
+
+//****************************************************************************
+//fourth warp reduction for matrix multiplication (2 particles per warp)
+//****************************************************************************
+template<typename Operation>
+__device__ inline  float fourthwarpReduce(float val, Operation op)
+{
+int offset = 2;
+#pragma unroll
+    for (int iteration = 3; offset > 0; iteration= iteration-1)
     {
         val = op(val, warpShflDown(val, offset));
     }
@@ -316,6 +333,3 @@ __device__ inline float fastPower(const float x, const float k)
 
 
 #endif
-
-
-

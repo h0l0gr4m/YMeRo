@@ -21,10 +21,7 @@ float fastPower(float x, float a)
 #include <core/utils/cuda_common.h>
 #endif
 
-struct DPDparameter
-{
-  float alpha_p, gamma_p;
-};
+
 
 
 class Pairwise_SmartDPD
