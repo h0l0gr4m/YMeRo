@@ -176,9 +176,8 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
                     np, cinfo, rc*rc, pair,calculation_FlowProperties,calculation_NNInputs);
             SAFE_KERNEL_LAUNCH(
                     NeuralNet,
-                    getNblocks(np, nth), nth, 0, stream,
+                    getNblocks(16*np, nth), nth, 0, stream,
                     np, 4,pv1DPDparameter, pv1NNInputs,d_Weights);
-            printf("------------------------------------------------------------------------------------------------------------------------------------------");
 
         }
         else /*  External interaction */

@@ -25,7 +25,7 @@ return threadId;
 
 
 //****************************************************************************
-//fourth warp reduction for matrix multiplication (2 particles per warp)
+//if iteration is equal to 4 , this is a fourth warp reduction
 //****************************************************************************
 __device__ inline  float warpReduce(float val, int iteration)
 {
@@ -44,8 +44,10 @@ __global__ void NeuralNet(int size, int iteration,DPDparameter *pv1DPDparameter,
 {
 
 	int thread = getGlobalIdx_3D_3D();
-  if (thread > size)
+  // printf("%d \n ",thread);
+  if (thread > 16*(size-1))
     return;
+
   uint32_t laneid = thread % 32;
   uint32_t warpid = thread / 32;
   uint32_t particle = (warpid * 2) + 1 + laneid/ 16 ;
@@ -58,10 +60,12 @@ __global__ void NeuralNet(int size, int iteration,DPDparameter *pv1DPDparameter,
   {  if(weight_index<8)
     {
       pv1DPDparameter[particle].alpha_p=value;
-      // printf("thread: %d ,warpid: %d, laneid: %d, particle: %d, value: %f \n" ,thread,warpid,laneid,particle,value);
+      // printf("thread: %d ,warpid: %d, laneid: %d, particle: %d, alpha_value: %f \n" ,thread,warpid,laneid,particle,pv1DPDparameter[particle].alpha_p);
     }
     else
       pv1DPDparameter[particle].gamma_p=value;
+      // printf("thread: %d ,warpid: %d, laneid: %d, particle: %d, gammma_value: %f \n" ,thread,warpid,laneid,particle,pv1DPDparameter[particle].gamma_p);
+
 
   }
 }

@@ -279,7 +279,7 @@ struct DPDparameter
 
 struct NNInput
 {
-   float g1,g2,g3,v1,d1,d2,d3,b1=1;
+   float g1,g2,g3,v1,d1,d2,d3,b1,b2;
    __HD__ float &operator[]( size_t idx )
    {
         switch( idx )
