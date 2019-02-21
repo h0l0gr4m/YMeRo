@@ -19,8 +19,7 @@ InteractionSmartDPDWithStress::InteractionSmartDPDWithStress(const YmrState *sta
 
 InteractionSmartDPDWithStress::~InteractionSmartDPDWithStress() = default;
 
-void InteractionSmartDPDWithStress::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
-                                               float a, float gamma, float kbt, float power)
+void InteractionSmartDPDWithStress::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,float a, float gamma, float kbt, float power)
 {
     if (a     == Default) a     = this->a;
     if (gamma == Default) gamma = this->gamma;

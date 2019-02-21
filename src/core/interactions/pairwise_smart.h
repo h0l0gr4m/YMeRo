@@ -37,6 +37,7 @@ public:
 private:
     float a;
     float gamma;
+    float Weights[16];
     std::map< std::pair<std::string, std::string>, PairwiseInteraction > intMap;
     std::string parameterName;
     PairwiseInteraction defaultPair;

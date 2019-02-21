@@ -50,9 +50,9 @@ __device__ inline void sampleChannels(int pid, int cid, ChannelsInfo channelsInf
         }
         if (channelsInfo.types[i] == Average3D::ChannelType::Tensor9)
         {
-            atomicAdd(((float3*)channelsInfo.average[i]) + 2*cid + 0, ((float3*)channelsInfo.data[i])[2*pid + 0] );
-            atomicAdd(((float3*)channelsInfo.average[i]) + 2*cid + 1, ((float3*)channelsInfo.data[i])[2*pid + 1] );
-            atomicAdd(((float3*)channelsInfo.average[i]) + 2*cid + 2, ((float3*)channelsInfo.data[i])[2*pid + 2] );
+            atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 0, ((float3*)channelsInfo.data[i])[3*pid + 0] );
+            atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 1, ((float3*)channelsInfo.data[i])[3*pid + 1] );
+            atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 2, ((float3*)channelsInfo.data[i])[3*pid + 2] );
         }
     }
 }

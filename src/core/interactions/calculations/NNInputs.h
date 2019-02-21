@@ -67,13 +67,16 @@ public:
       const float A11A23A32 = pv1Velocity_Gradient[dstId].xx * A23A32;
       const float A12A21A33 = A12A21 * pv1Velocity_Gradient[dstId].zz;
       const float A11A22A33 = A11A22*pv1Velocity_Gradient[dstId].zz;
+
       pv1NNInput[dstId].g2 = A11A22+A11A33+A33A22-A12A21-A23A32-A13A31;
       pv1NNInput[dstId].g3 = -A13A22A31+A12A23A31+A13A21A32-A11A23A32-A12A21A33+A11A22A33;
+
       float3 vor = make_float3(0.0);
       vor.x = pv1Vorticity[dstId].x;
       vor.y = pv1Vorticity[dstId].y;
       vor.z = pv1Vorticity[dstId].z;
       pv1NNInput[dstId].v1 = length(vor);
+
       pv1NNInput[dstId].d1 = pv1Aprox_Density[dstId].x;
       pv1NNInput[dstId].d2 = pv1Aprox_Density[dstId].y;
       pv1NNInput[dstId].d3 = pv1Aprox_Density[dstId].z;

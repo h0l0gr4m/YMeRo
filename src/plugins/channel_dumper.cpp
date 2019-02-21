@@ -47,7 +47,7 @@ void UniformCartesianDumper::handshake()
             case 6: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor6, names[i])); break;
             case 9: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor9, names[i])); break;
             default:
-                die("Plugin '%s' got %d as a channel '%s' size, expected 1, 3 or 6", name.c_str(), sizes[i], names[i].c_str());
+                die("Plugin '%s' got %d as a channel '%s' size, expected 1, 3,6 or 9", name.c_str(), sizes[i], names[i].c_str());
         }
     }
 

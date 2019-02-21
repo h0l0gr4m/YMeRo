@@ -7,14 +7,16 @@
 #include <core/pvs/particle_vector.h>
 
 
-InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName, float rc, float a, float gamma, float kbt, float power, bool allocateImpl) :
+InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name, std::string parameterName, float rc, float a, float gamma, float kbt, float power, bool allocateImpl) :
     Interaction(state, name, rc),
     parameterName(parameterName),a(a), gamma(gamma), kbt(kbt), power(power)
 {
-    if (allocateImpl) {
+    if (allocateImpl)
+    {
         Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
         impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (state,name,parameterName,a,gamma ,rc, dpd);
     }
+
 }
 
 InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName, float rc, float a, float gamma, float kbt,  float power) :

@@ -4,13 +4,14 @@
 #include <memory>
 #include <limits>
 #include <core/utils/pytypes.h>
+#include <core/containers.h>
 
 class InteractionSmartDPD : public Interaction
 {
 public:
     constexpr static float Default = std::numeric_limits<float>::infinity();
 
-    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName, float rc, float a, float gamma, float kbt, float power);
+    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,float rc, float a, float gamma, float kbt, float power);
 
     ~InteractionSmartDPD();
 

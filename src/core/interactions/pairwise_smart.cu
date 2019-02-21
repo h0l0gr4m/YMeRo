@@ -155,13 +155,14 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
             const int nth = 128;
             auto cinfo = cl1->cellInfo();
             pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
+            pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
             NNInput *pv1NNInputs = pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
+
             float Weights[16] ={1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
             float *d_Weights;
             cudaMalloc(&d_Weights, 16*sizeof(float));
             cudaMemcpy(d_Weights,Weights,16*sizeof(float),cudaMemcpyHostToDevice);
 
-            pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
             SAFE_KERNEL_LAUNCH(
                     copy_kernel,
                     getNblocks(np, nth), nth, 0, stream,

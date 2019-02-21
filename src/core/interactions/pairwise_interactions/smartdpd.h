@@ -51,9 +51,8 @@ public:
 
     __D__ inline float3 operator()(const Particle dst, int dstId, const Particle src, int srcId) const
     {
-        float alpha_p = (pv1DPDparameter[dstId].alpha_p + pv1DPDparameter[srcId].alpha_p)/2;
-        float gamma_p = (pv1DPDparameter[dstId].gamma_p + pv1DPDparameter[srcId].gamma_p)/2;
-	//printf("alpha_p: %f , gamma_p %f \n" , alpha_p , gamma_p);
+        const float alpha_p = (pv1DPDparameter[dstId].alpha_p + pv1DPDparameter[srcId].alpha_p)/2;
+        const float gamma_p = (pv1DPDparameter[dstId].gamma_p + pv1DPDparameter[srcId].gamma_p)/2;
 
         float sigma_p = sqrt(2 * gamma_p * kbT / dt);
         const float3 dr = dst.r - src.r;
@@ -72,7 +71,6 @@ public:
         const float myrandnr = Logistic::mean0var1(seed, min(src.i1, dst.i1), max(src.i1, dst.i1));
 
         const float strength = alpha_p * argwr - (gamma_p * wr * rdotv + sigma_p * myrandnr) * wr;
-
         return dr_r * strength;
     }
 

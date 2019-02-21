@@ -84,11 +84,12 @@ __device__ inline float distance2(const Ta a, const Tb b)
          srcP.readCoordinate(cinfo.particles, srcId);
 
          bool interacting = distance2(srcP.r, dstP.r) < rc2;
-         if(dstId == srcId)
-            interacting = false;
+         if(InteractWith == InteractionWith::Self)
+            if(dstId <= srcId) interacting = false;
 
          if (interacting)
          {
+             srcP.readVelocity(cinfo.particles, srcId);
              calculation(dstP, dstId, srcP, srcId);
          }
      }
@@ -211,16 +212,20 @@ __global__ void computeSelfInteractions(
                 const int pend   = cinfo.cellStarts[rowEnd];
 
                 if (cellY == cell0.y && cellZ == cell0.z)
+                {
                     computeCell<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Self>  (pstart, pend, dstP, dstId, dstFrc, cinfo, rc2, interaction);
-                else
-                    computeCell<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Other> (pstart, pend, dstP, dstId, dstFrc, cinfo, rc2, interaction);
-                if (true == true)
                     compute_calculation<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Self> (pstart, pend, dstP, dstId, cinfo, rc2, calculation_FP);
-                    calculation_NNInputs(dstP, dstId);
-
+                }
+                else
+                {
+                    computeCell<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Other> (pstart, pend, dstP, dstId, dstFrc, cinfo, rc2, interaction);
+                    compute_calculation<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Other> (pstart, pend, dstP, dstId, cinfo, rc2, calculation_FP);
+                }
             }
 
     atomicAdd(cinfo.forces + dstId, dstFrc);
+    calculation_NNInputs(dstP, dstId);
+
 }
 
 

@@ -44,7 +44,6 @@ __global__ void NeuralNet(int size, int iteration,DPDparameter *pv1DPDparameter,
 {
 
 	int thread = getGlobalIdx_3D_3D();
-  // printf("%d \n ",thread);
   if (thread > 16*(size-1))
     return;
 
@@ -54,18 +53,16 @@ __global__ void NeuralNet(int size, int iteration,DPDparameter *pv1DPDparameter,
   uint32_t input_index = (laneid-16) % 8 ;
   uint32_t weight_index = laneid % 16;
   float value = pv1NNInputs[particle][input_index]*Weights[weight_index];
-  printf("value: %f , input_index: %d, particle: %d , NNInput[particle][input_index]: %f , Weights[weight_index]: %f \n" , value,input_index,particle ,pv1NNInputs[particle][input_index],Weights[weight_index]);
+  // printf("value: %.16f , input_index: %d, particle: %d , NNInput[particle][input_index]: %f , Weights[weight_index]: %f \n" , value,input_index,particle ,pv1NNInputs[particle][input_index],Weights[weight_index]);
   value = warpReduce(value,iteration);
-  if(laneid % 8 == 0)
-  {  if(weight_index<8)
-    {
-      pv1DPDparameter[particle].alpha_p=value;
-      // printf("thread: %d ,warpid: %d, laneid: %d, particle: %d, alpha_value: %f \n" ,thread,warpid,laneid,particle,pv1DPDparameter[particle].alpha_p);
-    }
-    else
-      pv1DPDparameter[particle].gamma_p=value;
-      // printf("thread: %d ,warpid: %d, laneid: %d, particle: %d, gammma_value: %f \n" ,thread,warpid,laneid,particle,pv1DPDparameter[particle].gamma_p);
-
-
-  }
+  // if(laneid % 8 == 0)
+  // {  if(weight_index<8)
+  //   {
+  //     pv1DPDparameter[particle].alpha_p=value;
+  //     // printf("thread: %d ,warpid: %d, laneid: %d, particle: %d, alpha_value: %f \n" ,thread,warpid,laneid,particle,pv1DPDparameter[particle].alpha_p);
+  //   }
+  //   else
+  //     pv1DPDparameter[particle].gamma_p=value;
+  //     // printf("thread: %d ,warpid: %d, laneid: %d, particle: %d, gammma_value: %f \n" ,thread,warpid,laneid,particle,pv1DPDparameter[particle].gamma_p);
+  // }
 }

@@ -62,7 +62,6 @@ public:
         const float myrandnr = Logistic::mean0var1(seed, min(src.i1, dst.i1), max(src.i1, dst.i1));
 
         const float strength = a * argwr - (gamma * wr * rdotv + sigma * myrandnr) * wr;
-
         return dr_r * strength;
     }
 

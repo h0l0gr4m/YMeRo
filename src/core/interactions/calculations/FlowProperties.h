@@ -109,15 +109,31 @@ public:
         atomicAdd(&pv1Velocity_Gradient[dstId].zy ,dstVelocity_Gradientzy);
         atomicAdd(&pv1Velocity_Gradient[dstId].zz ,dstVelocity_Gradientzz);
 
-        //caluclate vorticity vector
+
+        atomicAdd(&pv2Velocity_Gradient[srcId].xx ,dstVelocity_Gradientxx);
+        atomicAdd(&pv2Velocity_Gradient[srcId].xy ,dstVelocity_Gradientxy);
+        atomicAdd(&pv2Velocity_Gradient[srcId].xz ,dstVelocity_Gradientxz);
+        atomicAdd(&pv2Velocity_Gradient[srcId].yx ,dstVelocity_Gradientyx);
+        atomicAdd(&pv2Velocity_Gradient[srcId].yy ,dstVelocity_Gradientyy);
+        atomicAdd(&pv2Velocity_Gradient[srcId].yz ,dstVelocity_Gradientyz);
+        atomicAdd(&pv2Velocity_Gradient[srcId].zx ,dstVelocity_Gradientzx);
+        atomicAdd(&pv2Velocity_Gradient[srcId].zy ,dstVelocity_Gradientzy);
+        atomicAdd(&pv2Velocity_Gradient[srcId].zz ,dstVelocity_Gradientzz);
+
+        //caluclate vorcicity vector
         float3 dstVorticity;
         dstVorticity.x = -q*(du.z*dr.y-du.y*dr.z);
         dstVorticity.y = -q*(du.x*dr.z-du.z*dr.x);
         dstVorticity.z = -q*(du.y*dr.x-du.x*dr.z);
 
+
         atomicAdd(&pv1Vorticity[dstId].x,dstVorticity.x);
         atomicAdd(&pv1Vorticity[dstId].y,dstVorticity.y);
         atomicAdd(&pv1Vorticity[dstId].z,dstVorticity.z);
+
+        atomicAdd(&pv2Vorticity[srcId].x,dstVorticity.x);
+        atomicAdd(&pv2Vorticity[srcId].y,dstVorticity.y);
+        atomicAdd(&pv2Vorticity[srcId].z,dstVorticity.z);
         // calculate density (similar to density) via symmetry functions
         float3 d_particle;
         d_particle.x = symmetry_function(rij,0.5,1)*eta_kernel(rij);
@@ -127,6 +143,9 @@ public:
         atomicAdd(&pv1Aprox_Density[dstId].y,d_particle.y);
         atomicAdd(&pv1Aprox_Density[dstId].z,d_particle.z);
 
+        atomicAdd(&pv2Aprox_Density[srcId].x,d_particle.x);
+        atomicAdd(&pv2Aprox_Density[srcId].y,d_particle.y);
+        atomicAdd(&pv2Aprox_Density[srcId].z,d_particle.z);
 
 
    }
