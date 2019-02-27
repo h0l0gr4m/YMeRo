@@ -8,13 +8,13 @@
 #include <core/pvs/particle_vector.h>
 
 
-InteractionSmartDPDWithStress::InteractionSmartDPDWithStress(const YmrState *state,std::string name,std::string parameterName, std::string stressName,
+InteractionSmartDPDWithStress::InteractionSmartDPDWithStress(const YmrState *state,std::string name,std::string parameterName, std::string stressName,std::vector<float> weights,
                                                    float rc, float a, float gamma, float kbt, float power, float stressPeriod) :
-    InteractionSmartDPD(state,name,parameterName, rc, a, gamma, kbt, power, false),
+    InteractionSmartDPD(state,name,parameterName,weights, rc, a, gamma, kbt, power, false),
     stressPeriod(stressPeriod)
 {
     Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
-    impl = std::make_unique<SmartInteractionPair_withStress<Pairwise_SmartDPD>> (state,name,parameterName,a,gamma, stressName, rc, stressPeriod, dpd);
+    impl = std::make_unique<SmartInteractionPair_withStress<Pairwise_SmartDPD>> (state,name,parameterName,weights,a,gamma, stressName, rc, stressPeriod, dpd);
 }
 
 InteractionSmartDPDWithStress::~InteractionSmartDPDWithStress() = default;

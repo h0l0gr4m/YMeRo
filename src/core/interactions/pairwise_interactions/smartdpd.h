@@ -63,7 +63,7 @@ public:
         const float rij = rij2 * invrij;
         const float argwr = 1.0f - rij * invrc;
         const float wr = fastPower(argwr, power);
-
+        // printf("dstId: %d , dstu.x : %f , srcId : %d , srcu.x: %f\n", dstId , dst.u.x, srcId , src.u.x);
         const float3 dr_r = dr * invrij;
         const float3 du = dst.u - src.u;
         const float rdotv = dot(dr_r, du);

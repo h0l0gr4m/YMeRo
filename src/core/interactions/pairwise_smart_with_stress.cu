@@ -88,15 +88,15 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::setPrerequisites(Part
 
 template<class PairwiseInteraction>
 SmartInteractionPair_withStress<PairwiseInteraction>::SmartInteractionPair_withStress(
-    const YmrState *state,std::string name,std::string parameterName,float a,float gamma,std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
+    const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights,float a,float gamma,std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
     a(a),
     gamma(gamma),
     parameterName(parameterName),
     Interaction(state,name, rc),
     stressName(stressName),
     stressPeriod(stressPeriod),
-    interaction(state,name,parameterName,a,gamma,rc, pair),
-    interactionWithStress(state,name,parameterName,a,gamma,rc, PairwiseStressWrapper<PairwiseInteraction>(stressName, pair))
+    interaction(state,name,parameterName,weights,a,gamma,rc, FlowProperties<PairwiseInteraction>("fp_name",pair)),
+    interactionWithStress(state,name,parameterName,weights,a,gamma,rc, FlowProperties<PairwiseStressWrapper<PairwiseInteraction>>("fp_name", PairwiseStressWrapper<PairwiseInteraction>(stressName,pair)))
 { }
 
 template<class PairwiseInteraction>
@@ -122,8 +122,8 @@ template<class PairwiseInteraction>
 void SmartInteractionPair_withStress<PairwiseInteraction>::setSpecificPair(
         std::string pv1name, std::string pv2name, PairwiseInteraction pair)
 {
-    interaction.          setSpecificPair(pv1name, pv2name, pair);
-    interactionWithStress.setSpecificPair(pv1name, pv2name, PairwiseStressWrapper<PairwiseInteraction>(stressName, pair));
+    interaction.          setSpecificPair(pv1name, pv2name, FlowProperties<PairwiseInteraction>("fp_name",pair));
+    interactionWithStress.setSpecificPair(pv1name, pv2name, FlowProperties<PairwiseStressWrapper<PairwiseInteraction>>("fp_name", PairwiseStressWrapper<PairwiseInteraction>(stressName,pair)));
 }
 
 

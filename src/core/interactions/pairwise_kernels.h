@@ -69,45 +69,20 @@ __device__ inline float distance2(const Ta a, const Tb b)
  * based on particle ids
  */
 
-
-
- template<InteractionOut NeedDstAcc, InteractionOut NeedSrcAcc, InteractionWith InteractWith, typename Calculation>
- __device__ inline void compute_calculation(
-         int pstart, int pend,
-         Particle dstP, int dstId,
-         CellListInfo cinfo,
-         float rc2, Calculation& calculation)
- {
-     for (int srcId = pstart; srcId < pend; srcId++)
-     {
-         Particle srcP;
-         srcP.readCoordinate(cinfo.particles, srcId);
-
-         bool interacting = distance2(srcP.r, dstP.r) < rc2;
-         if(InteractWith == InteractionWith::Self)
-            if(dstId <= srcId) interacting = false;
-
-         if (interacting)
-         {
-             srcP.readVelocity(cinfo.particles, srcId);
-             calculation(dstP, dstId, srcP, srcId);
-         }
-     }
- }
-
-
  template<InteractionOut NeedDstAcc, InteractionOut NeedSrcAcc, InteractionWith InteractWith, typename Interaction>
  __device__ inline void computeCell(
          int pstart, int pend,
          Particle dstP, int dstId, float3& dstFrc,
          CellListInfo cinfo,
          float rc2, Interaction& interaction)
- {
+
+{
+
+
      for (int srcId = pstart; srcId < pend; srcId++)
      {
          Particle srcP;
          srcP.readCoordinate(cinfo.particles, srcId);
-
          bool interacting = distance2(srcP.r, dstP.r) < rc2;
 
          if (InteractWith == InteractionWith::Self)
@@ -124,9 +99,14 @@ __device__ inline float distance2(const Ta a, const Tb b)
 
              if (NeedSrcAcc == InteractionOut::NeedAcc)
                  atomicAdd(cinfo.forces + srcId, -frc);
+
+
          }
-     }
+        // printf("dstId: %d ; dstPu.x: %f \n" , dstId , dstP.u.x);
+      }
+
  }
+
 
 /**
  * Compute interactions within a single ParticleVector.
@@ -154,8 +134,8 @@ __global__ void computeSelfInteractions(
     const int dstId = blockIdx.x*blockDim.x + threadIdx.x;
     if (dstId >= np) return;
     const Particle dstP(cinfo.particles, dstId);
+    // printf("dstId: %d ; dstPu.x: %f \n" , dstId , dstP.u.x);
     float3 dstFrc = make_float3(0.0f);
-
     const int3 cell0 = cinfo.getCellIdAlongAxes(dstP.r);
 
     for (int cellZ = cell0.z-1; cellZ <= cell0.z+1; cellZ++)
@@ -180,58 +160,8 @@ __global__ void computeSelfInteractions(
             }
 
     atomicAdd(cinfo.forces + dstId, dstFrc);
-}
-
-template<typename Interaction,typename Calculation, typename Calculation1>
-__launch_bounds__(128, 16)
-__global__ void computeSelfInteractions(
-        const int np, CellListInfo cinfo,
-        const float rc2, Interaction interaction, Calculation calculation_FP,Calculation1 calculation_NNInputs)
-{
-    const int dstId = blockIdx.x*blockDim.x + threadIdx.x;
-    if (dstId >= np) return;
-
-    const Particle dstP(cinfo.particles, dstId);
-    float3 dstFrc = make_float3(0.0f);
-
-    const int3 cell0 = cinfo.getCellIdAlongAxes(dstP.r);
-
-    for (int cellZ = cell0.z-1; cellZ <= cell0.z+1; cellZ++)
-        for (int cellY = cell0.y-1; cellY <= cell0.y; cellY++)
-            {
-                if ( !(cellY >= 0 && cellY < cinfo.ncells.y && cellZ >= 0 && cellZ < cinfo.ncells.z) ) continue;
-                if (cellY == cell0.y && cellZ > cell0.z) continue;
-
-                const int midCellId = cinfo.encode(cell0.x, cellY, cellZ);
-                int rowStart  = max(midCellId-1, 0);
-                int rowEnd    = min(midCellId+2, cinfo.totcells);
-
-                if ( cellY == cell0.y && cellZ == cell0.z ) rowEnd = midCellId + 1; // this row is already partly covered
-
-                const int pstart = cinfo.cellStarts[rowStart];
-                const int pend   = cinfo.cellStarts[rowEnd];
-
-                if (cellY == cell0.y && cellZ == cell0.z)
-                {
-                    computeCell<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Self>  (pstart, pend, dstP, dstId, dstFrc, cinfo, rc2, interaction);
-                    compute_calculation<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Self> (pstart, pend, dstP, dstId, cinfo, rc2, calculation_FP);
-                }
-                else
-                {
-                    computeCell<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Other> (pstart, pend, dstP, dstId, dstFrc, cinfo, rc2, interaction);
-                    compute_calculation<InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionWith::Other> (pstart, pend, dstP, dstId, cinfo, rc2, calculation_FP);
-                }
-            }
-
-    atomicAdd(cinfo.forces + dstId, dstFrc);
-    calculation_NNInputs(dstP, dstId);
 
 }
-
-
-
-
-
 
 /**
  * Compute interactions between particle of two different ParticleVector.
@@ -493,4 +423,5 @@ __global__ void computeExternalInteractions_27tpp(
 
     if (NeedDstAcc == InteractionOut::NeedAcc)
         atomicAdd(dstView.forces + dstId, dstFrc);
+
 }

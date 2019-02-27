@@ -20,13 +20,16 @@
 #include "calculations/NeuralNet_kernel.h"
 #include "calculations/FlowProperties.h"
 #include "calculations/NNInputs.h"
+#include "calculations/nninput_kernel.h"
 
-__global__ void copy_kernel(DPDparameter* devPointer ,int np, float a, float gamma)
+__global__ void copy_kernel(DPDparameter* devPointer1,DPDparameter* devPointer2,int np, float a, float gamma)
 {
    const int dstId = blockIdx.x*blockDim.x + threadIdx.x;
    if (dstId >= np) return;
-   devPointer[dstId].alpha_p = a;
-   devPointer[dstId].gamma_p = gamma;
+   devPointer1[dstId].alpha_p = a;
+   devPointer1[dstId].gamma_p = gamma;
+   devPointer2[dstId].alpha_p = a;
+   devPointer2[dstId].gamma_p = gamma;
 
 }
 
@@ -36,18 +39,21 @@ __global__ void copy_kernel(DPDparameter* devPointer ,int np, float a, float gam
  * Select one of the available kernels for external interaction depending
  * on the number of particles involved, report it and call
  */
-#define DISPATCH_EXTERNAL(P1, P2, P3, TPP, INTERACTION_FUNCTION)                \
-do{ debug2("Dispatched to "#TPP" thread(s) per particle variant");              \
-    SAFE_KERNEL_LAUNCH(                                                         \
-            computeExternalInteractions_##TPP##tpp<P1 COMMA P2 COMMA P3>,       \
-            getNblocks(TPP*view.size, nth), nth, 0, stream,                     \
-            view, cl2->cellInfo(), rc*rc, INTERACTION_FUNCTION); } while (0)
+ #define DISPATCH_EXTERNAL(P1, P2, P3, TPP, INTERACTION_FUNCTION)                \
+ do{ debug2("Dispatched to "#TPP" thread(s) per particle variant");              \
+     SAFE_KERNEL_LAUNCH(                                                         \
+             computeExternalInteractions_##TPP##tpp<P1 COMMA P2 COMMA P3>,       \
+             getNblocks(TPP*view.size, nth), nth, 0, stream,                     \
+             view, cl2->cellInfo(), rc*rc, INTERACTION_FUNCTION); } while (0)
 
-#define CHOOSE_EXTERNAL(P1, P2, P3, INTERACTION_FUNCTION)                                              \
-do{  if (view.size < 1000  ) { DISPATCH_EXTERNAL(P1, P2, P3, 27, INTERACTION_FUNCTION); }              \
-else if (view.size < 10000 ) { DISPATCH_EXTERNAL(P1, P2, P3, 9,  INTERACTION_FUNCTION); }              \
-else if (view.size < 400000) { DISPATCH_EXTERNAL(P1, P2, P3, 3,  INTERACTION_FUNCTION); }              \
-else                         { DISPATCH_EXTERNAL(P1, P2, P3, 1,  INTERACTION_FUNCTION); } } while(0)
+ #define CHOOSE_EXTERNAL(P1, P2, P3, INTERACTION_FUNCTION)                                              \
+ do{  if (view.size < 1000  ) { DISPATCH_EXTERNAL(P1, P2, P3, 27, INTERACTION_FUNCTION); }              \
+ else if (view.size < 10000 ) { DISPATCH_EXTERNAL(P1, P2, P3, 9,  INTERACTION_FUNCTION); }              \
+ else if (view.size < 400000) { DISPATCH_EXTERNAL(P1, P2, P3, 3,  INTERACTION_FUNCTION); }              \
+ else                         { DISPATCH_EXTERNAL(P1, P2, P3, 1,  INTERACTION_FUNCTION); } } while(0)
+
+
+
 
 /**
  * Interface to _compute() with local interactions.
@@ -144,8 +150,6 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
     if (type == InteractionType::Regular)
     {
         pair.setup(pv1->local(), pv2->local(), cl1, cl2, t);
-        calculation_FlowProperties.setup(pv1->local(), pv2->local(), cl1, cl2, t);
-        calculation_NNInputs.setup(pv1->local(), pv2->local(), cl1, cl2, t);
         /*  Self interaction */
         if (pv1 == pv2)
         {
@@ -154,36 +158,15 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
 
             const int nth = 128;
             auto cinfo = cl1->cellInfo();
-            pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
-            pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
-            NNInput *pv1NNInputs = pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
 
-            float Weights[16] ={1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
-            float *d_Weights;
-            cudaMalloc(&d_Weights, 16*sizeof(float));
-            cudaMemcpy(d_Weights,Weights,16*sizeof(float),cudaMemcpyHostToDevice);
-
-            SAFE_KERNEL_LAUNCH(
-                    copy_kernel,
-                    getNblocks(np, nth), nth, 0, stream,
-                    pv1DPDparameter,np,a,gamma);
-            SAFE_KERNEL_LAUNCH(
-                    copy_kernel,
-                    getNblocks(np, nth), nth, 0, stream,
-                    pv2DPDparameter,np, a, gamma);
             SAFE_KERNEL_LAUNCH(
                     computeSelfInteractions,
                     getNblocks(np, nth), nth, 0, stream,
-                    np, cinfo, rc*rc, pair,calculation_FlowProperties,calculation_NNInputs);
-            SAFE_KERNEL_LAUNCH(
-                    NeuralNet,
-                    getNblocks(16*np, nth), nth, 0, stream,
-                    np, 4,pv1DPDparameter, pv1NNInputs,d_Weights);
+                    np, cinfo, rc*rc, pair);
 
         }
         else /*  External interaction */
-        {
-            const int np1 = pv1->local()->size();
+        {   const int np1 = pv1->local()->size();
             const int np2 = pv2->local()->size();
             debug("Computing external forces for %s - %s (%d - %d particles)", pv1->name.c_str(), pv2->name.c_str(), np1, np2);
 
@@ -199,9 +182,6 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
     if (type == InteractionType::Halo)
     {
         pair.setup(pv1->halo(), pv2->local(), cl1, cl2, t);
-        calculation_FlowProperties.setup(pv1->halo(), pv2->local(), cl1, cl2, t);
-        calculation_NNInputs.setup(pv1->halo(), pv2->local(), cl1, cl2, t);
-
         const int np1 = pv1->halo()->size();  // note halo here
         const int np2 = pv2->local()->size();
         debug("Computing halo forces for %s(halo) - %s (%d - %d particles)", pv1->name.c_str(), pv2->name.c_str(), np1, np2);
@@ -210,10 +190,31 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
         const int nth = 128;
         if (np1 > 0 && np2 > 0)
             if (dynamic_cast<ObjectVector*>(pv1) == nullptr) // don't need forces for pure particle halo
-                CHOOSE_EXTERNAL(InteractionOut::NoAcc,   InteractionOut::NeedAcc, InteractionMode::Dilute, pair );
+            {
+                CHOOSE_EXTERNAL(InteractionOut::NoAcc,   InteractionOut::NeedAcc, InteractionMode::Dilute, pair);
+            }
             else
-                CHOOSE_EXTERNAL(InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionMode::Dilute, pair );
+            {
+                CHOOSE_EXTERNAL(InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionMode::Dilute, pair);
+            }
     }
+    // const int np = pv1->local()->size();
+    // const int nth = 128;
+    // inputsnn.setup(pv1->local(), pv2->local(), cl1, cl2, t);
+    // SAFE_KERNEL_LAUNCH(
+    //         computeNNInputs,
+    //         getNblocks(np, nth), nth, 0, stream,
+    //         np,inputsnn);
+    //
+    // float *d_Weights;
+    // cudaMalloc(&d_Weights, 16*sizeof(float));
+    // cudaMemcpy(d_Weights,&Weights[0],16*sizeof(float),cudaMemcpyHostToDevice);
+    // NNInput *pv1NNInputs = pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
+    // SAFE_KERNEL_LAUNCH(
+    //         NeuralNet,
+    //         getNblocks(16*np, nth), nth, 0, stream,
+    //         np, 4,pv1DPDparameter, pv1NNInputs,d_Weights);
+
 }
 
 
@@ -224,7 +225,8 @@ void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector*
          name.c_str(), pv1->name.c_str(), pv2->name.c_str());
 
 
-
+    const int nth = 128;
+    const int np = pv1->local()->size();
     pv1->requireDataPerParticle<DPDparameter>(parameterName,ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<DPDparameter>(parameterName,ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
@@ -239,6 +241,14 @@ void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector*
 
     pv1->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<NNInput>("NNInputs",ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+
+    pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
+    pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
+    SAFE_KERNEL_LAUNCH(
+            copy_kernel,
+            getNblocks(np, nth), nth, 0, 0,
+            pv1DPDparameter,pv2DPDparameter,np,a,gamma);
 
 }
 
@@ -270,4 +280,5 @@ void InteractionPairSmart<PairwiseInteraction>::setSpecificPair(std::string pv1n
 
 //for testing purpose
 template class InteractionPairSmart<Pairwise_SmartDPD>;
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_SmartDPD>>;
+template class InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>;
+template class InteractionPairSmart<FlowProperties<PairwiseStressWrapper<Pairwise_SmartDPD>>>;

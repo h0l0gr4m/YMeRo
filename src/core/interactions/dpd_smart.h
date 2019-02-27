@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include "interface.h"
 #include <memory>
 #include <limits>
@@ -11,7 +12,7 @@ class InteractionSmartDPD : public Interaction
 public:
     constexpr static float Default = std::numeric_limits<float>::infinity();
 
-    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,float rc, float a, float gamma, float kbt, float power);
+    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights,float rc, float a, float gamma, float kbt, float power);
 
     ~InteractionSmartDPD();
 
@@ -27,11 +28,12 @@ public:
 
 protected:
 
-    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName, float rc, float a, float gamma, float kbt,  float power, bool allocateImpl);
+    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights, float rc, float a, float gamma, float kbt,  float power, bool allocateImpl);
 
     std::unique_ptr<Interaction> impl;
 
     // Default values
     float a, gamma, kbt,  power;
     std::string parameterName;
+    std::vector<float> Weights;
 };

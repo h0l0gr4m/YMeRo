@@ -52,8 +52,9 @@ public:
 
     }
 
-    __D__ inline void operator()(const Particle dst, int dstId) const
+    __D__ inline void operator()(int dstId) const
     {
+      
       pv1NNInput[dstId].g1 = pv1Velocity_Gradient[dstId].xx+pv1Velocity_Gradient[dstId].yy+pv1Velocity_Gradient[dstId].zz;
       const float A11A22 = pv1Velocity_Gradient[dstId].xx*pv1Velocity_Gradient[dstId].yy;
       const float A11A33 = pv1Velocity_Gradient[dstId].xx*pv1Velocity_Gradient[dstId].zz;

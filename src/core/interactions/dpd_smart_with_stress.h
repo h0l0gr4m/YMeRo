@@ -6,7 +6,7 @@
 class InteractionSmartDPDWithStress : public InteractionSmartDPD
 {
 public:
-    InteractionSmartDPDWithStress(const YmrState *state,std::string name,std::string parameterName, std::string stressName, float rc, float a, float gamma, float kbt,float power, float stressPeriod);
+    InteractionSmartDPDWithStress(const YmrState *state,std::string name,std::string parameterName, std::string stressName,std::vector<float> weights, float rc, float a, float gamma, float kbt,float power, float stressPeriod);
 
     ~InteractionSmartDPDWithStress();
 

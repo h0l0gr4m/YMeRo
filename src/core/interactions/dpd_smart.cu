@@ -7,20 +7,20 @@
 #include <core/pvs/particle_vector.h>
 
 
-InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name, std::string parameterName, float rc, float a, float gamma, float kbt, float power, bool allocateImpl) :
+InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name, std::string parameterName,std::vector<float> weights, float rc, float a, float gamma, float kbt, float power, bool allocateImpl) :
     Interaction(state, name, rc),
-    parameterName(parameterName),a(a), gamma(gamma), kbt(kbt), power(power)
+    parameterName(parameterName),a(a), gamma(gamma), kbt(kbt), power(power),Weights(weights)
 {
     if (allocateImpl)
     {
         Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
-        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (state,name,parameterName,a,gamma ,rc, dpd);
+        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (state,name,parameterName,weights,a,gamma ,rc, dpd);
     }
 
 }
 
-InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName, float rc, float a, float gamma, float kbt,  float power) :
-    InteractionSmartDPD(state,name,parameterName, rc, a, gamma, kbt, power, true)
+InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights, float rc, float a, float gamma, float kbt,  float power) :
+    InteractionSmartDPD(state,name,parameterName,weights, rc, a, gamma, kbt, power, true)
 {}
 
 InteractionSmartDPD::~InteractionSmartDPD() = default;

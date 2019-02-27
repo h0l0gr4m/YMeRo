@@ -49,19 +49,18 @@ inline __device__ float symmetry_function(float r, float eta , float R_s)
 
 
 
-
+template<typename BasicPairwiseForce>
 class FlowProperties
 {
 public:
-    FlowProperties(std::string fp_name = "fp_name") :
-        fp_name(fp_name)
+    FlowProperties(std::string fp_name,BasicPairwiseForce basicForce) :
+        fp_name(fp_name),basicForce(basicForce)
     {}
-
-
 
 
     void setup(LocalParticleVector* lpv1, LocalParticleVector* lpv2, CellList* cl1, CellList* cl2, float t)
     {
+      basicForce.setup(lpv1, lpv2, cl1, cl2, t);
 
       pv1Aprox_Density = lpv1->extraPerParticle.getData<Aprox_Density>("aprox_density_name")->devPtr();
       pv2Aprox_Density = lpv2->extraPerParticle.getData<Aprox_Density>("aprox_density_name")->devPtr();
@@ -73,20 +72,18 @@ public:
       pv2Velocity_Gradient = lpv2->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->devPtr();
     }
 
-    __D__ inline void operator()(const Particle dst, int dstId, const Particle src, int srcId) const
+    __D__ inline float3 operator()(const Particle dst, int dstId, const Particle src, int srcId) const
     {
+        float3 f = basicForce(dst, dstId, src, srcId);
+
         const float3 dr = dst.r - src.r;
         const float rij = length(dr);
         const float invrij = 1.0/rij;
-        const float3 dstu = dst.u;
-        const float3 srcu = src.u;
-        const float3 du = dstu-srcu;
-
-
+        const float3 du = dst.u-src.u;
       	const float Vj  = 1.0/6.0;
         const float q = invrij*Vj*der_eta_kernel(rij);
 
-        //calculate velocity gradient matrix
+        // calculate velocity gradient matrix
 
         const float dstVelocity_Gradientxx = - q*du.x*dr.x;
         const float dstVelocity_Gradientxy = - q*du.x*dr.y;
@@ -120,20 +117,21 @@ public:
         atomicAdd(&pv2Velocity_Gradient[srcId].zy ,dstVelocity_Gradientzy);
         atomicAdd(&pv2Velocity_Gradient[srcId].zz ,dstVelocity_Gradientzz);
 
-        //caluclate vorcicity vector
-        float3 dstVorticity;
-        dstVorticity.x = -q*(du.z*dr.y-du.y*dr.z);
-        dstVorticity.y = -q*(du.x*dr.z-du.z*dr.x);
-        dstVorticity.z = -q*(du.y*dr.x-du.x*dr.z);
+        // //caluclate vorcicity vector
+        // float3 dstVorticity;
+        const float dstVorticityx = -q*(du.z*dr.y-du.y*dr.z);
+        const float dstVorticityy = -q*(du.x*dr.z-du.z*dr.x);
+        const float dstVorticityz = -q*(du.y*dr.x-du.x*dr.z);
 
 
-        atomicAdd(&pv1Vorticity[dstId].x,dstVorticity.x);
-        atomicAdd(&pv1Vorticity[dstId].y,dstVorticity.y);
-        atomicAdd(&pv1Vorticity[dstId].z,dstVorticity.z);
+        atomicAdd(&pv1Vorticity[dstId].x,dstVorticityx);
+        // atomicAdd(&pv1Vorticity[dstId].y,dstVorticityy);
+        atomicAdd(&pv1Vorticity[dstId].z,dstVorticityz);
 
-        atomicAdd(&pv2Vorticity[srcId].x,dstVorticity.x);
-        atomicAdd(&pv2Vorticity[srcId].y,dstVorticity.y);
-        atomicAdd(&pv2Vorticity[srcId].z,dstVorticity.z);
+        atomicAdd(&pv2Vorticity[srcId].x,dstVorticityx);
+        atomicAdd(&pv2Vorticity[srcId].y,dstVorticityy);
+        atomicAdd(&pv2Vorticity[srcId].z,dstVorticityz);
+
         // calculate density (similar to density) via symmetry functions
         float3 d_particle;
         d_particle.x = symmetry_function(rij,0.5,1)*eta_kernel(rij);
@@ -147,11 +145,14 @@ public:
         atomicAdd(&pv2Aprox_Density[srcId].y,d_particle.y);
         atomicAdd(&pv2Aprox_Density[srcId].z,d_particle.z);
 
+        // printf("dstId: %d ; dstPu.x: %f \n" , dstId , dst.u.x);
 
+        return f;
    }
 private:
       Aprox_Density *pv1Aprox_Density, *pv2Aprox_Density;
       Vorticity *pv1Vorticity, *pv2Vorticity;
       Velocity_Gradient *pv1Velocity_Gradient, *pv2Velocity_Gradient;
       std::string fp_name;
+      BasicPairwiseForce basicForce;
 };
