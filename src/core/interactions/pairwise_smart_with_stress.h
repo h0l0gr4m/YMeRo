@@ -42,6 +42,6 @@ private:
     std::string parameterName;
     std::vector<float> Weights;
 
-    InteractionPairSmart<FlowProperties<PairwiseInteraction>> interaction;
-    InteractionPairSmart<FlowProperties<PairwiseStressWrapper<PairwiseInteraction>>> interactionWithStress;
+    InteractionPairSmart<PairwiseInteraction> interaction;
+    InteractionPairSmart<PairwiseStressWrapper<PairwiseInteraction>> interactionWithStress;
 };

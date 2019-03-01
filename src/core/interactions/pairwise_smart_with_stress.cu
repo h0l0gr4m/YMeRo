@@ -95,8 +95,8 @@ SmartInteractionPair_withStress<PairwiseInteraction>::SmartInteractionPair_withS
     Interaction(state,name, rc),
     stressName(stressName),
     stressPeriod(stressPeriod),
-    interaction(state,name,parameterName,weights,a,gamma,rc, FlowProperties<PairwiseInteraction>("fp_name",pair)),
-    interactionWithStress(state,name,parameterName,weights,a,gamma,rc, FlowProperties<PairwiseStressWrapper<PairwiseInteraction>>("fp_name", PairwiseStressWrapper<PairwiseInteraction>(stressName,pair)))
+    interaction(state,name,parameterName,weights,a,gamma,rc, pair),
+    interactionWithStress(state,name,parameterName,weights,a,gamma,rc,PairwiseStressWrapper<PairwiseInteraction>(stressName,pair))
 { }
 
 template<class PairwiseInteraction>
@@ -122,9 +122,8 @@ template<class PairwiseInteraction>
 void SmartInteractionPair_withStress<PairwiseInteraction>::setSpecificPair(
         std::string pv1name, std::string pv2name, PairwiseInteraction pair)
 {
-    interaction.          setSpecificPair(pv1name, pv2name, FlowProperties<PairwiseInteraction>("fp_name",pair));
-    interactionWithStress.setSpecificPair(pv1name, pv2name, FlowProperties<PairwiseStressWrapper<PairwiseInteraction>>("fp_name", PairwiseStressWrapper<PairwiseInteraction>(stressName,pair)));
+    interaction.          setSpecificPair(pv1name, pv2name, pair);
+    interactionWithStress.setSpecificPair(pv1name, pv2name, PairwiseStressWrapper<PairwiseInteraction>(stressName,pair));
 }
 
-
-template class SmartInteractionPair_withStress<Pairwise_SmartDPD>;
+template class SmartInteractionPair_withStress<FlowProperties<Pairwise_SmartDPD>>;

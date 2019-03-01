@@ -1,7 +1,9 @@
 #include "dpd_smart.h"
 #include <memory>
 #include "pairwise_smart.h"
-#include "pairwise_interactions/smartdpd.h"
+#include "pairwise_interactions/dpd.h"
+#include "calculations/FlowProperties.h"
+
 
 #include <core/utils/make_unique.h>
 #include <core/pvs/particle_vector.h>
@@ -14,7 +16,8 @@ InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name
     if (allocateImpl)
     {
         Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
-        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (state,name,parameterName,weights,a,gamma ,rc, dpd);
+        FlowProperties<Pairwise_SmartDPD> fp("fp_name", dpd);
+        impl = std::make_unique<InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>> (state,name,parameterName,weights,a,gamma ,rc,fp);
     }
 
 }
@@ -57,8 +60,10 @@ void InteractionSmartDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* p
     if (kbt   == Default) kbt   = this->kbt;
     if (power == Default) power = this->power;
 
-    Pairwise_SmartDPD dpd(parameterName,this->rc, a, gamma, kbt, state->dt, power);
-    auto ptr = static_cast< InteractionPairSmart<Pairwise_SmartDPD>* >(impl.get());
 
-    ptr->setSpecificPair(pv1->name, pv2->name, dpd);
+    Pairwise_SmartDPD dpd(parameterName,this->rc, a, gamma, kbt, state->dt, power);
+    FlowProperties<Pairwise_SmartDPD> fp("fp_name", dpd);
+    auto ptr = static_cast< InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>* >(impl.get());
+
+    ptr->setSpecificPair(pv1->name, pv2->name, fp);
 }

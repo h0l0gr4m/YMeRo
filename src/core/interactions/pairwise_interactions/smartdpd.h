@@ -51,9 +51,9 @@ public:
 
     __D__ inline float3 operator()(const Particle dst, int dstId, const Particle src, int srcId) const
     {
-        const float alpha_p = (pv1DPDparameter[dstId].alpha_p + pv1DPDparameter[srcId].alpha_p)/2;
-        const float gamma_p = (pv1DPDparameter[dstId].gamma_p + pv1DPDparameter[srcId].gamma_p)/2;
-
+        const float alpha_p = (pv1DPDparameter[dstId].alpha_p + pv2DPDparameter[srcId].alpha_p)/2;
+        const float gamma_p = (pv1DPDparameter[dstId].gamma_p + pv2DPDparameter[srcId].gamma_p)/2;
+        // printf("a: %f , gamma : %f \n" ,alpha_p ,gamma_p);
         float sigma_p = sqrt(2 * gamma_p * kbT / dt);
         const float3 dr = dst.r - src.r;
         const float rij2 = dot(dr, dr);

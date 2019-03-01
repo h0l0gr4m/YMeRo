@@ -198,13 +198,13 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
                 CHOOSE_EXTERNAL(InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionMode::Dilute, pair);
             }
     }
-    // const int np = pv1->local()->size();
-    // const int nth = 128;
-    // inputsnn.setup(pv1->local(), pv2->local(), cl1, cl2, t);
-    // SAFE_KERNEL_LAUNCH(
-    //         computeNNInputs,
-    //         getNblocks(np, nth), nth, 0, stream,
-    //         np,inputsnn);
+    const int np = pv1->local()->size();
+    const int nth = 128;
+    inputsnn.setup(pv1->local(), pv2->local(), cl1, cl2, t);
+    SAFE_KERNEL_LAUNCH(
+            computeNNInputs,
+            getNblocks(np, nth), nth, 0, stream,
+            np,inputsnn);
     //
     // float *d_Weights;
     // cudaMalloc(&d_Weights, 16*sizeof(float));
@@ -279,6 +279,6 @@ void InteractionPairSmart<PairwiseInteraction>::setSpecificPair(std::string pv1n
 
 
 //for testing purpose
-template class InteractionPairSmart<Pairwise_SmartDPD>;
 template class InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>;
-template class InteractionPairSmart<FlowProperties<PairwiseStressWrapper<Pairwise_SmartDPD>>>;
+template class InteractionPairSmart<FlowProperties<Pairwise_DPD>>;
+template class InteractionPairSmart<PairwiseStressWrapper<FlowProperties<Pairwise_SmartDPD>>>;

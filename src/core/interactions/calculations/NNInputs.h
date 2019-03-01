@@ -54,8 +54,9 @@ public:
 
     __D__ inline void operator()(int dstId) const
     {
-      
+
       pv1NNInput[dstId].g1 = pv1Velocity_Gradient[dstId].xx+pv1Velocity_Gradient[dstId].yy+pv1Velocity_Gradient[dstId].zz;
+      // printf("div: %f\n" , pv1NNInput[dstId].g1);
       const float A11A22 = pv1Velocity_Gradient[dstId].xx*pv1Velocity_Gradient[dstId].yy;
       const float A11A33 = pv1Velocity_Gradient[dstId].xx*pv1Velocity_Gradient[dstId].zz;
       const float A33A22 = pv1Velocity_Gradient[dstId].zz*pv1Velocity_Gradient[dstId].yy;

@@ -102,7 +102,6 @@ __device__ inline float distance2(const Ta a, const Tb b)
 
 
          }
-        // printf("dstId: %d ; dstPu.x: %f \n" , dstId , dstP.u.x);
       }
 
  }

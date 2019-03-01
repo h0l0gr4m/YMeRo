@@ -75,7 +75,7 @@ void InteractionPair<PairwiseInteraction>::halo(ParticleVector *pv1,
     auto isov2 = dynamic_cast<ObjectVector *>(pv2) != nullptr;
 
     float t = state->currentTime;
-    
+
     // Two object vectors. Compute just one interaction, doesn't matter which
     if (isov1 && isov2) {
         _compute(InteractionType::Halo, pv1, pv2, cl1, cl2, t, stream);

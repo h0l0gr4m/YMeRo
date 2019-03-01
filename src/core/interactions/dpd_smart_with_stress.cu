@@ -3,7 +3,7 @@
 #include "dpd_smart_with_stress.h"
 #include "pairwise_smart_with_stress.h"
 #include "pairwise_interactions/smartdpd.h"
-
+#include "calculations/FlowProperties.h"
 #include <core/utils/make_unique.h>
 #include <core/pvs/particle_vector.h>
 
@@ -14,7 +14,8 @@ InteractionSmartDPDWithStress::InteractionSmartDPDWithStress(const YmrState *sta
     stressPeriod(stressPeriod)
 {
     Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
-    impl = std::make_unique<SmartInteractionPair_withStress<Pairwise_SmartDPD>> (state,name,parameterName,weights,a,gamma, stressName, rc, stressPeriod, dpd);
+    FlowProperties<Pairwise_SmartDPD> fp ("fp_name",dpd);
+    impl = std::make_unique<SmartInteractionPair_withStress<FlowProperties<Pairwise_SmartDPD>>>(state,name,parameterName,weights,a,gamma, stressName, rc, stressPeriod, fp);
 }
 
 InteractionSmartDPDWithStress::~InteractionSmartDPDWithStress() = default;
@@ -27,7 +28,8 @@ void InteractionSmartDPDWithStress::setSpecificPair(ParticleVector* pv1, Particl
     if (power == Default) power = this->power;
 
     Pairwise_SmartDPD dpd(parameterName,this->rc, a, gamma, kbt,state->dt, power);
-    auto ptr = static_cast< SmartInteractionPair_withStress<Pairwise_SmartDPD>* >(impl.get());
+    FlowProperties<Pairwise_SmartDPD> fp ("fp_name",dpd);
+    auto ptr = static_cast< SmartInteractionPair_withStress<FlowProperties<Pairwise_SmartDPD>>* >(impl.get());
 
-    ptr->setSpecificPair(pv1->name, pv2->name, dpd);
+    ptr->setSpecificPair(pv1->name, pv2->name, fp);
 }

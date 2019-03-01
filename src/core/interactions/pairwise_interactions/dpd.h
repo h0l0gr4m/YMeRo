@@ -49,7 +49,7 @@ public:
         const float3 dr = dst.r - src.r;
         const float rij2 = dot(dr, dr);
         if (rij2 > rc2) return make_float3(0.0f);
-
+        // printf("a: %f , gamma : %f \n" ,a ,gamma);
         const float invrij = rsqrtf(rij2);
         const float rij = rij2 * invrij;
         const float argwr = 1.0f - rij * invrc;

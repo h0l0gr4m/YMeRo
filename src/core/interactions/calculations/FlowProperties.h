@@ -117,21 +117,20 @@ public:
         atomicAdd(&pv2Velocity_Gradient[srcId].zy ,dstVelocity_Gradientzy);
         atomicAdd(&pv2Velocity_Gradient[srcId].zz ,dstVelocity_Gradientzz);
 
-        // //caluclate vorcicity vector
-        // float3 dstVorticity;
+        //caluclate vorcicity vector
         const float dstVorticityx = -q*(du.z*dr.y-du.y*dr.z);
         const float dstVorticityy = -q*(du.x*dr.z-du.z*dr.x);
         const float dstVorticityz = -q*(du.y*dr.x-du.x*dr.z);
 
 
+
         atomicAdd(&pv1Vorticity[dstId].x,dstVorticityx);
-        // atomicAdd(&pv1Vorticity[dstId].y,dstVorticityy);
+        atomicAdd(&pv1Vorticity[dstId].y,dstVorticityy);
         atomicAdd(&pv1Vorticity[dstId].z,dstVorticityz);
 
         atomicAdd(&pv2Vorticity[srcId].x,dstVorticityx);
         atomicAdd(&pv2Vorticity[srcId].y,dstVorticityy);
         atomicAdd(&pv2Vorticity[srcId].z,dstVorticityz);
-
         // calculate density (similar to density) via symmetry functions
         float3 d_particle;
         d_particle.x = symmetry_function(rij,0.5,1)*eta_kernel(rij);
@@ -146,8 +145,8 @@ public:
         atomicAdd(&pv2Aprox_Density[srcId].z,d_particle.z);
 
         // printf("dstId: %d ; dstPu.x: %f \n" , dstId , dst.u.x);
-
         return f;
+
    }
 private:
       Aprox_Density *pv1Aprox_Density, *pv2Aprox_Density;
