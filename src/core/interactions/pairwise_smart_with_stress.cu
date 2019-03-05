@@ -88,15 +88,15 @@ void SmartInteractionPair_withStress<PairwiseInteraction>::setPrerequisites(Part
 
 template<class PairwiseInteraction>
 SmartInteractionPair_withStress<PairwiseInteraction>::SmartInteractionPair_withStress(
-    const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights,float a,float gamma,std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
+    const YmrState *state,std::string name,std::string parameterName,PinnedBuffer<float> Weights,float a,float gamma,std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
     a(a),
     gamma(gamma),
     parameterName(parameterName),
     Interaction(state,name, rc),
     stressName(stressName),
     stressPeriod(stressPeriod),
-    interaction(state,name,parameterName,weights,a,gamma,rc, pair),
-    interactionWithStress(state,name,parameterName,weights,a,gamma,rc,PairwiseStressWrapper<PairwiseInteraction>(stressName,pair))
+    interaction(state,name,parameterName,Weights,a,gamma,rc, pair),
+    interactionWithStress(state,name,parameterName,Weights,a,gamma,rc,PairwiseStressWrapper<PairwiseInteraction>(stressName,pair))
 { }
 
 template<class PairwiseInteraction>

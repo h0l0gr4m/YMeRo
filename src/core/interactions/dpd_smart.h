@@ -33,7 +33,8 @@ protected:
     std::unique_ptr<Interaction> impl;
 
     // Default values
-    float a, gamma, kbt,  power;
+    float a, gamma, kbt,  power,loss ;
     std::string parameterName;
-    std::vector<float> Weights;
+    PinnedBuffer<float> Weights;
+
 };

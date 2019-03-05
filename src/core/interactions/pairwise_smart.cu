@@ -200,20 +200,19 @@ void InteractionPairSmart<PairwiseInteraction>::_compute(InteractionType type,
     }
     const int np = pv1->local()->size();
     const int nth = 128;
+    NNInputs inputsnn(Weights);
     inputsnn.setup(pv1->local(), pv2->local(), cl1, cl2, t);
     SAFE_KERNEL_LAUNCH(
             computeNNInputs,
             getNblocks(np, nth), nth, 0, stream,
             np,inputsnn);
-    //
-    // float *d_Weights;
-    // cudaMalloc(&d_Weights, 16*sizeof(float));
-    // cudaMemcpy(d_Weights,&Weights[0],16*sizeof(float),cudaMemcpyHostToDevice);
-    // NNInput *pv1NNInputs = pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
-    // SAFE_KERNEL_LAUNCH(
-    //         NeuralNet,
-    //         getNblocks(16*np, nth), nth, 0, stream,
-    //         np, 4,pv1DPDparameter, pv1NNInputs,d_Weights);
+    auto dev_weightPt = Weights.hostPtr();
+
+    NNInput *pv1NNInputs = pv1->local()->extraPerParticle.getData<NNInput>("NNInputs")->devPtr();
+    SAFE_KERNEL_LAUNCH(
+            NeuralNet,
+            getNblocks(16*np, nth), nth, 0, stream,
+            np, 4,pv1DPDparameter, pv1NNInputs,dev_weightPt);
 
 }
 

@@ -23,7 +23,7 @@ public:
     void halo   (ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2,  cudaStream_t stream) override;
     void setPrerequisites(ParticleVector* pv1, ParticleVector* pv2) override ;
 
-    SmartInteractionPair_withStress(const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights,float a,float gamma, std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair);
+    SmartInteractionPair_withStress(const YmrState *state,std::string name,std::string parameterName,PinnedBuffer<float> Weights,float a,float gamma, std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair);
 
     void setSpecificPair(std::string pv1name, std::string pv2name, PairwiseInteraction pair);
     void initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream) override;
@@ -40,7 +40,7 @@ private:
     std::map<ParticleVector*, float> pv2lastStressTime;
     std::string stressName;
     std::string parameterName;
-    std::vector<float> Weights;
+    PinnedBuffer<float> Weights;
 
     InteractionPairSmart<PairwiseInteraction> interaction;
     InteractionPairSmart<PairwiseStressWrapper<PairwiseInteraction>> interactionWithStress;

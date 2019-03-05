@@ -11,13 +11,17 @@
 
 InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name, std::string parameterName,std::vector<float> weights, float rc, float a, float gamma, float kbt, float power, bool allocateImpl) :
     Interaction(state, name, rc),
-    parameterName(parameterName),a(a), gamma(gamma), kbt(kbt), power(power),Weights(weights)
+    parameterName(parameterName),a(a), gamma(gamma), kbt(kbt), power(power)
 {
     if (allocateImpl)
     {
+        auto devP = Weights.hostPtr();
+        memcpy(devP, &weights[0], weights.size() * sizeof(float));
+        Weights.uploadToDevice(0);
         Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
         FlowProperties<Pairwise_SmartDPD> fp("fp_name", dpd);
-        impl = std::make_unique<InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>> (state,name,parameterName,weights,a,gamma ,rc,fp);
+        impl = std::make_unique<InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>> (state,name,parameterName,Weights,a,gamma ,rc,fp);
+
     }
 
 }

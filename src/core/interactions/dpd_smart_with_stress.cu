@@ -15,7 +15,7 @@ InteractionSmartDPDWithStress::InteractionSmartDPDWithStress(const YmrState *sta
 {
     Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
     FlowProperties<Pairwise_SmartDPD> fp ("fp_name",dpd);
-    impl = std::make_unique<SmartInteractionPair_withStress<FlowProperties<Pairwise_SmartDPD>>>(state,name,parameterName,weights,a,gamma, stressName, rc, stressPeriod, fp);
+    impl = std::make_unique<SmartInteractionPair_withStress<FlowProperties<Pairwise_SmartDPD>>>(state,name,parameterName,Weights,a,gamma, stressName, rc, stressPeriod, fp);
 }
 
 InteractionSmartDPDWithStress::~InteractionSmartDPDWithStress() = default;

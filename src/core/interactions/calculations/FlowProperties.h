@@ -70,6 +70,10 @@ public:
 
       pv1Velocity_Gradient = lpv1->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->devPtr();
       pv2Velocity_Gradient = lpv2->extraPerParticle.getData<Velocity_Gradient>("v_grad_name")->devPtr();
+
+      pv1Stress = lpv1->extraPerParticle.getData<Stress>("stressDPD")->devPtr();
+      pv2Stress = lpv2->extraPerParticle.getData<Stress>("stressDPD")->devPtr();
+
     }
 
     __D__ inline float3 operator()(const Particle dst, int dstId, const Particle src, int srcId) const
@@ -94,7 +98,6 @@ public:
         const float dstVelocity_Gradientzx = - q*du.z*dr.x;
         const float dstVelocity_Gradientzy = - q*du.z*dr.y;
         const float dstVelocity_Gradientzz = - q*du.z*dr.z;
-
 
         atomicAdd(&pv1Velocity_Gradient[dstId].xx ,dstVelocity_Gradientxx);
         atomicAdd(&pv1Velocity_Gradient[dstId].xy ,dstVelocity_Gradientxy);
@@ -144,14 +147,19 @@ public:
         atomicAdd(&pv2Aprox_Density[srcId].y,d_particle.y);
         atomicAdd(&pv2Aprox_Density[srcId].z,d_particle.z);
 
-        // printf("dstId: %d ; dstPu.x: %f \n" , dstId , dst.u.x);
+
+
+
         return f;
 
    }
 private:
+      std::string fp_name;
+      BasicPairwiseForce basicForce;
+
       Aprox_Density *pv1Aprox_Density, *pv2Aprox_Density;
       Vorticity *pv1Vorticity, *pv2Vorticity;
       Velocity_Gradient *pv1Velocity_Gradient, *pv2Velocity_Gradient;
-      std::string fp_name;
-      BasicPairwiseForce basicForce;
+      Stress *pv1Stress, *pv2Stress;
+
 };
