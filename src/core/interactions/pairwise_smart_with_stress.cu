@@ -1,129 +1,97 @@
-#include "pairwise_smart_with_stress.h"
+#include "pairwise_interactions/dpd.h"
+#include "pairwise_interactions/lj.h"
+#include "pairwise_interactions/lj_object_aware.h"
+#include "pairwise_interactions/mdpd.h"
+#include "pairwise_with_stress.h"
 
-#include "pairwise_interactions/smartdpd.h"
-
-#include <core/datatypes.h>
-
-
-/**
- * Implementation of short-range symmetric pairwise interactions
- */
+#include <core/celllist.h>
+#include <core/utils/common.h>
 
 template<class PairwiseInteraction>
-void SmartInteractionPair_withStress<PairwiseInteraction>::regular(
-        ParticleVector* pv1, ParticleVector* pv2,
-        CellList* cl1, CellList* cl2,
-       cudaStream_t stream)
+InteractionPair_withStress<PairwiseInteraction>::InteractionPair_withStress(
+    const YmrState *state, std::string name, float rc, float stressPeriod, PairwiseInteraction pair) :
+
+    Interaction(state, name, rc),
+    stressPeriod(stressPeriod),
+    interaction(state, name, rc, pair),
+    interactionWithStress(state, name, rc, PairwiseStressWrapper<PairwiseInteraction>(pair))
+{}
+
+template<class PairwiseInteraction>
+InteractionPair_withStress<PairwiseInteraction>::~InteractionPair_withStress() = default;
+
+template<class PairwiseInteraction>
+void InteractionPair_withStress<PairwiseInteraction>::setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2)
 {
-    float t = state->currentTime;
-    if (lastStressTime+stressPeriod <= t || lastStressTime == t)
-    {
-        debug("Executing interaction '%s' with stress", name.c_str());
+    info("Interaction '%s' requires channel '%s' from PVs '%s' and '%s'",
+         name.c_str(), ChannelNames::stresses.c_str(), pv1->name.c_str(), pv2->name.c_str());
 
-        if (pv2lastStressTime[pv1] != t)
-        {
-            pv1->local()->extraPerParticle.getData<Stress>(stressName)->clear(0);
-            pv2lastStressTime[pv1] = t;
-        }
+    pv1->requireDataPerParticle <Stress> (ChannelNames::stresses, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Stress> (ChannelNames::stresses, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 
-        if (pv2lastStressTime[pv2] != t)
-        {
-            pv2->local()->extraPerParticle.getData<Stress>(stressName)->clear(0);
-            pv2lastStressTime[pv2] = t;
-        }
-
-        interactionWithStress.regular(pv1, pv2, cl1, cl2,  stream);
-        lastStressTime = t;
-    }
-    else
-        interaction.regular(pv1, pv2, cl1, cl2, stream);
+    cl1->requireExtraDataPerParticle <Stress> (ChannelNames::stresses);
+    cl2->requireExtraDataPerParticle <Stress> (ChannelNames::stresses);
 }
 
 template<class PairwiseInteraction>
-void SmartInteractionPair_withStress<PairwiseInteraction>::halo   (
+std::vector<Interaction::InteractionChannel> InteractionPair_withStress<PairwiseInteraction>::getFinalOutputChannels() const
+{
+    auto activePredicateStress = [this]() {
+       float t = state->currentTime;
+       return (lastStressTime+stressPeriod <= t) || (lastStressTime == t);
+    };
+
+    return {{ChannelNames::forces, Interaction::alwaysActive},
+            {ChannelNames::stresses, activePredicateStress}};
+}
+
+template<class PairwiseInteraction>
+void InteractionPair_withStress<PairwiseInteraction>::local(
         ParticleVector* pv1, ParticleVector* pv2,
-        CellList* cl1, CellList* cl2,
-        cudaStream_t stream)
+        CellList* cl1, CellList* cl2, cudaStream_t stream)
 {
     float t = state->currentTime;
+
     if (lastStressTime+stressPeriod <= t || lastStressTime == t)
     {
         debug("Executing interaction '%s' with stress", name.c_str());
 
-        if (pv2lastStressTime[pv1] != t)
-        {
-            pv1->local()->extraPerParticle.getData<Stress>(stressName)->clear(stream);
-            pv2lastStressTime[pv1] = t;
-        }
+        interactionWithStress.local(pv1, pv2, cl1, cl2, stream);
+        lastStressTime = t;
+    }
+    else
+        interaction.local(pv1, pv2, cl1, cl2, stream);
+}
 
-        if (pv2lastStressTime[pv2] != t)
-        {
-            pv2->local()->extraPerParticle.getData<Stress>(stressName)->clear(stream);
-            pv2lastStressTime[pv2] = t;
-        }
+template<class PairwiseInteraction>
+void InteractionPair_withStress<PairwiseInteraction>::halo   (
+        ParticleVector *pv1, ParticleVector *pv2,
+        CellList *cl1, CellList *cl2,
+        cudaStream_t stream)
+{
+    float t = state->currentTime;
+
+    if (lastStressTime+stressPeriod <= t || lastStressTime == t)
+    {
+        debug("Executing interaction '%s' with stress", name.c_str());
 
         interactionWithStress.halo(pv1, pv2, cl1, cl2, stream);
         lastStressTime = t;
     }
     else
-        interaction.halo(pv1, pv2, cl1, cl2,stream);
+        interaction.halo(pv1, pv2, cl1, cl2, stream);
 }
 
 template<class PairwiseInteraction>
-void SmartInteractionPair_withStress<PairwiseInteraction>::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2)
-{
-
-    interaction.setPrerequisites(pv1,pv2);
-    info("Interaction '%s' requires channel 'stress' from PVs '%s' and '%s'",
-         name.c_str(), pv1->name.c_str(), pv2->name.c_str());
-
-    pv1->requireDataPerParticle<Stress>(stressName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-    pv2->requireDataPerParticle<Stress>(stressName, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
-
-
-
-    pv2lastStressTime[pv1] = -1;
-    pv2lastStressTime[pv2] = -1;
-}
-
-template<class PairwiseInteraction>
-SmartInteractionPair_withStress<PairwiseInteraction>::SmartInteractionPair_withStress(
-    const YmrState *state,std::string name,std::string parameterName,PinnedBuffer<float> Weights,float a,float gamma,std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair) :
-    a(a),
-    gamma(gamma),
-    parameterName(parameterName),
-    Interaction(state,name, rc),
-    stressName(stressName),
-    stressPeriod(stressPeriod),
-    interaction(state,name,parameterName,Weights,a,gamma,rc, pair),
-    interactionWithStress(state,name,parameterName,Weights,a,gamma,rc,PairwiseStressWrapper<PairwiseInteraction>(stressName,pair))
-{ }
-
-template<class PairwiseInteraction>
-void SmartInteractionPair_withStress<PairwiseInteraction>::initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream)
-{
-    float t = state->currentTime;
-    interaction.initStep(pv1,pv2,stream);
-    if (lastStressTime+stressPeriod <= t || lastStressTime == t) {
-
-        if (pv2lastStressTime[pv1] != t)
-            pv1->local()->extraPerParticle.getData<Stress>(stressName)->clear(stream);
-
-        if (pv2lastStressTime[pv2] != t)
-            pv2->local()->extraPerParticle.getData<Stress>(stressName)->clear(stream);
-    }
-
-
-
-}
-
-
-template<class PairwiseInteraction>
-void SmartInteractionPair_withStress<PairwiseInteraction>::setSpecificPair(
+void InteractionPair_withStress<PairwiseInteraction>::setSpecificPair(
         std::string pv1name, std::string pv2name, PairwiseInteraction pair)
 {
     interaction.          setSpecificPair(pv1name, pv2name, pair);
-    interactionWithStress.setSpecificPair(pv1name, pv2name, PairwiseStressWrapper<PairwiseInteraction>(stressName,pair));
+    interactionWithStress.setSpecificPair(pv1name, pv2name, PairwiseStressWrapper<PairwiseInteraction>(pair));
 }
 
-template class SmartInteractionPair_withStress<FlowProperties<Pairwise_SmartDPD>>;
+
+template class InteractionPair_withStress<Pairwise_DPD>;
+template class InteractionPair_withStress<Pairwise_LJ>;
+template class InteractionPair_withStress<Pairwise_LJObjectAware>;
+template class InteractionPair_withStress<Pairwise_MDPD>;

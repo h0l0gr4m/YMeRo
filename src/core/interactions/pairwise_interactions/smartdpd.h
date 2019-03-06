@@ -1,13 +1,13 @@
 #pragma once
 
 #include <core/datatypes.h>
-#include <core/utils/cuda_rng.h>
+#include "fetchers.h"
 
-#include <core/utils/cpu_gpu_defines.h>
-#include <core/utils/helper_math.h>
+#include <core/interactions/accumulators/force.h>
+
 
 #include <random>
-#include <core/pvs/particle_vector.h>
+
 
 class CellList;
 class LocalParticleVector;
@@ -24,11 +24,15 @@ float fastPower(float x, float a)
 
 
 
-class Pairwise_SmartDPD
+class Pairwise_SmartDPD : public ParticleFetcherWithVelocity
 {
 public:
+
+  using ViewType     = PVview;
+  using ParticleType = Particle;
+
     Pairwise_SmartDPD(std::string parameterName,float rc, float a, float gamma, float kbT, float dt, float power) :
-        parameterName(parameterName),rc(rc), a(a), gamma(gamma), power(power),kbT(kbT),dt(dt)
+        ParticleFetcherWithVelocity(rc), parameterName(parameterName), a(a), gamma(gamma), power(power),kbT(kbT),dt(dt)
     {
         rc2 = rc*rc;
         invrc = 1.0 / rc;
@@ -73,6 +77,8 @@ public:
         const float strength = alpha_p * argwr - (gamma_p * wr * rdotv + sigma_p * myrandnr) * wr;
         return dr_r * strength;
     }
+
+        __D__ inline ForceAccumulator getZeroedAccumulator() const {return ForceAccumulator();}
 
 public:
     std::string parameterName;

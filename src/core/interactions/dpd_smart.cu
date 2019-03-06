@@ -32,16 +32,21 @@ InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,
 
 InteractionSmartDPD::~InteractionSmartDPD() = default;
 
-void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2)
+void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2,CellList *cl1, CellList *cl2)
 {
-    impl->setPrerequisites(pv1, pv2);
+    impl->setPrerequisites(pv1, pv2,cl1,cl2);
 }
 
-void InteractionSmartDPD::regular(ParticleVector* pv1, ParticleVector* pv2,
+std::vector<Interaction::InteractionChannel> InteractionSmartDPD::getFinalOutputChannels() const
+{
+    return impl->getFinalOutputChannels();
+}
+
+void InteractionSmartDPD::local(ParticleVector* pv1, ParticleVector* pv2,
                              CellList* cl1, CellList* cl2,
                              cudaStream_t stream)
 {
-    impl->regular(pv1, pv2, cl1, cl2, stream);
+    impl->local(pv1, pv2, cl1, cl2, stream);
 }
 
 void InteractionSmartDPD::halo   (ParticleVector* pv1, ParticleVector* pv2,
@@ -51,10 +56,6 @@ void InteractionSmartDPD::halo   (ParticleVector* pv1, ParticleVector* pv2,
     impl->halo   (pv1, pv2, cl1, cl2,stream);
 }
 
-void InteractionSmartDPD::initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream)
-{
-    impl->initStep(pv1, pv2, stream);
-}
 
 void InteractionSmartDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
         float a, float gamma, float kbt, float power)

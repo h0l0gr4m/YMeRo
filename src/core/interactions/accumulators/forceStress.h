@@ -21,7 +21,7 @@ public:
         frcStress({{0.f, 0.f, 0.f},
                    {0.f, 0.f, 0.f, 0.f, 0.f, 0.f}})
     {}
-    
+
     __D__ inline void atomicAddToDst(const ForceStress& fs, PVviewWithStresses<BasicView>& view, int id) const
     {
         atomicAdd(      view.forces   + id, fs.force );
@@ -46,7 +46,7 @@ public:
         frcStress.stress.yz += fs.stress.yz;
         frcStress.stress.zz += fs.stress.zz;
     }
-    
+
 private:
     ForceStress frcStress;
 
