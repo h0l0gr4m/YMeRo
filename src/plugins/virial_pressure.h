@@ -1,19 +1,22 @@
 #pragma once
 
 #include <core/containers.h>
+#include <core/field/from_function.h>
 
 #include "interface.h"
 
 class ParticleVector;
 
-namespace VirialPressure {
+namespace VirialPressure
+{
 using ReductionType = double;
 }
 
 class VirialPressurePlugin : public SimulationPlugin
 {
 public:
-    VirialPressurePlugin(const YmrState *state, std::string name, std::string pvName, std::string stressName, int dumpEvery);
+    VirialPressurePlugin(const YmrState *state, std::string name, std::string pvName,
+                         FieldFunction func, float3 h, int dumpEvery);
 
     ~VirialPressurePlugin();
 
@@ -26,12 +29,14 @@ public:
     bool needPostproc() override { return true; }
 
 private:
-    std::string pvName, stressName;
+    std::string pvName;
     int dumpEvery;
     bool needToSend = false;
+
+    FieldFromFunction region;
     
     PinnedBuffer<VirialPressure::ReductionType> localVirialPressure {1};
-    float savedTime = 0;
+    TimeType savedTime = 0;
 
     std::vector<char> sendBuffer;
 

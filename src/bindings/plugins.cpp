@@ -152,12 +152,23 @@ void exportPlugins(py::module& m)
         Responsible for performing the I/O.
     )");
 
+    py::handlers_class<ParticleChannelSaverPlugin>(m, "ParticleChannelSaver", pysim, R"(
+        This plugin creates an extra channel per particle inside the given particle vector with a given name.
+        It copies the content of an extra channel of pv at each time step and make it accessible by other plugins.
+    )");
     
     py::handlers_class<ParticleSenderPlugin>(m, "ParticleSenderPlugin", pysim, R"(
         This plugin will dump positions, velocities and optional attached data of all the particles of the specified Particle Vector.
         The data is dumped into hdf5 format. An additional xdfm file is dumped to describe the data and make it readable by visualization tools. 
     )");
 
+
+    py::handlers_class<ParticleDisplacementPlugin>(m, "ParticleDisplacementPlugin", pysim, R"(
+        This plugin computes and save the displacement of the particles within a given particle vector.
+        The result is stored inside the extra channel "displacements" as an array of float3.
+    )");
+
+    
     py::handlers_class<ParticleDumperPlugin>(m, "ParticleDumperPlugin", pypost, R"(
         Postprocess side plugin of :any:`ParticleSenderPlugin`.
         Responsible for performing the I/O.
@@ -191,6 +202,18 @@ void exportPlugins(py::module& m)
         Responsible for performing the I/O.
     )");
     
+
+    py::handlers_class<SimulationRadialVelocityControl>(m, "RadialVelocityControl", pysim, R"(
+        This plugin applies a radial force (decreasing as :math:`r^3`) to all the particles of the target PVS.
+        The force is adapted via a PID controller such that the average of the velocity times radial position of the particles matches a target value.
+    )");
+
+    py::handlers_class<PostprocessRadialVelocityControl>(m, "PostprocessRadialVelocityControl", pypost, R"(
+        Postprocess side plugin of :any:`RadialVelocityControl`.
+        Responsible for performing the I/O.
+    )");
+
+
     py::handlers_class<SimulationStats>(m, "SimulationStats", pysim, R"(
         This plugin will report aggregate quantities of all the particles in the simulation:
         total number of particles in the simulation, average temperature and momentum, maximum velocity magnutide of a particle
@@ -223,6 +246,14 @@ void exportPlugins(py::module& m)
         `keepVelocity = False`, in which case it sets the velocity to a term drawn from a Maxwell distribution.
     )");
 
+
+    py::handlers_class<VelocityInletPlugin>(m, "VelocityInlet", pysim, R"(
+        This plugin inserts particles in a given :any:`ParticleVector`.
+        The particles are inserted on a given surface with given velocity inlet. 
+        The rate of insertion is governed by the velocity and the given number density.
+    )");
+    
+    
     py::handlers_class<VirialPressurePlugin>(m, "VirialPressure", pysim, R"(
         This plugin compute the virial pressure from a given :any:`ParticleVector`.
         Note that the stress computation must be enabled with the corresponding stressName.
@@ -262,6 +293,18 @@ void exportPlugins(py::module& m)
     
     py::handlers_class<XYZDumper>(m, "XYZDumper", pypost, R"(
         Postprocess side plugin of :any:`XYZPlugin`.
+        Responsible for the I/O part.
+    )");
+
+    py::handlers_class<WallForceCollectorPlugin>(m, "WallForceCollector", pysim, R"(
+        This plugin collects and average the total force exerted on a given wall.
+        The result has 2 components:
+            - bounce back: force necessary to the momentum change
+            - frozen particles: total interaction force exerted on the frozen particles
+    )");
+
+    py::handlers_class<WallForceDumperPlugin>(m, "WallForceDumper", pypost, R"(
+        Postprocess side plugin of :any:`WallForceCollector`.
         Responsible for the I/O part.
     )");
 
@@ -483,6 +526,27 @@ void exportPlugins(py::module& m)
             forces: array of forces, one force (3 floats) per vertex in a single mesh
     )");
 
+    m.def("__createParticleChannelSaver", &PluginFactory::createParticleChannelSaverPlugin, 
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "channelName"_a, "savedName"_a, R"(
+        Create :any:`ParticleChannelSaver` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            channelName: the name of the source channel
+            savedName: name of the extra channel
+    )");
+
+    m.def("__createParticleDisplacement", &PluginFactory::createParticleDisplacementPlugin, 
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "update_every"_a, R"(
+        Create :any:`ParticleDisplacement` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            update_every: displacements are computed between positions separated by this amount of timesteps
+    )");
+
     m.def("__createPinObject", &PluginFactory::createPinObjPlugin, 
           "compute_task"_a, "state"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, "velocity"_a, "angular_velocity"_a, R"(
         Create :any:`PinObject` plugin
@@ -496,6 +560,24 @@ void exportPlugins(py::module& m)
                 If the corresponding component should not be restricted, set this value to :python:`PinObject::Unrestricted`
             angular_velocity: 3 floats, each component is the desired object angular velocity.
                 If the corresponding component should not be restricted, set this value to :python:`PinObject::Unrestricted`
+    )");
+
+    m.def("__createRadialVelocityControl", &PluginFactory::createRadialVelocityControlPlugin,
+          "compute_task"_a, "state"_a, "name"_a, "filename"_a, "pvs"_a, "minRadius"_a, "maxRadius"_a, 
+          "sample_every"_a, "tune_every"_a, "dump_every"_a, "center"_a, "target_vel"_a, "Kp"_a, "Ki"_a, "Kd"_a, R"(
+        Create :any:`VelocityControl` plugin
+        
+        Args:
+            name: name of the plugin
+            filename: dump file name 
+            pvs: list of concerned :class:`ParticleVector`
+            minRadius, maxRadius: only particles within this distance are considered 
+            sample_every: sample velocity every this many time-steps
+            tune_every: adapt the force every this many time-steps
+            dump_every: write files every this many time-steps
+            center: center of the radial coordinates
+            target_vel: the target mean velocity of the particles at :math:`r=1`
+            Kp, Ki, Kd: PID controller coefficients
     )");
 
     m.def("__createStats", &PluginFactory::createStatsPlugin,
@@ -519,7 +601,7 @@ void exportPlugins(py::module& m)
             keepVelocity: True for adding Maxwell distribution to the previous velocity; False to set the velocity to a Maxwell distribution.
     )");
 
-    m.def("__createVelocityControl", &PluginFactory::createSimulationVelocityControlPlugin,
+    m.def("__createVelocityControl", &PluginFactory::createVelocityControlPlugin,
           "compute_task"_a, "state"_a, "name"_a, "filename"_a, "pvs"_a, "low"_a, "high"_a,
           "sample_every"_a, "tune_every"_a, "dump_every"_a, "target_vel"_a, "Kp"_a, "Ki"_a, "Kd"_a, R"(
         Create :any:`VelocityControl` plugin
@@ -536,14 +618,30 @@ void exportPlugins(py::module& m)
             Kp, Ki, Kd: PID controller coefficients
     )");
 
+    m.def("__createVelocityInlet", &PluginFactory::createVelocityInletPlugin,
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a,
+          "implicit_surface_func"_a, "velocity_field"_a, "resolution"_a, "number_density"_a, "kBT"_a, R"(
+        Create :any:`VelocityInlet` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: the :any:`ParticleVector` that we ll work with 
+            implicit_surface_func: a scalar field function that has the required surface as zero level set
+            velocity_field: vector field that describes the velocity on the inlet (will be evaluated on the surface only)
+            resolution: grid size used to discretize the surface
+            number_density: number density of the inserted solvent
+            kBT: temperature of the inserted solvent
+    )");
+
     m.def("__createVirialPressurePlugin", &PluginFactory::createVirialPressurePlugin,
-          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "stress_mame"_a, "dump_every"_a, "path"_a, R"(
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "regionFunc"_a, "h"_a, "dump_every"_a, "path"_a, R"(
         Create :any:`VirialPressure` plugin
         
         Args:
             name: name of the plugin
             pv: concerned :class:`ParticleVector`
-            stress_name: the extraData entry name of the stress per particle
+            regionFunc: predicate for the concerned region; positive inside the region and negative outside
+            h: grid size for representing the predicate onto a grid
             dump_every: report total pressure every this many time-steps
             path: the folder name in which the file will be dumped
     )");
@@ -559,6 +657,19 @@ void exportPlugins(py::module& m)
             C: :math:`C`  
             h: :math:`h`  
             max_force: :math:`F_{max}`  
+    )");
+
+    m.def("__createWallForceCollector", &PluginFactory::createWallForceCollectorPlugin, 
+          "compute_task"_a, "state"_a, "name"_a, "wall"_a, "pvFrozen"_a, "sample_every"_a, "dump_every"_a, "filename"_a, R"(
+        Create :any:`WallForceCollector` plugin
+        
+        Args:
+            name: name of the plugin            
+            wall: :any:`Wall` that we ll work with
+            pvFrozen: corresponding frozen :any:`ParticleVector`
+            sample_every: sample every this number of time steps
+            dump_every: dump every this amount of timesteps
+            filename: output filename
     )");
 }
 

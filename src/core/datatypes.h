@@ -1,19 +1,16 @@
 #pragma once
 
-#include <cuda.h>
-#include <cstdlib>
-#include <cstdint>
-#include <cassert>
-#include <type_traits>
-#include <utility>
-#include <stack>
-#include <algorithm>
-
 #include <core/logger.h>
 #include <core/utils/cpu_gpu_defines.h>
 
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstdlib>
+#include <cuda.h>
 #include <cuda_runtime.h>
-
+#include <type_traits>
+#include <utility>
 
 //==================================================================================================================
 // Basic types
@@ -135,15 +132,25 @@ struct __align__(16) Particle
      * Particle(addr[2*pid], addr[2*pid+1]);
      * @endcode
      *
-     * @param addr must have at least \e 2*pid entries
+     * @param addr must have at least \e 2*(pid+1) entries
      * @param pid  particle id
      */
-    __HD__ inline Particle(const float4* addr, int pid)
+    __HD__ inline Particle(const float4 *addr, int pid)
+    {
+        read(addr, pid);
+    }
+
+    /**
+     * Read coordinate and velocity from the given \e addr
+     *
+     * @param addr must have at least \e 2*(pid+1) entries
+     * @param pid  particle id
+     */
+    __HD__ inline void read(const float4 *addr, int pid)
     {
         readCoordinate(addr, pid);
         readVelocity  (addr, pid);
     }
-
 
     /**
      * Only read coordinates from the given \e addr
@@ -151,7 +158,7 @@ struct __align__(16) Particle
      * @param addr must have at least \e 2*pid entries
      * @param pid  particle id
      */
-    __HD__ inline void readCoordinate(const float4* addr, const int pid)
+    __HD__ inline void readCoordinate(const float4 *addr, const int pid)
     {
         const Float3_int tmp = addr[2*pid];
         r  = tmp.v;
@@ -164,7 +171,7 @@ struct __align__(16) Particle
      * @param addr must have at least \e 2*pid entries
      * @param pid  particle id
      */
-    __HD__ inline void readVelocity(const float4* addr, const int pid)
+    __HD__ inline void readVelocity(const float4 *addr, const int pid)
     {
         const Float3_int tmp = addr[2*pid+1];
         u  = tmp.v;
@@ -257,6 +264,7 @@ struct Stress
 };
 
 
+
 struct Aprox_Density
 {
   float x,y,z;
@@ -295,3 +303,15 @@ struct NNInput
         }
     }
 };
+
+__HD__ void inline operator+=(Stress& a, const Stress& b)
+{
+    a.xx += b.xx; a.xy += b.xy; a.xz += b.xz;
+    a.yy += b.yy; a.yz += b.yz; a.zz += b.zz;
+}
+
+__HD__ Stress inline operator+(Stress a, const Stress& b)
+{
+    a += b;
+    return a;
+}

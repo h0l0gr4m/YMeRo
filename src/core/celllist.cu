@@ -9,7 +9,12 @@
 
 #include <extern/cub/cub/device/device_scan.cuh>
 
-static __device__ bool outgoingParticle(float4 pos)
+namespace CellListKernels
+{
+
+enum {INVALID = -1};
+
+inline __device__ bool outgoingParticle(float4 pos)
 {
     return Float3_int(pos).isMarked();
 }
@@ -27,7 +32,7 @@ __global__ void computeCellSizes(PVview view, CellListInfo cinfo)
         atomicAdd(cinfo.cellSizes + cid, 1);
 }
 
-__global__ void reorderParticles(PVview view, CellListInfo cinfo, float4* outParticles)
+__global__ void reorderParticles(PVview view, CellListInfo cinfo, float4 *outParticles)
 {
     const int gid = blockIdx.x * blockDim.x + threadIdx.x;
     const int pid = gid / 2;
@@ -61,25 +66,45 @@ __global__ void reorderParticles(PVview view, CellListInfo cinfo, float4* outPar
         writeNoCache(outParticles + 2*dstId+sh, val);
         if (sh == 0) cinfo.order[pid] = dstId;
     }
+    else if (sh == 0)
+        cinfo.order[pid] = INVALID;
 }
 
 template <typename T>
 __global__ void reorderExtraDataPerParticle(int n, const T *inExtraData, CellListInfo cinfo, T *outExtraData)
 {
-    const int srcId = blockIdx.x * blockDim.x + threadIdx.x;
+    int srcId = blockIdx.x * blockDim.x + threadIdx.x;
     if (srcId >= n) return;
 
-    const int dstId = cinfo.order[srcId];
-    outExtraData[dstId] = inExtraData[srcId];
+    int dstId = cinfo.order[srcId];
+    if (dstId != INVALID)
+        outExtraData[dstId] = inExtraData[srcId];
 }
 
-__global__ void addForcesKernel(PVview view, CellListInfo cinfo)
+__global__ void addForcesKernel(PVview dstView, CellListInfo cinfo, PVview srcView)
 {
-    const int pid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (pid >= view.size) return;
+    int pid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (pid >= dstView.size) return;
 
-    view.forces[pid] += cinfo.forces[cinfo.order[pid]];
+    int srcId = cinfo.order[pid];
+
+    assert(srcId != INVALID);
+    dstView.forces[pid] += srcView.forces[srcId];
 }
+
+template <typename T>
+__global__ void accumulateKernel(int n, T *dst, CellListInfo cinfo, const T *src)
+{
+    int pid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (pid >= n) return;
+
+    int srcId = cinfo.order[pid];
+
+    assert(srcId != INVALID);
+    dst[pid] += src[srcId];
+}
+
+} // namespace CellListKernels
 
 //=================================================================================
 // Info
@@ -108,7 +133,7 @@ CellListInfo::CellListInfo(float3 h, float3 localDomainSize) :
 // Basic cell-lists
 //=================================================================================
 
-CellList::CellList(ParticleVector* pv, float rc, float3 localDomainSize) :
+CellList::CellList(ParticleVector *pv, float rc, float3 localDomainSize) :
         CellListInfo(rc, localDomainSize), pv(pv),
         particlesDataContainer(new LocalParticleVector(nullptr))
 {
@@ -124,7 +149,7 @@ CellList::CellList(ParticleVector* pv, float rc, float3 localDomainSize) :
     debug("Initialized %s cell-list with %dx%dx%d cells and cut-off %f", pv->name.c_str(), ncells.x, ncells.y, ncells.z, this->rc);
 }
 
-CellList::CellList(ParticleVector* pv, int3 resolution, float3 localDomainSize) :
+CellList::CellList(ParticleVector *pv, int3 resolution, float3 localDomainSize) :
         CellListInfo(localDomainSize / make_float3(resolution), localDomainSize), pv(pv),
         particlesDataContainer(new LocalParticleVector(nullptr))
 {
@@ -140,27 +165,86 @@ CellList::CellList(ParticleVector* pv, int3 resolution, float3 localDomainSize) 
     debug("Initialized %s cell-list with %dx%dx%d cells and cut-off %f", pv->name.c_str(), ncells.x, ncells.y, ncells.z, this->rc);
 }
 
+CellList::~CellList() = default;
+
+bool CellList::_checkNeedBuild() const
+{
+    if (changedStamp == pv->cellListStamp)
+    {
+        debug2("%s is already up-to-date, building skipped", makeName().c_str());
+        return false;
+    }
+
+    if (pv->local()->size() == 0)
+    {
+        debug2("%s consists of no particles, building skipped", makeName().c_str());
+        return false;
+    }
+
+    return true;
+}
+
+template <typename T>
+static void requireData(const std::string& channelName, int np, ExtraDataManager& containerManager)
+{
+    if (!containerManager.checkChannelExists(channelName))
+        containerManager.createData<T>(channelName, np);
+}
+
+
+void CellList::_updateExtraDataChannels(cudaStream_t stream)
+{
+    auto& pvManager        = pv->local()->extraPerParticle;
+    auto& containerManager = particlesDataContainer->extraPerParticle;
+    int np = pv->local()->size();
+
+    for (const auto& namedChannel : pvManager.getSortedChannels()) {
+        const auto& name = namedChannel.first;
+        const auto& desc = namedChannel.second;
+        if (desc->persistence != ExtraDataManager::PersistenceMode::Persistent) continue;
+
+#define SWITCH_ENTRY(ctype)                                             \
+        case DataType::TOKENIZE(ctype):                                 \
+            requireData<ctype>(name, np, containerManager);             \
+            break;
+
+        switch(desc->dataType) {
+            TYPE_TABLE(SWITCH_ENTRY);
+        default:
+            die("%s: cannot require extra data: %s has None type.", makeName().c_str(), name.c_str());
+        }
+
+#undef SWITCH_ENTRY
+    }
+}
 
 void CellList::_computeCellSizes(cudaStream_t stream)
 {
-    debug2("Computing cell sizes for %d %s particles", pv->local()->size(), pv->name.c_str());
+    debug2("%s : Computing cell sizes for %d particles", makeName().c_str(), pv->local()->size());
     cellSizes.clear(stream);
 
     PVview view(pv, pv->local());
 
     const int nthreads = 128;
     SAFE_KERNEL_LAUNCH(
-            computeCellSizes,
+            CellListKernels::computeCellSizes,
             getNblocks(view.size, nthreads), nthreads, 0, stream,
             view, cellInfo() );
 }
 
 void CellList::_computeCellStarts(cudaStream_t stream)
 {
-    size_t bufSize;
-    cub::DeviceScan::ExclusiveSum(nullptr, bufSize, cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
-    scanBuffer.resize_anew(bufSize);
-    cub::DeviceScan::ExclusiveSum(scanBuffer.devPtr(), bufSize, cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
+	// Scan is always working with the same number of cells
+	// Memory requirements can't change
+	size_t bufSize = scanBuffer.size();
+
+	if (bufSize == 0)
+	{
+		cub::DeviceScan::ExclusiveSum(nullptr, bufSize, cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
+		scanBuffer.resize_anew(bufSize);
+	}
+    cub::DeviceScan::ExclusiveSum(scanBuffer.devPtr(), bufSize,
+    							  cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
 }
 
 void CellList::_reorderData(cudaStream_t stream)
@@ -175,64 +259,64 @@ void CellList::_reorderData(cudaStream_t stream)
 
     const int nthreads = 128;
     SAFE_KERNEL_LAUNCH(
-        reorderParticles,
+        CellListKernels::reorderParticles,
         getNblocks(2*view.size, nthreads), nthreads, 0, stream,
         view, cellInfo(), (float4*)particlesDataContainer->coosvels.devPtr() );
 }
 
 template <typename T>
-static void reorderExtraData(int np, CellListInfo cinfo, ExtraDataManager *dstExtraData,
-                             const ExtraDataManager::ChannelDescription *channel, const std::string& channelName,
-                             cudaStream_t stream)
+static void reorderExtraDataEntry(int np, CellListInfo cinfo, ExtraDataManager *dstExtraData,
+                                  const ExtraDataManager::ChannelDescription *channel, const std::string& channelName,
+                                  cudaStream_t stream)
 {
-    if (!dstExtraData->checkChannelExists(channelName))
-        dstExtraData->createData<T>(channelName, np);
-
     T      *outExtraData = dstExtraData->getData<T>(channelName)->devPtr();
     const T *inExtraData = (const T*) channel->container->genericDevPtr();
 
     const int nthreads = 128;
 
     SAFE_KERNEL_LAUNCH(
-        reorderExtraDataPerParticle<T>,
+        CellListKernels::reorderExtraDataPerParticle<T>,
         getNblocks(np, nthreads), nthreads, 0, stream,
         np, inExtraData, cinfo, outExtraData );
 }
 
-void CellList::_reorderExtraData(cudaStream_t stream)
+void CellList::_reorderExtraDataEntry(const std::string& channelName,
+                                      const ExtraDataManager::ChannelDescription *channelDesc,
+                                      cudaStream_t stream)
 {
-    auto srcExtraData = &pv->local()->extraPerParticle;
     auto dstExtraData = &particlesDataContainer->extraPerParticle;
-
     int np = pv->local()->size();
 
-    for (auto& namedChannel : srcExtraData->getSortedChannels())
+    switch (channelDesc->dataType)
     {
-        auto channelName = namedChannel.first;
-        auto channelDesc = namedChannel.second;
 
-        if (channelDesc->persistence == ExtraDataManager::PersistenceMode::Persistent) {
-            debug2("Reordering %d `%s` particles extra data `%s`",
-                   pv->local()->size(), pv->name.c_str(), channelName.c_str());
+#define SWITCH_ENTRY(ctype)                             \
+        case DataType::TOKENIZE(ctype):                 \
+            reorderExtraDataEntry<ctype>                \
+                (np, cellInfo(), dstExtraData,          \
+                 channelDesc, channelName, stream);     \
+            break;
 
-            switch (channelDesc->dataType)
-            {
-
-#define SWITCH_ENTRY(ctype)                                             \
-                case DataType::TOKENIZE(ctype):                         \
-                    reorderExtraData<ctype>                             \
-                        (np, cellInfo(), dstExtraData,                  \
-                         channelDesc, channelName, stream);             \
-                    break;
-
-                TYPE_TABLE(SWITCH_ENTRY);
+        TYPE_TABLE(SWITCH_ENTRY);
 
 #undef SWITCH_ENTRY
 
-            default:
-                die("Channel '%s' has None type", channelName.c_str());
-            };
-        }
+    default:
+        die("%s : cannot reorder data: channel '%s' has None type",
+            makeName().c_str(), channelName.c_str());
+    };
+
+}
+
+void CellList::_reorderPersistentData(cudaStream_t stream)
+{
+    auto srcExtraData = &pv->local()->extraPerParticle;
+
+    for (const auto& namedChannel : srcExtraData->getSortedChannels()) {
+        const auto& name = namedChannel.first;
+        const auto& desc = namedChannel.second;
+        if (desc->persistence != ExtraDataManager::PersistenceMode::Persistent) continue;
+        _reorderExtraDataEntry(name, desc, stream);
     }
 }
 
@@ -241,66 +325,121 @@ void CellList::_build(cudaStream_t stream)
     _computeCellSizes(stream);
     _computeCellStarts(stream);
     _reorderData(stream);
-    _reorderExtraData(stream);
+    _reorderPersistentData(stream);
 
     changedStamp = pv->cellListStamp;
 }
 
 CellListInfo CellList::cellInfo()
 {
-    CellListInfo::particles      = reinterpret_cast<float4*>(localPV->coosvels.devPtr());
-    CellListInfo::forces         = reinterpret_cast<float4*>(localPV->forces.devPtr());
-    CellListInfo::cellSizes      = cellSizes.devPtr();
-    CellListInfo::cellStarts     = cellStarts.devPtr();
-    CellListInfo::order          = order.devPtr();
+    CellListInfo::cellSizes  = cellSizes.devPtr();
+    CellListInfo::cellStarts = cellStarts.devPtr();
+    CellListInfo::order      = order.devPtr();
 
     return *((CellListInfo*)this);
 }
 
 void CellList::build(cudaStream_t stream)
 {
-    if (changedStamp == pv->cellListStamp)
-    {
-        debug2("Cell-list for %s is already up-to-date, building skipped", pv->name.c_str());
-        return;
-    }
+    _updateExtraDataChannels(stream);
 
-    if (pv->local()->size() == 0)
-    {
-        debug2("%s consists of no particles, cell-list building skipped", pv->name.c_str());
-        return;
-    }
+    if (!_checkNeedBuild()) return;
+
+    debug("building %s", makeName().c_str());
 
     _build(stream);
 }
 
-void CellList::addForces(cudaStream_t stream)
+void CellList::_accumulateForces(cudaStream_t stream)
 {
-    PVview view(pv, pv->local());
+    PVview dstView(pv, pv->local());
     int nthreads = 128;
 
     SAFE_KERNEL_LAUNCH(
-            addForcesKernel,
-            getNblocks(view.size, nthreads), nthreads, 0, stream,
-            view, cellInfo() );
+            CellListKernels::addForcesKernel,
+            getNblocks(dstView.size, nthreads), nthreads, 0, stream,
+            dstView, cellInfo(), getView<PVview>() );
 }
 
-void CellList::clearForces(cudaStream_t stream)
+void CellList::_accumulateExtraData(const std::string& channelName, cudaStream_t stream)
 {
-    localPV->forces.clear(stream);
+    const int nthreads = 128;
+    switch(localPV->extraPerParticle.getChannelDescOrDie(channelName).dataType) {
+
+#define SWITCH_ENTRY(ctype)                                             \
+        case DataType::TOKENIZE(ctype):                                 \
+        {                                                               \
+            auto src = localPV    ->extraPerParticle.getData<ctype>(channelName); \
+            auto dst = pv->local()->extraPerParticle.getData<ctype>(channelName); \
+            int n = pv->local()->size();                                \
+            SAFE_KERNEL_LAUNCH(                                         \
+                CellListKernels::accumulateKernel<ctype>,               \
+                getNblocks(n, nthreads), nthreads, 0, stream,           \
+                n, dst->devPtr(), cellInfo(), src->devPtr() );          \
+            }                                                           \
+            break;
+
+        TYPE_TABLE_ADDITIONABLE(SWITCH_ENTRY);
+
+    default:
+        die("%s : cannot accumulate entry '%s': type not supported",
+            makeName().c_str(), channelName.c_str());
+
+#undef SWITCH_ENTRY
+    };
 }
 
-void CellList::setViewPtrs(PVview& view)
+void CellList::accumulateChannels(const std::vector<std::string>& channelNames, cudaStream_t stream)
 {
-    view.particles = (float4*) localPV->coosvels.devPtr();
-    view.forces    = (float4*) localPV->forces.devPtr();
+    for (const auto& channelName : channelNames) {
+        debug2("%s : accumulating channel '%s'", makeName().c_str(), channelName.c_str());
+
+        if (channelName == ChannelNames::forces)
+            _accumulateForces(stream);
+        else
+            _accumulateExtraData(channelName, stream);
+    }
 }
+
+void CellList::gatherChannels(const std::vector<std::string>& channelNames, cudaStream_t stream)
+{
+    for (auto& channelName : channelNames) {
+
+        debug("%s : gathering channel '%s'", makeName().c_str(), channelName.c_str());
+
+        auto& desc = localPV->extraPerParticle.getChannelDescOrDie(channelName);
+        _reorderExtraDataEntry(channelName, &desc, stream);
+
+        // invalidate particle vector halo if any entry is active
+        pv->haloValid = false;
+    }
+}
+
+void CellList::clearChannels(const std::vector<std::string>& channelNames, cudaStream_t stream)
+{
+    for (const auto& channelName : channelNames) {
+        debug2("%s : clearing channel '%s'", makeName().c_str(), channelName.c_str());
+
+        if (channelName == ChannelNames::forces)
+            localPV->forces.clear(stream);
+        else
+            localPV->extraPerParticle.getGenericData(channelName)->clearDevice(stream);
+    }
+}
+
+LocalParticleVector* CellList::getLocalParticleVector() {return localPV;}
+
+std::string CellList::makeName() const
+{
+    return "Cell List '" + pv->name + "' (rc " + std::to_string(rc) + ")";
+}
+
 
 //=================================================================================
 // Primary cell-lists
 //=================================================================================
 
-PrimaryCellList::PrimaryCellList(ParticleVector* pv, float rc, float3 localDomainSize) :
+PrimaryCellList::PrimaryCellList(ParticleVector *pv, float rc, float3 localDomainSize) :
         CellList(pv, rc, localDomainSize)
 {
     localPV = pv->local();
@@ -309,7 +448,7 @@ PrimaryCellList::PrimaryCellList(ParticleVector* pv, float rc, float3 localDomai
         error("Using primary cell-lists with objects is STRONGLY discouraged. This will very likely result in an error");
 }
 
-PrimaryCellList::PrimaryCellList(ParticleVector* pv, int3 resolution, float3 localDomainSize) :
+PrimaryCellList::PrimaryCellList(ParticleVector *pv, int3 resolution, float3 localDomainSize) :
         CellList(pv, resolution, localDomainSize)
 {
     localPV = pv->local();
@@ -318,18 +457,82 @@ PrimaryCellList::PrimaryCellList(ParticleVector* pv, int3 resolution, float3 loc
         error("Using primary cell-lists with objects is STRONGLY discouraged. This will very likely result in an error");
 }
 
+PrimaryCellList::~PrimaryCellList() = default;
+
 void PrimaryCellList::build(cudaStream_t stream)
 {
+	// Reqired here to avoid ptr swap if building didn't actually happen
+    if (!_checkNeedBuild()) return;
+
     CellList::build(stream);
+
+    if (pv->local()->size() == 0)
+    {
+        debug2("%s consists of no particles, cell-list building skipped", pv->name.c_str());
+        return;
+    }
 
     // Now we need the new size of particles array.
     int newSize;
     CUDA_Check( cudaMemcpyAsync(&newSize, cellStarts.devPtr() + totcells, sizeof(int), cudaMemcpyDeviceToHost, stream) );
     CUDA_Check( cudaStreamSynchronize(stream) );
 
-    debug2("Reordering completed, new size of %s particle vector is %d", pv->name.c_str(), newSize);
+    debug2("%s : reordering completed, new size of %s particle vector is %d",
+           makeName().c_str(), pv->name.c_str(), newSize);
 
     particlesDataContainer->resize(newSize, stream);
+
     std::swap(pv->local()->coosvels, particlesDataContainer->coosvels);
+    _swapPersistentExtraData();
+
     pv->local()->resize(newSize, stream);
+}
+
+void PrimaryCellList::accumulateChannels(const std::vector<std::string>& channelNames, cudaStream_t stream)
+{}
+
+void PrimaryCellList::gatherChannels(const std::vector<std::string>& channelNames, cudaStream_t stream)
+{
+    // do not need to reorder data, but still invalidate halo
+    if (!channelNames.empty())
+        pv->haloValid = false;
+}
+
+
+template <typename T>
+static void swap(const std::string& channelName, ExtraDataManager& pvManager, ExtraDataManager& containerManager)
+{
+    std::swap(*pvManager       .getData<T>(channelName),
+              *containerManager.getData<T>(channelName));
+}
+
+void PrimaryCellList::_swapPersistentExtraData()
+{
+    auto& pvManager        = pv->local()->extraPerParticle;
+    auto& containerManager = particlesDataContainer->extraPerParticle;
+
+    for (const auto& namedChannel : pvManager.getSortedChannels()) {
+        const auto& name = namedChannel.first;
+        const auto& desc = namedChannel.second;
+        if (desc->persistence != ExtraDataManager::PersistenceMode::Persistent) continue;
+
+#define SWITCH_ENTRY(ctype)                                             \
+        case DataType::TOKENIZE(ctype):                                 \
+            swap<ctype>(name, pvManager, containerManager);             \
+            break;
+
+        switch(desc->dataType) {
+            TYPE_TABLE(SWITCH_ENTRY);
+        default:
+            die("%s: cannot swap data: %s has None type.",
+                makeName().c_str(), name.c_str());
+        }
+
+#undef SWITCH_ENTRY
+    }
+}
+
+std::string PrimaryCellList::makeName() const
+{
+    return "Primary " + CellList::makeName();
 }

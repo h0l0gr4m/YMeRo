@@ -1,16 +1,16 @@
-#include <pybind11/stl.h>
-
-#include <core/pvs/particle_vector.h>
-#include <core/pvs/object_vector.h>
-#include <core/mesh.h>
-#include <core/pvs/rigid_object_vector.h>
-#include <core/pvs/rigid_ellipsoid_object_vector.h>
-#include <core/pvs/membrane_vector.h>
-
-#include <core/utils/pytypes.h>
-
 #include "bindings.h"
 #include "class_wrapper.h"
+
+#include <core/mesh/membrane.h>
+#include <core/mesh/mesh.h>
+#include <core/pvs/membrane_vector.h>
+#include <core/pvs/object_vector.h>
+#include <core/pvs/particle_vector.h>
+#include <core/pvs/rigid_ellipsoid_object_vector.h>
+#include <core/pvs/rigid_object_vector.h>
+#include <core/utils/pytypes.h>
+
+#include <pybind11/stl.h>
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -85,13 +85,23 @@ void exportParticleVectors(py::module& m)
 
     py::handlers_class<MembraneMesh>(m, "MembraneMesh", pymesh, R"(
         Internally used class for desctibing a triangular mesh that can be used with the Membrane Interactions.
-        In contrast with the simple :any:`Mesh`, this class precomputes some required quantities on the mesh
+        In contrast with the simple :any:`Mesh`, this class precomputes some required quantities on the mesh, 
+        including connectivity structures and stress-free quantities.        
     )")
         .def(py::init<std::string>(), "off_filename"_a, R"(
-            Create a mesh by reading the OFF file
+            Create a mesh by reading the OFF file.
+            The stress free shape is the input initial mesh
             
             Args:
                 off_filename: path of the OFF file
+        )")
+        .def(py::init<std::string, std::string>(),
+             "off_initial_mesh"_a, "off_stress_free_mesh"_a, R"(
+            Create a mesh by reading the OFF file, with a different stress free shape.
+            
+            Args:
+                off_initial_mesh: path of the OFF file : initial mesh
+                off_stress_free_mesh: path of the OFF file : stress-free mesh)
         )")
         .def(py::init<const PyTypes::VectorOfFloat3&, const PyTypes::VectorOfInt3&>(), "vertices"_a, "faces"_a, R"(
         Create a mesh by giving coordinates and connectivity
@@ -99,7 +109,17 @@ void exportParticleVectors(py::module& m)
         Args:
             vertices: vertex coordinates
             faces:    connectivity: one triangle per entry, each integer corresponding to the vertex indices
+        )")
+        .def(py::init<const PyTypes::VectorOfFloat3&, const PyTypes::VectorOfFloat3&, const PyTypes::VectorOfInt3&>(),
+             "vertices"_a, "stress_free_vertices"_a, "faces"_a, R"(
+        Create a mesh by giving coordinates and connectivity, with a different stress-free shape.
+        
+        Args:
+            vertices: vertex coordinates
+            stress_free_vertices: vertex coordinates of the stress-free shape
+            faces:    connectivity: one triangle per entry, each integer corresponding to the vertex indices
     )");
+
         
     py::handlers_class<ObjectVector> pyov(m, "ObjectVector", pypv, R"(
         Basic Object Vector

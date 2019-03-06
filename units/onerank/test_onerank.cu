@@ -237,7 +237,7 @@ void execute(float3 length, int niters, double& l2, double& linf)
         particles[i] = pv.local()->coosvels[i];
 
     auto haloExchanger = std::make_unique<ParticleHaloExchanger>();
-    haloExchanger->attach(&pv, &cells);
+    haloExchanger->attach(&pv, &cells, {});
     SingleNodeEngine haloEngine(std::move(haloExchanger));
 
     auto redistributor = std::make_unique<ParticleRedistributor>();
@@ -265,8 +265,8 @@ void execute(float3 length, int niters, double& l2, double& linf)
 
         haloEngine.init(defStream);
         
-        dpd.setPrerequisites(&pv, &pv);
-        dpd.regular(&pv, &pv, &cells, &cells, defStream);
+        dpd.setPrerequisites(&pv, &pv, &cells, &cells);
+        dpd.local(&pv, &pv, &cells, &cells, defStream);
 
         haloEngine.finalize(defStream);
 

@@ -6,51 +6,6 @@ class Interaction:
         """
         pass
 
-class JuelicherBendingParameters:
-    r"""
-        Bending parameters for Juelicher model
-    
-    """
-    def __init__():
-        r"""__init__(self: Interactions.JuelicherBendingParameters) -> None
-
-
-            Structure keeping parameters of the bending membrane interaction
-        
-
-        """
-        pass
-
-class KantorBendingParameters:
-    r"""
-        Bending parameters for Kantor model
-    
-    """
-    def __init__():
-        r"""__init__(self: Interactions.KantorBendingParameters) -> None
-
-
-            Structure keeping parameters of the bending membrane interaction
-        
-
-        """
-        pass
-
-class MembraneParameters:
-    r"""
-        Common membrane parameters
-    
-    """
-    def __init__():
-        r"""__init__(self: Interactions.MembraneParameters) -> None
-
-
-            Structure keeping parameters of the membrane interaction
-        
-
-        """
-        pass
-
 class DPD(Interaction):
     r"""
         Pairwise interaction with conservative part and dissipative + random part acting as a thermostat, see [Groot1997]_
@@ -75,7 +30,7 @@ class DPD(Interaction):
             
         .. [Groot1997] Groot, R. D., & Warren, P. B. (1997).
             Dissipative particle dynamics: Bridging the gap between atomistic and mesoscopic simulations.
-            J. Chem. Phys., 107(11), 4423–4435. `doi <https://doi.org/10.1063/1.474784>`_
+            J. Chem. Phys., 107(11), 4423-4435. `doi <https://doi.org/10.1063/1.474784>`_
     
     """
     def __init__():
@@ -100,6 +55,33 @@ class DPD(Interaction):
 
             Override some of the interaction parameters for a specific pair of Particle Vectors
          
+
+        """
+        pass
+
+class Density(Interaction):
+    r"""
+        Compute MDPD density of particles, see [Warren2003]_
+    
+        .. math::
+        
+            \rho_i = \sum\limits_{j \neq i} w_\rho (r_{ij})
+
+        where the summation goes over the neighbours of particle :math:`i` within a cutoff range of :math:`r_c`, and
+
+        .. math::
+            
+            w_\rho(r) = \begin{cases} \frac{15}{2\pi r_d^3}\left(1-\frac{r}{r_d}\right)^2, & r < r_d \\ 0, & r \geqslant r_d \end{cases}            
+    
+    """
+    def __init__():
+        r"""__init__(name: str, rc: float) -> None
+
+  
+            Args:
+                name: name of the interaction
+                rc: interaction cut-off
+    
 
         """
         pass
@@ -143,6 +125,48 @@ class LJ(Interaction):
         """
         pass
 
+class MDPD(Interaction):
+    r"""
+        Compute MDPD interaction as described in [Warren2003].
+        Must be used together with :any:`Density` interaction.
+
+        The interaction forces are the same as described in :any:`DPD` with the modified conservative term
+
+        .. math::
+
+            F^C_{ij} = a w_c(r_{ij}) + b (\rho_i + \rho_j) w_d(r_{ij}),
+ 
+        where :math:`\rho_i` is computed from :any:`Density` and
+
+        .. math::
+
+            w_c(r) = \begin{cases} (1-\frac{r}{r_c}), & r < r_c \\ 0, & r \geqslant r_c \end{cases} \\
+            w_d(r) = \begin{cases} (1-\frac{r}{r_d}), & r < r_d \\ 0, & r \geqslant r_d \end{cases}
+
+
+        .. [Warren2003] Warren, P. B. 
+           "Vapor-liquid coexistence in many-body dissipative particle dynamics."
+           Physical Review E 68.6 (2003): 066702.`_
+    
+    """
+    def __init__():
+        r"""__init__(name: str, rc: float, rd: float, a: float, b: float, gamma: float, kbt: float, power: float) -> None
+
+  
+            Args:
+            name: name of the interaction
+                rc: interaction cut-off (no forces between particles further than **rc** apart)
+                rd: density cutoff, assumed rd <= rc
+                a: :math:`a`
+                b: :math:`b`
+                gamma: :math:`\gamma`
+                kbt: :math:`k_B T`
+                power: :math:`p` in the weight function
+    
+
+        """
+        pass
+
 class MembraneForces(Interaction):
     r"""
         Abstract class for membrane interactions.
@@ -156,99 +180,113 @@ class MembraneForces(Interaction):
             - membrane viscosity, pairwise force :math:`\mathbf{F}^v`
             - membrane fluctuations, pairwise force :math:`\mathbf{F}^R`
 
-        The form of these potentials is given by:
+        The form of the constrain potentials are given by (see [Fedosov2010]_ for more explanations):
 
         .. math::
 
-            U_b = \sum_{j \in {1 ... N_s}} k_b \left[  1-\cos(\theta_j - \theta_0) \right], \\
-            U_s = \sum_{j \in {1 ... N_s}} \left[ \frac {k_s l_m \left( 3x_j^2 - 2x_j^3 \right)}{4(1-x_j)} + \frac{k_p}{l_0} \right], \\
             U_A = \frac{k_a (A_{tot} - A^0_{tot})^2}{2 A^0_{tot}} + \sum_{j \in {1 ... N_t}} \frac{k_d (A_j-A_0)^2}{2A_0}, \\
             U_V = \frac{k_v (V-V^0_{tot})^2}{2 V^0_{tot}}.
 
-        See [Fedosov2010]_ for more explanations.
         The viscous and dissipation forces are central forces and are the same as DPD interactions with :math:`w(r) = 1` 
         (no cutoff radius, applied to each bond).
 
-        .. [Fedosov2010] Fedosov, D. A.; Caswell, B. & Karniadakis, G. E. 
-                             A multiscale red blood cell model with accurate mechanics, rheology, and dynamics 
-                             Biophysical journal, Elsevier, 2010, 98, 2215-2225
+        Several bending models are implemented. First, the Kantor enrgy reads (see [kantor1987]_):
 
-    
-    """
-    def __init__():
-        r"""Initialize self.  See help(type(self)) for accurate signature.
-        """
-        pass
+        .. math::
 
-class MembraneForcesJuelicher(Interaction):
-    r"""
-        Mesh-based forces acting on a membrane according to the model in [Fedosov2010]_ with Juelicher bending model.
+            U_b = \sum_{j \in {1 ... N_s}} k_b \left[  1-\cos(\theta_j - \theta_0) \right].
 
-        The bending potential :math:`U_b` is defined as:
+        The Juelicher energy is (see [Juelicher1996]_):
 
         .. math::
 
             U_b = 2 k_b \sum_{\alpha = 1}^{N_v} \frac {\left( M_{\alpha} - C_0\right)^2}{A_\alpha}, \\
             M_{\alpha} = \frac 1 4 \sum_{<i,j>}^{(\alpha)} l_{ij} \theta_{ij}.
 
-        See [Juelicher1996]_ for more explanations. Note that the current model is an extended version of the original form.
-        The viscous and dissipation forces are central forces and are the same as DPD interactions with :math:`w(r) = 1` 
-        (no cutoff radius, applied to each bond).
+        It is improve with ADE model (TODO: ref).
+
+        Currently, the stretching and shear energiy models are:
+        WLC model:
+
+        .. math::
+
+            U_s = \sum_{j \in {1 ... N_s}} \left[ \frac {k_s l_m \left( 3x_j^2 - 2x_j^3 \right)}{4(1-x_j)} + \frac{k_p}{l_0} \right].
+
+        Lim model, which is an extension of the Skalak shear energy (see [Lim2008]_).
+
+        .. math::
+        
+            U_{Lim} =& \sum_{i=1}^{N_{t}}\left(A_{0}\right)_{i}\left(\frac{k_a}{2}\left(\alpha_{i}^{2}+a_{3} \alpha_{i}^{3}+a_{4} \alpha_{i}^{4}\right)\right.\\
+                     & +\mu\left(\beta_{i}+b_{1} \alpha_{i} \beta_{i}+b_{2} \beta_{i}^{2}\right) ),
+
+        where :math:`\alpha` and :math:`\beta` are the invariants of the strains.
+
+        .. [Fedosov2010] Fedosov, D. A.; Caswell, B. & Karniadakis, G. E. 
+                         A multiscale red blood cell model with accurate mechanics, rheology, and dynamics 
+                         Biophysical journal, Elsevier, 2010, 98, 2215-2225
+
+        .. [kantor1987] Kantor, Y. & Nelson, D. R. 
+                        Phase transitions in flexible polymeric surfaces 
+                        Physical Review A, APS, 1987, 36, 4020
 
         .. [Juelicher1996] Juelicher, Frank, and Reinhard Lipowsky. 
                            Shape transformations of vesicles with intramembrane domains.
                            Physical Review E 53.3 (1996): 2670.
+
+        .. [Lim2008] Lim HW, Gerald, Michael Wortis, and Ranjan Mukhopadhyay. 
+                     Red blood cell shapes and shape transformations: newtonian mechanics of a composite membrane: sections 2.1–2.4.
+                     Soft Matter: Lipid Bilayers and Red Blood Cells 4 (2008): 83-139.
     
     """
     def __init__():
-        r"""__init__(name: str, params: Interactions.MembraneParameters, params_bending: Interactions.JuelicherBendingParameters, stressFree: bool, grow_until: float = 0) -> None
+        r"""__init__(name: str, shear_desc: str, bending_desc: str, stress_free: bool = False, grow_until: float = 0.0, **kwargs) -> None
 
  
              Args:
                  name: name of the interaction
-                 params: instance of :any: `MembraneParameters`
-                 params_bending: instance of :any: `JuelicherBendingParameters`
-                 stressFree: equilibrium bond length and areas are taken from the initial mesh
-                 grow_until: time to grow the cell at initialization stage; 
-                             the size increases linearly in time from half of the provided mesh to its full size after that time
-                             the parameters are scaled accordingly with time
-    
+                 shear_desc: a string describing what shear force is used
+                 bending_desc: a string describing what bending force is used
+                 stress_free: if True, stress Free shape is used for the shear parameters
+                 grow_until: the size increases linearly in time from half of the provided mesh 
+                             to its full size after that time; the parameters are scaled accordingly with time
 
-        """
-        pass
+             kwargs:
 
-class MembraneForcesKantor(Interaction):
-    r"""
-        Mesh-based forces acting on a membrane according to the model in [Fedosov2010]_
+                 * **tot_area**:   total area of the membrane at equilibrium
+                 * **tot_volume**: total volume of the membrane at equilibrium
+                 * **ka_tot**:     constrain energy for total area
+                 * **kv_tot**:     constrain energy for total volume
+                 * **kBT**:        fluctuation temperature (set to zero will switch off fluctuation forces)
+                 * **gammaC**:     central component of dissipative forces
+                 * **gammaT**:     tangential component of dissipative forces (warning: if non zero, the interaction will NOT conserve angular momentum)
 
-         The bending potential :math:`U_b` is defined as:
+             Shear Parameters, warm like chain model (set **shear_desc** = 'wlc'):
 
-        .. math::
+                 * **x0**:   :math:`x_0`
+                 * **ks**:   energy magnitude for bonds
+                 * **mpow**: :math:`m`
+                 * **ka**:   energy magnitude for local area
 
-            U_b = \sum_{j \in {1 ... N_s}} k_b \left[  1-\cos(\theta_j - \theta_0) \right]
+             Shear Parameters, Lim model (set **shear_desc** = 'Lim'):
 
-        See [Fedosov2010]_ for more explanations.
-        The viscous and dissipation forces are central forces and are the same as DPD interactions with :math:`w(r) = 1` 
-        (no cutoff radius, applied to each bond).
+                 * **ka**: :math:`k_a`, magnitude of stretching force
+                 * **mu**: :math:`\mu`, magnitude of shear force
+                 * **a3**: :math:`a_3`, non linear part for stretching 
+                 * **a4**: :math:`a_4`, non linear part for stretching 
+                 * **b1**: :math:`b_1`, non linear part for shear
+                 * **b2**: :math:`b_2`, non linear part for shear
 
-        .. [Fedosov2010] Fedosov, D. A.; Caswell, B. & Karniadakis, G. E. 
-                             A multiscale red blood cell model with accurate mechanics, rheology, and dynamics 
-                             Biophysical journal, Elsevier, 2010, 98, 2215-2225
+             Bending Parameters, Kantor model (set **bending_desc** = 'Kantor'):
 
-    
-    """
-    def __init__():
-        r"""__init__(name: str, params: Interactions.MembraneParameters, params_bending: Interactions.KantorBendingParameters, stressFree: bool, grow_until: float = 0) -> None
+                 * **kb**:    local bending energy magnitude
+                 * **theta**: spontaneous angle
 
- 
-             Args:
-                 name: name of the interaction
-                 params: instance of :any: `MembraneParameters`
-                 params_bending: instance of :any: `KantorBendingParameters`
-                 stressFree: equilibrium bond length and areas are taken from the initial mesh
-                 grow_until: time to grow the cell at initialization stage; 
-                             the size increases linearly in time from half of the provided mesh to its full size after that time
-                             the parameters are scaled accordingly with time
+             Bending Parameters, Juelicher model (set **bending_desc** = 'Juelicher'):
+
+                 * **kb**:  local bending energy magnitude
+                 * **C0**:  spontaneous curvature
+                 * **kad**: area difference energy magnitude
+                 * **DA0**: spontaneous area difference
     
 
         """
@@ -260,12 +298,11 @@ class DPDWithStress(DPD):
     
     """
     def __init__():
-        r"""__init__(name: str, stressName: str, rc: float, a: float, gamma: float, kbt: float, power: float, stressPeriod: float) -> None
+        r"""__init__(name: str, rc: float, a: float, gamma: float, kbt: float, power: float, stressPeriod: float) -> None
 
   
             Args:
                 name: name of the interaction
-                stressName: name of the stress entry
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 a: :math:`a`
                 gamma: :math:`\gamma`
@@ -293,12 +330,11 @@ class LJWithStress(LJ):
     
     """
     def __init__():
-        r"""__init__(name: str, stressName: str, rc: float, epsilon: float, sigma: float, max_force: float = 1000.0, object_aware: bool, stressPeriod: float) -> None
+        r"""__init__(name: str, rc: float, epsilon: float, sigma: float, max_force: float = 1000.0, object_aware: bool, stressPeriod: float) -> None
 
 
             Args:
                 name: name of the interaction
-                stressName: name of the stress entry
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 epsilon: :math:`\varepsilon`
                 sigma: :math:`\sigma`
@@ -318,6 +354,30 @@ class LJWithStress(LJ):
 
             Override some of the interaction parameters for a specific pair of Particle Vectors
         
+
+        """
+        pass
+
+class MDPDWithStress(MDPD):
+    r"""
+        wrapper of :any:`MDPD` with, in addition, stress computation
+    
+    """
+    def __init__():
+        r"""__init__(name: str, rc: float, rd: float, a: float, b: float, gamma: float, kbt: float, power: float, stressPeriod: float) -> None
+
+  
+            Args:
+                name: name of the interaction
+                rc: interaction cut-off (no forces between particles further than **rc** apart)
+                rd: density cut-off, assumed rd < rc
+                a: :math:`a`
+                b: :math:`b`
+                gamma: :math:`\gamma`
+                kbt: :math:`k_B T`
+                power: :math:`p` in the weight function
+                stressPeriod: compute the stresses every this period (in simulation time units)
+    
 
         """
         pass

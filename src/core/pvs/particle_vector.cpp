@@ -214,7 +214,7 @@ ParticleVector::ParticleVector(const YmrState *state, std::string name,  float m
     _halo(halo)
 {
     // usually old positions and velocities don't need to exchanged
-    requireDataPerParticle<Particle> ("old_particles", ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    requireDataPerParticle<Particle> (ChannelNames::oldParts, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
 }
 
 static void splitPV(DomainInfo domain, LocalParticleVector *local,
@@ -296,14 +296,14 @@ void ParticleVector::_checkpointParticleData(MPI_Comm comm, std::string path)
     std::vector<XDMF::Channel> channels;
     channels.push_back(XDMF::Channel("velocity", velocities.data(),
                                      XDMF::Channel::DataForm::Vector, XDMF::Channel::NumberType::Float, typeTokenize<float>() ));
-    channels.push_back(XDMF::Channel("ids", ids.data(),
+    channels.push_back(XDMF::Channel(ChannelNames::globalIds, ids.data(),
                                      XDMF::Channel::DataForm::Scalar, XDMF::Channel::NumberType::Int, typeTokenize<int>() ));
 
     _extractPersistentExtraParticleData(channels);
 
     XDMF::write(filename, &grid, channels, comm);
 
-    restart_helpers::make_symlink(comm, path, name, filename);
+    RestartHelpers::make_symlink(comm, path, name, filename);
 
     debug("Checkpoint for particle vector '%s' successfully written", name.c_str());
 }
@@ -343,8 +343,8 @@ std::vector<int> ParticleVector::_restartParticleData(MPI_Comm comm, std::string
     std::vector<int> map;
 
     _getRestartExchangeMap(comm, parts, map);
-    restart_helpers::exchangeData(comm, map, parts, 1);
-    restart_helpers::copyShiftCoordinates(state->domain, parts, local());
+    RestartHelpers::exchangeData(comm, map, parts, 1);
+    RestartHelpers::copyShiftCoordinates(state->domain, parts, local());
 
     local()->coosvels.uploadToDevice(0);
     CUDA_Check( cudaDeviceSynchronize() );

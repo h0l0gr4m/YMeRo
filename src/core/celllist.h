@@ -1,15 +1,15 @@
 #pragma once
 
-#include <cstdint>
-
-#include <core/datatypes.h>
 #include <core/containers.h>
+#include <core/datatypes.h>
 #include <core/logger.h>
+#include <core/pvs/particle_vector.h>
+#include <core/pvs/views/pv.h>
 #include <core/utils/cuda_common.h>
 
-class ParticleVector;
-class LocalParticleVector;
-struct PVview;
+#include <cstdint>
+#include <functional>
+
 
 enum class CellListsProjection
 {
@@ -27,7 +27,6 @@ public:
     float rc;
 
     int *cellSizes, *cellStarts, *order;
-    float4 *particles, *forces;
 
     CellListInfo(float3 h, float3 localDomainSize);
     CellListInfo(float rc, float3 localDomainSize);
@@ -89,6 +88,42 @@ public:
 
 class CellList : public CellListInfo
 {
+public:
+
+    CellList(ParticleVector *pv, float rc, float3 localDomainSize);
+    CellList(ParticleVector *pv, int3 resolution, float3 localDomainSize);
+
+    virtual ~CellList();
+
+    CellListInfo cellInfo();
+
+    virtual void build(cudaStream_t stream);
+
+    virtual void accumulateChannels(const std::vector<std::string>& channelNames, cudaStream_t stream);
+    virtual void gatherChannels(const std::vector<std::string>& channelNames, cudaStream_t stream);
+    void clearChannels(const std::vector<std::string>& channelNames, cudaStream_t stream);
+
+
+
+    template <typename ViewType>
+    ViewType getView() const
+    {
+        return ViewType(pv, localPV);
+    }
+
+    /**
+     * add extra channel to the cell-list.
+     * depending on \c kind, the channel will be cleared, accumulated and scattered at different times
+     *
+     */
+    template <typename T>
+    void requireExtraDataPerParticle(const std::string& name)
+    {
+        particlesDataContainer->extraPerParticle.createData<T>(name);
+    }
+
+    LocalParticleVector* getLocalParticleVector();
+
 protected:
     int changedStamp{-1};
 
@@ -100,38 +135,41 @@ protected:
 
     ParticleVector* pv;
 
+    bool _checkNeedBuild() const;
+    void _updateExtraDataChannels(cudaStream_t stream);
     void _computeCellSizes(cudaStream_t stream);
     void _computeCellStarts(cudaStream_t stream);
     void _reorderData(cudaStream_t stream);
-    void _reorderExtraData(cudaStream_t stream);
+    void _reorderPersistentData(cudaStream_t stream);
 
     void _build(cudaStream_t stream);
 
-public:
+    void _accumulateForces(cudaStream_t stream);
+    void _accumulateExtraData(const std::string& channelName, cudaStream_t stream);
 
-    CellList(ParticleVector* pv, float rc, float3 localDomainSize);
-    CellList(ParticleVector* pv, int3 resolution, float3 localDomainSize);
+    void _reorderExtraDataEntry(const std::string& channelName,
+                                const ExtraDataManager::ChannelDescription *channelDesc,
+                                cudaStream_t stream);
 
-    CellListInfo cellInfo();
-
-    virtual void build(cudaStream_t stream);
-    virtual void addForces(cudaStream_t stream);
-    void clearForces(cudaStream_t stream);
-
-    void setViewPtrs(PVview& view);
-
-    virtual ~CellList() = default;
+    virtual std::string makeName() const;
 };
 
 class PrimaryCellList : public CellList
 {
 public:
 
-    PrimaryCellList(ParticleVector* pv, float rc, float3 localDomainSize);
-    PrimaryCellList(ParticleVector* pv, int3 resolution, float3 localDomainSize);
+    PrimaryCellList(ParticleVector *pv, float rc, float3 localDomainSize);
+    PrimaryCellList(ParticleVector *pv, int3 resolution, float3 localDomainSize);
+
+    ~PrimaryCellList();
 
     void build(cudaStream_t stream);
-    void addForces(cudaStream_t stream) {};
 
-    ~PrimaryCellList() = default;
+    void accumulateChannels(const std::vector<std::string>& channelNames, cudaStream_t stream) override;
+    void gatherChannels(const std::vector<std::string>& channelNames, cudaStream_t stream) override;
+
+protected:
+
+    void _swapPersistentExtraData();
+    std::string makeName() const override;
 };

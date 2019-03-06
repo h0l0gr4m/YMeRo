@@ -56,15 +56,17 @@ function (add_test_executable dirName)
   add_test(${EXEC_NAME} ${EXEC_NAME})
 endfunction()
 
-#add_test_executable(bounce)
 add_test_executable(celllists)
 # add_test_executable(flagella)
 add_test_executable(integration)
 add_test_executable(interaction)
+add_test_executable(marching_cubes)
 add_test_executable(onerank)
 add_test_executable(pid)
 add_test_executable(scheduler)
 add_test_executable(serializer)
+add_test_executable(triangle_invariants)
+add_test_executable(warpScan)
 
 
 # Setup nvcc flags

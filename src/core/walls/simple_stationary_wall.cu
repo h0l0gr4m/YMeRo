@@ -1,34 +1,34 @@
 #include "simple_stationary_wall.h"
 
-#include <fstream>
-#include <cmath>
-#include <texture_types.h>
-#include <cassert>
-
-#include <core/logger.h>
-#include <core/utils/kernel_launch.h>
-#include <core/utils/cuda_common.h>
-#include <core/celllist.h>
-#include <core/pvs/particle_vector.h>
-#include <core/pvs/object_vector.h>
-#include <core/pvs/views/ov.h>
-#include <core/pvs/extra_data/packers.h>
-#include <core/bounce_solver.h>
-
-#include <core/utils/cuda_rng.h>
-
+#include "common_kernels.h"
+#include "stationary_walls/box.h"
 #include "stationary_walls/cylinder.h"
+#include "stationary_walls/plane.h"
 #include "stationary_walls/sdf.h"
 #include "stationary_walls/sphere.h"
-#include "stationary_walls/plane.h"
-#include "stationary_walls/box.h"
+#include "velocity_field/none.h"
+
+#include <core/bounce_solver.h>
+#include <core/celllist.h>
+#include <core/logger.h>
+#include <core/pvs/extra_data/packers.h>
+#include <core/pvs/object_vector.h>
+#include <core/pvs/particle_vector.h>
+#include <core/pvs/views/ov.h>
+#include <core/utils/cuda_common.h>
+#include <core/utils/kernel_launch.h>
+
+#include <cassert>
+#include <cmath>
+#include <fstream>
+#include <texture_types.h>
 
 //===============================================================================================
 // Removing kernels
 //===============================================================================================
 
 template<typename InsideWallChecker>
-__global__ void collectRemaining(PVview view, float4* remaining, int* nRemaining, InsideWallChecker checker)
+__global__ void collectRemaining(PVview view, float4 *remaining, int *nRemaining, InsideWallChecker checker)
 {
     const float tolerance = 1e-6f;
 
@@ -47,7 +47,7 @@ __global__ void collectRemaining(PVview view, float4* remaining, int* nRemaining
 }
 
 template<typename InsideWallChecker>
-__global__ void packRemainingObjects(OVview view, ObjectPacker packer, char* output, int* nRemaining, InsideWallChecker checker)
+__global__ void packRemainingObjects(OVview view, ObjectPacker packer, char *output, int *nRemaining, InsideWallChecker checker)
 {
     const float tolerance = 1e-6f;
 
@@ -88,7 +88,7 @@ __global__ void packRemainingObjects(OVview view, ObjectPacker packer, char* out
     if (tid == 0) packer.obj.pack(objId, dstAddr);
 }
 
-__global__ static void unpackRemainingObjects(const char* from, OVview view, ObjectPacker packer)
+__global__ static void unpackRemainingObjects(const char *from, OVview view, ObjectPacker packer)
 {
     const int objId = blockIdx.x;
     const int tid = threadIdx.x;
@@ -130,8 +130,13 @@ __device__ inline bool isCellOnBoundary(PVview view, float3 cornerCoo, float3 le
     return (pos != 8 && neg != 8);
 }
 
-template<bool QUERY, typename InsideWallChecker>
-__global__ void getBoundaryCells(PVview view, CellListInfo cinfo, int* nBoundaryCells, int* boundaryCells, InsideWallChecker checker)
+enum class QueryMode {
+   Query,
+   Collect    
+};
+
+template<QueryMode queryMode, typename InsideWallChecker>
+__global__ void getBoundaryCells(PVview view, CellListInfo cinfo, int *nBoundaryCells, int *boundaryCells, InsideWallChecker checker)
 {
     const int cid = blockIdx.x * blockDim.x + threadIdx.x;
     if (cid >= cinfo.totcells) return;
@@ -143,86 +148,8 @@ __global__ void getBoundaryCells(PVview view, CellListInfo cinfo, int* nBoundary
     if (isCellOnBoundary(view, cornerCoo, cinfo.h, checker))
     {
         int id = atomicAggInc(nBoundaryCells);
-        if (!QUERY) boundaryCells[id] = cid;
-    }
-}
-
-//===============================================================================================
-// SDF bouncing kernel
-//===============================================================================================
-
-template<typename InsideWallChecker>
-__device__ float3 rescue(float3 candidate, float dt, float tol, int id, const InsideWallChecker& checker)
-{
-    const int maxIters = 100;
-    const float factor = 5.0f*dt;
-    
-    for (int i=0; i<maxIters; i++)
-    {
-        float v = checker(candidate);
-        if (v < -tol) break;
-        
-        float3 rndShift;
-        rndShift.x = Saru::mean0var1(candidate.x - floorf(candidate.x), id+i, id*id);
-        rndShift.y = Saru::mean0var1(rndShift.x,                        id+i, id*id);
-        rndShift.z = Saru::mean0var1(rndShift.y,                        id+i, id*id);
-
-        if (checker(candidate + factor*rndShift) < v)
-            candidate += factor*rndShift;
-    }
-
-    return candidate;
-}
-
-template<typename InsideWallChecker>
-__global__ void bounceKernel(
-        PVviewWithOldParticles view, CellListInfo cinfo,
-        const int* wallCells, const int nWallCells, const float dt, const InsideWallChecker checker)
-{
-    const float insideTolerance = 2e-6f;
-
-    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid >= nWallCells) return;
-    const int cid = wallCells[tid];
-    const int pstart = cinfo.cellStarts[cid];
-    const int pend   = cinfo.cellStarts[cid+1];
-
-    for (int pid = pstart; pid < pend; pid++)
-    {
-        Particle p(view.particles, pid);
-        
-        const float val = checker(p.r);        
-        if (val < 0.0f) continue;
-
-        float3 candidate;
-        Particle pOld(view.old_particles, pid);
-        const float oldVal = checker(pOld.r);
-        
-        // If for whatever reason the previous position was bad, try to rescue
-        if (oldVal >= 0.0f) candidate = rescue(pOld.r, dt, insideTolerance, p.i1, checker);
-        
-        // If the previous position was very close to the surface,
-        // remain there and simply reverse the velocity
-        else if (oldVal > -insideTolerance) candidate = pOld.r;
-        else
-        {
-            // Otherwise go to the point where sdf = 2*insideTolerance
-            float3 dr = p.r - pOld.r;
-
-            const float2 alpha_val = solveLinSearch_verbose([=] (float lambda) {
-                return checker(pOld.r + dr*lambda) + insideTolerance;
-            });
-            
-            if (alpha_val.x >= 0.0f && alpha_val.y < 0.0f)
-                candidate = pOld.r + dr*alpha_val.x;
-            else
-                candidate = pOld.r;
-        }
-
-        p.r = candidate;
-        p.u = -p.u;
-
-        p.write2Float4(cinfo.particles, pid);
+        if (queryMode == QueryMode::Collect)
+            boundaryCells[id] = cid;
     }
 }
 
@@ -231,7 +158,7 @@ __global__ void bounceKernel(
 //===============================================================================================
 
 template<typename InsideWallChecker>
-__global__ void checkInside(PVview view, int* nInside, const InsideWallChecker checker)
+__global__ void checkInside(PVview view, int *nInside, const InsideWallChecker checker)
 {
 	const float checkTolerance = 1e-4f;
 
@@ -250,7 +177,7 @@ __global__ void checkInside(PVview view, int* nInside, const InsideWallChecker c
 //===============================================================================================
 
 template<typename InsideWallChecker>
-__global__ void computeSdfPerParticle(PVview view, float gradientThreshold, float* sdfs, float3* gradients, InsideWallChecker checker)
+__global__ void computeSdfPerParticle(PVview view, float gradientThreshold, float *sdfs, float3 *gradients, InsideWallChecker checker)
 {
     const float h = 0.25f;
     const float zeroTolerance = 1e-10f;
@@ -284,7 +211,7 @@ __global__ void computeSdfPerParticle(PVview view, float gradientThreshold, floa
 
 
 template<typename InsideWallChecker>
-__global__ void computeSdfPerPosition(int n, const float3 *positions, float* sdfs, InsideWallChecker checker)
+__global__ void computeSdfPerPosition(int n, const float3 *positions, float *sdfs, InsideWallChecker checker)
 {
     int pid = blockIdx.x * blockDim.x + threadIdx.x;
     if (pid >= n) return;
@@ -295,7 +222,7 @@ __global__ void computeSdfPerPosition(int n, const float3 *positions, float* sdf
 }
 
 template<typename InsideWallChecker>
-__global__ void computeSdfOnGrid(CellListInfo gridInfo, float* sdfs, InsideWallChecker checker)
+__global__ void computeSdfOnGrid(CellListInfo gridInfo, float *sdfs, InsideWallChecker checker)
 {
     const int nid = blockIdx.x * blockDim.x + threadIdx.x;
     
@@ -312,28 +239,37 @@ __global__ void computeSdfOnGrid(CellListInfo gridInfo, float* sdfs, InsideWallC
 //===============================================================================================
 
 template<class InsideWallChecker>
-void SimpleStationaryWall<InsideWallChecker>::setup(MPI_Comm& comm, float t, DomainInfo domain)
+SimpleStationaryWall<InsideWallChecker>::SimpleStationaryWall(std::string name, const YmrState *state, InsideWallChecker&& insideWallChecker) :
+    SDF_basedWall(state, name),
+    insideWallChecker(std::move(insideWallChecker))
+{
+    bounceForce.clear(0);
+}
+
+template<class InsideWallChecker>
+SimpleStationaryWall<InsideWallChecker>::~SimpleStationaryWall() = default;
+
+template<class InsideWallChecker>
+void SimpleStationaryWall<InsideWallChecker>::setup(MPI_Comm& comm)
 {
     info("Setting up wall %s", name.c_str());
 
     CUDA_Check( cudaDeviceSynchronize() );
-    MPI_Check( MPI_Comm_dup(comm, &wallComm) );
 
-    insideWallChecker.setup(wallComm, domain);
-    this->domain = domain;
+    insideWallChecker.setup(comm, state->domain);
 
     CUDA_Check( cudaDeviceSynchronize() );
 }
 
 template<class InsideWallChecker>
-void SimpleStationaryWall<InsideWallChecker>::attachFrozen(ParticleVector* pv)
+void SimpleStationaryWall<InsideWallChecker>::attachFrozen(ParticleVector *pv)
 {
     frozen = pv;
     info("Wall '%s' will treat particle vector '%s' as frozen", name.c_str(), pv->name.c_str());
 }
 
 template<class InsideWallChecker>
-void SimpleStationaryWall<InsideWallChecker>::attach(ParticleVector* pv, CellList* cl)
+void SimpleStationaryWall<InsideWallChecker>::attach(ParticleVector *pv, CellList *cl)
 {
     if (pv == frozen)
     {
@@ -349,28 +285,29 @@ void SimpleStationaryWall<InsideWallChecker>::attach(ParticleVector* pv, CellLis
     CUDA_Check( cudaDeviceSynchronize() );
     particleVectors.push_back(pv);
     cellLists.push_back(cl);
-    nBounceCalls.push_back(0);
 
+    const int nthreads = 128;
+    
     PVview view(pv, pv->local());
     PinnedBuffer<int> nBoundaryCells(1);
     nBoundaryCells.clear(0);
     SAFE_KERNEL_LAUNCH(
-            getBoundaryCells<true>,
-            (cl->totcells + 127) / 128, 128, 0, 0,
+            getBoundaryCells<QueryMode::Query>,
+            getNblocks(cl->totcells, nthreads), nthreads, 0, 0,
             view, cl->cellInfo(), nBoundaryCells.devPtr(), nullptr, insideWallChecker.handler() );
 
     nBoundaryCells.downloadFromDevice(0);
 
     debug("Found %d boundary cells", nBoundaryCells[0]);
-    auto bc = new DeviceBuffer<int>(nBoundaryCells[0]);
+    DeviceBuffer<int> bc(nBoundaryCells[0]);
 
     nBoundaryCells.clear(0);
     SAFE_KERNEL_LAUNCH(
-            getBoundaryCells<false>,
-            (cl->totcells + 127) / 128, 128, 0, 0,
-            view, cl->cellInfo(), nBoundaryCells.devPtr(), bc->devPtr(), insideWallChecker.handler() );
+            getBoundaryCells<QueryMode::Collect>,
+            getNblocks(cl->totcells, nthreads), nthreads, 0, 0,
+            view, cl->cellInfo(), nBoundaryCells.devPtr(), bc.devPtr(), insideWallChecker.handler() );
 
-    boundaryCells.push_back(bc);
+    boundaryCells.push_back(std::move(bc));
     CUDA_Check( cudaDeviceSynchronize() );
 }
 
@@ -413,9 +350,13 @@ void SimpleStationaryWall<InsideWallChecker>::removeInner(ParticleVector* pv)
     }
     else
     {
+        PackPredicate packPredicate = [](const ExtraDataManager::NamedChannelDesc& namedDesc) {
+            return namedDesc.second->communication == ExtraDataManager::CommunicationMode::NeedExchange;
+        };
+        
         // Prepare temp storage for extra object data
         OVview ovView(ov, ov->local());
-        ObjectPacker packer(ov, ov->local(), 0);
+        ObjectPacker packer(ov, ov->local(), packPredicate, 0);
 
         DeviceBuffer<char> tmp(ovView.nObjects * packer.totalPackedSize_byte);
 
@@ -428,7 +369,7 @@ void SimpleStationaryWall<InsideWallChecker>::removeInner(ParticleVector* pv)
         nRemaining.downloadFromDevice(0);
         ov->local()->resize_anew(nRemaining[0] * ov->objSize);
         ovView = OVview(ov, ov->local());
-        packer = ObjectPacker(ov, ov->local(), 0);
+        packer = ObjectPacker(ov, ov->local(), packPredicate, 0);
 
         SAFE_KERNEL_LAUNCH(
                 unpackRemainingObjects,
@@ -450,25 +391,30 @@ template<class InsideWallChecker>
 void SimpleStationaryWall<InsideWallChecker>::bounce(cudaStream_t stream)
 {
     float dt = this->state->dt;
+
+    bounceForce.clear(stream);
     
     for (int i = 0; i < particleVectors.size(); i++)
     {
-        auto pv = particleVectors[i];
-        auto cl = cellLists[i];
-        auto bc = boundaryCells[i];
-        PVviewWithOldParticles view(pv, pv->local());
+        auto  pv = particleVectors[i];
+        auto  cl = cellLists[i];
+        auto& bc = boundaryCells[i];
+        auto  view = cl->getView<PVviewWithOldParticles>();
 
         debug2("Bouncing %d %s particles, %d boundary cells",
-               pv->local()->size(), pv->name.c_str(), bc->size());
+               pv->local()->size(), pv->name.c_str(), bc.size());
 
         const int nthreads = 64;
         SAFE_KERNEL_LAUNCH(
-                bounceKernel,
-                getNblocks(bc->size(), nthreads), nthreads, 0, stream,
-                view, cl->cellInfo(), bc->devPtr(), bc->size(), dt, insideWallChecker.handler() );
+                BounceKernels::sdfBounce,
+                getNblocks(bc.size(), nthreads), nthreads, 0, stream,
+                view, cl->cellInfo(),
+                bc.devPtr(), bc.size(), dt,
+                insideWallChecker.handler(),
+                VelocityField_None(),
+                bounceForce.devPtr());
 
         CUDA_Check( cudaPeekAtLastError() );
-        nBounceCalls[i]++;
     }
 }
 
@@ -553,7 +499,7 @@ void SimpleStationaryWall<InsideWallChecker>::sdfOnGrid(float3 h, GPUcontainer* 
         die("Incompatible datatype size of container for SDF values: %d (sampling sdf on a grid)",
             sdfs->datatype_size());
         
-    CellListInfo gridInfo(h, domain.localSize);
+    CellListInfo gridInfo(h, state->domain.localSize);
     sdfs->resize_anew(gridInfo.totcells);
 
     const int nthreads = 128;
@@ -561,6 +507,12 @@ void SimpleStationaryWall<InsideWallChecker>::sdfOnGrid(float3 h, GPUcontainer* 
             computeSdfOnGrid,
             getNblocks(gridInfo.totcells, nthreads), nthreads, 0, stream,
             gridInfo, (float*)sdfs->genericDevPtr(), insideWallChecker.handler() );
+}
+
+template<class InsideWallChecker>
+PinnedBuffer<double3>* SimpleStationaryWall<InsideWallChecker>::getCurrentBounceForce()
+{
+    return &bounceForce;
 }
 
 template class SimpleStationaryWall<StationaryWall_Sphere>;

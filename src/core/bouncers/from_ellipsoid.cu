@@ -35,8 +35,8 @@ void BounceFromRigidEllipsoid::setup(ObjectVector* ov)
 {
     this->ov = ov;
 
-    ov->requireDataPerObject<RigidMotion> ("old_motions", ExtraDataManager::CommunicationMode::NeedExchange,
-                                           ExtraDataManager::PersistenceMode::None, sizeof(RigidReal));
+    ov->requireDataPerObject<RigidMotion> (ChannelNames::oldMotions, ExtraDataManager::CommunicationMode::NeedExchange,
+                                           ExtraDataManager::PersistenceMode::Persistent, sizeof(RigidReal));
 }
 
 /**
@@ -63,7 +63,7 @@ void BounceFromRigidEllipsoid::exec(ParticleVector *pv, CellList *cl, bool local
     if (!local)
     {
         SAFE_KERNEL_LAUNCH(
-                clearRigidForces,
+                RigidIntegrationKernels::clearRigidForces,
                 getNblocks(ovView.nObjects, nthreads), nthreads, 0, stream,
                 ovView );
     }

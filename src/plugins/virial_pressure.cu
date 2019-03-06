@@ -1,37 +1,45 @@
+#include "virial_pressure.h"
+#include "utils/simple_serializer.h"
+
 #include <core/datatypes.h>
 #include <core/pvs/particle_vector.h>
+#include <core/pvs/views/pv.h>
 #include <core/simulation.h>
 #include <core/utils/folders.h>
+#include <core/utils/common.h>
 #include <core/utils/cuda_common.h>
 #include <core/utils/kernel_launch.h>
 
-#include "virial_pressure.h"
-#include "simple_serializer.h"
-
-namespace VirialPressure
+namespace VirialPressureKernels
 {
-__global__ void totalPressure(int n, const Stress *stress, ReductionType *pressure)
+__global__ void totalPressure(PVview view, const Stress *stress, FieldDeviceHandler region, VirialPressure::ReductionType *pressure)
 {
-    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    const int wid = tid % warpSize;
-    if (tid >= n) return;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    const Stress s = stress[tid];
+    VirialPressure::ReductionType P = 0;
+    Particle p;
 
-    ReductionType P = (s.xx + s.yy + s.zz) / 3.0;
+    if (tid < view.size) {
+        const Stress s = stress[tid];
+        p.readCoordinate(view.particles, tid);
 
-    P = warpReduce(P, [](ReductionType a, ReductionType b) { return a+b; });
+        if (region(p.r) > 0)
+            P = (s.xx + s.yy + s.zz) / 3.0;
+    }
+    
+    P = warpReduce(P, [](VirialPressure::ReductionType a, VirialPressure::ReductionType b) { return a+b; });
 
-    if (wid == 0)
+    if (__laneid() == 0)
         atomicAdd(pressure, P);
 }
-}
+} // namespace VirialPressureKernels
 
-VirialPressurePlugin::VirialPressurePlugin(const YmrState *state, std::string name, std::string pvName, std::string stressName, int dumpEvery) :
+VirialPressurePlugin::VirialPressurePlugin(const YmrState *state, std::string name, std::string pvName,
+                                           FieldFunction func, float3 h, int dumpEvery) :
     SimulationPlugin(state, name),
     pvName(pvName),
-    stressName(stressName),
-    dumpEvery(dumpEvery)
+    dumpEvery(dumpEvery),
+    region(state, "field_"+name, func, h)
 {}
 
 VirialPressurePlugin::~VirialPressurePlugin() = default;
@@ -41,6 +49,8 @@ void VirialPressurePlugin::setup(Simulation* simulation, const MPI_Comm& comm, c
     SimulationPlugin::setup(simulation, comm, interComm);
 
     pv = simulation->getPVbyNameOrDie(pvName);
+
+    region.setup(comm);
 
     info("Plugin %s initialized for the following particle vector: %s", name.c_str(), pvName.c_str());
 }
@@ -53,21 +63,21 @@ void VirialPressurePlugin::handshake()
 
 void VirialPressurePlugin::afterIntegration(cudaStream_t stream)
 {
-    if (currentTimeStep % dumpEvery != 0 || currentTimeStep == 0) return;
+    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 
-    int n = pv->local()->size();
-    const Stress *stress = pv->local()->extraPerParticle.getData<Stress>(stressName)->devPtr();
+    PVview view(pv, pv->local());
+    const Stress *stress = pv->local()->extraPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
 
     localVirialPressure.clear(stream);
     
     SAFE_KERNEL_LAUNCH(
-        VirialPressure::totalPressure,
-        getNblocks(n, 128), 128, 0, stream,
-        n, stress, localVirialPressure.devPtr() );
+        VirialPressureKernels::totalPressure,
+        getNblocks(view.size, 128), 128, 0, stream,
+        view, stress, region.handler(), localVirialPressure.devPtr() );
 
     localVirialPressure.downloadFromDevice(stream, ContainersSynch::Synch);
     
-    savedTime = currentTime;
+    savedTime = state->currentTime;
     needToSend = true;
 }
 
@@ -130,7 +140,7 @@ void VirialPressureDumper::handshake()
 
 void VirialPressureDumper::deserialize(MPI_Status& stat)
 {
-    float curTime;
+    TimeType curTime;
     VirialPressure::ReductionType localPressure, totalPressure;
 
     SimpleSerializer::deserialize(data, curTime, localPressure);
@@ -139,6 +149,6 @@ void VirialPressureDumper::deserialize(MPI_Status& stat)
 
     MPI_Check( MPI_Reduce(&localPressure, &totalPressure, 1, mpiReductionType, MPI_SUM, 0, comm) );
 
-    fprintf(fdump, "%g %g\n", curTime, totalPressure);
+    fprintf(fdump, "%g %.6e\n", curTime, totalPressure);
 }
 

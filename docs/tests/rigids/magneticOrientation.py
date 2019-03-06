@@ -61,9 +61,10 @@ if args.withMesh:
 
 u.run(10000)
 
+del(u)
+
 
 # nTEST: rigids.magneticOrientation.Static
-# set -eu
 # cd rigids
 # rm -rf stats rigid.out.txt
 # f="pos.txt"
@@ -73,7 +74,6 @@ u.run(10000)
 # cat stats/ellipsoid.txt | awk '{print $2, $10, $3}' > rigid.out.txt
 
 # nTEST: rigids.magneticOrientation.Time
-# set -eu
 # cd rigids
 # rm -rf stats rigid.out.txt
 # f="pos.txt"

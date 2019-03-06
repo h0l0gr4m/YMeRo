@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /bin/bash
 
 usage() {
     cat <<EOF
@@ -17,6 +17,9 @@ if test $# -ne 0; then usage; fi
 case `hostname` in
     falcon*|panda*)
         echo falcon
+	;;
+    barry*)
+	echo barry
 	;;
     daint*)
 	echo daint

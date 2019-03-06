@@ -1,9 +1,11 @@
 #pragma once
 
-#include <cuda_runtime.h>
-#include <mpi.h>
-
 #include "core/ymero_object.h"
+
+#include <cuda_runtime.h>
+#include <functional>
+#include <mpi.h>
+#include <vector>
 
 class CellList;
 class ParticleVector;
@@ -19,9 +21,6 @@ class ParticleVector;
 class Interaction : public YmrSimulationObject
 {
 public:
-    /// Cut-off raduis
-    float rc;
-
     Interaction(const YmrState *state, std::string name, float rc);
 
     virtual ~Interaction();
@@ -31,15 +30,8 @@ public:
      * Default: ask nothing
      * Called from Simulation right after setup
      */
-    virtual void setPrerequisites(ParticleVector *pv1, ParticleVector *pv2);
-
-    /**
-     * Init fields in particle vectors reuired before interaction
-     * Default: do nothing
-     * Called from Simulation at every step
-     */
-    virtual void initStep(ParticleVector *pv1, ParticleVector *pv2, cudaStream_t stream);
-
+    virtual void setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2);
+    
     /**
      * Interface to compute local interactions.
      * For now order of \e pv1 and \e pv2 is important for computational reasons,
@@ -51,8 +43,8 @@ public:
      * @param cl1 cell-list built for the appropriate cut-off raduis #rc for \p pv1
      * @param cl2 cell-list built for the appropriate cut-off raduis #rc for \p pv2
      */
-    virtual void regular(ParticleVector *pv1, ParticleVector *pv2,
-                         CellList *cl1, CellList *cl2, cudaStream_t stream) = 0;
+    virtual void local(ParticleVector *pv1, ParticleVector *pv2,
+                       CellList *cl1, CellList *cl2, cudaStream_t stream) = 0;
 
     /**
      * Interface to compute halo interactions. It principle it has to compute
@@ -66,4 +58,41 @@ public:
      */
     virtual void halo(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1,
                       CellList *cl2, cudaStream_t stream) = 0;
+
+
+    /// monitor activity of a channel
+    using ActivePredicate = std::function<bool()>;
+
+    /**
+     * describe the activity of a channel in an interaction
+     */
+    struct InteractionChannel
+    {
+        std::string name;
+        ActivePredicate active;
+    };
+
+    /**
+     * describe what channels are produced as intermediate output for another interaction
+     * default: nothing
+     */
+    virtual std::vector<InteractionChannel> getIntermediateOutputChannels() const;
+
+    /**
+     * describe what channels are needed as intermediate input fror another interaction
+     * default: nothing
+     */
+    virtual std::vector<InteractionChannel> getIntermediateInputChannels() const;
+    
+    /**
+     * describe what channels are produced by the interaction 
+     * default: forces, always active
+     */
+    virtual std::vector<InteractionChannel> getFinalOutputChannels() const;
+
+    static const ActivePredicate alwaysActive;
+    
+public:
+    /// Cut-off raduis
+    float rc;
 };

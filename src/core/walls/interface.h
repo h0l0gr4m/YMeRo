@@ -1,14 +1,14 @@
 #pragma once
 
+#include "core/ymero_object.h"
+#include <core/containers.h>
+#include <core/domain.h>
+#include <core/pvs/particle_vector.h>
+
 #include <mpi.h>
 #include <vector>
 #include <cuda_runtime.h>
-#include <core/domain.h>
 
-#include "core/ymero_object.h"
-
-class LocalParticleVector;
-class ParticleVector;
 class CellList;
 class GPUcontainer;
 
@@ -19,7 +19,7 @@ public:
     
     virtual ~Wall();
 
-    virtual void setup(MPI_Comm& comm, float t, DomainInfo domain) = 0;
+    virtual void setup(MPI_Comm& comm) = 0;
     virtual void attachFrozen(ParticleVector* pv) = 0;
 
     virtual void removeInner(ParticleVector* pv) = 0;
@@ -47,7 +47,7 @@ public:
             float gradientThreshold, cudaStream_t stream) = 0;
     virtual void sdfPerPosition(GPUcontainer *positions, GPUcontainer* sdfs, cudaStream_t stream) = 0;
     virtual void sdfOnGrid(float3 gridH, GPUcontainer* sdfs, cudaStream_t stream) = 0;
-
+    virtual PinnedBuffer<double3>* getCurrentBounceForce() = 0;
 
     ~SDF_basedWall();
 };

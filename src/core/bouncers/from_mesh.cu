@@ -45,9 +45,11 @@ void BounceFromMesh::setup(ObjectVector* ov)
     // old motions HAVE to be there and communicated and shifted
 
     if (rov == nullptr)
-        ov->requireDataPerParticle<Particle> ("old_particles", ExtraDataManager::CommunicationMode::NeedExchange, ExtraDataManager::PersistenceMode::None, sizeof(float));
+        ov->requireDataPerParticle<Particle> (ChannelNames::oldParts, ExtraDataManager::CommunicationMode::NeedExchange,
+                                              ExtraDataManager::PersistenceMode::Persistent, sizeof(float));
     else
-        ov->requireDataPerObject<RigidMotion> ("old_motions", ExtraDataManager::CommunicationMode::NeedExchange, ExtraDataManager::PersistenceMode::None, sizeof(RigidReal));
+        ov->requireDataPerObject<RigidMotion> (ChannelNames::oldMotions, ExtraDataManager::CommunicationMode::NeedExchange,
+                                               ExtraDataManager::PersistenceMode::Persistent, sizeof(RigidReal));
 }
 
 /**
@@ -147,7 +149,7 @@ void BounceFromMesh::exec(ParticleVector *pv, CellList *cl, bool local, cudaStre
         view.forces = vertexView.vertexForces;
 
         SAFE_KERNEL_LAUNCH(
-                collectRigidForces,
+                RigidIntegrationKernels::collectRigidForces,
                 getNblocks(view.size, 128), 128, 0, stream,
                 view );
     }

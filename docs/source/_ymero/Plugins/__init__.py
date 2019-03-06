@@ -134,6 +134,18 @@ class ObjPositionsDumper(PostprocessPlugin):
         Responsible for performing the I/O.
     
     """
+class ParticleChannelSaver(SimulationPlugin):
+    r"""
+        This plugin creates an extra channel per particle inside the given particle vector with a given name.
+        It copies the content of an extra channel of pv at each time step and make it accessible by other plugins.
+    
+    """
+class ParticleDisplacementPlugin(SimulationPlugin):
+    r"""
+        This plugin computes and save the displacement of the particles within a given particle vector.
+        The result is stored inside the extra channel "displacements" as an array of float3.
+    
+    """
 class ParticleDumperPlugin(PostprocessPlugin):
     r"""
         Postprocess side plugin of :any:`ParticleSenderPlugin`.
@@ -168,6 +180,12 @@ class PinObject(SimulationPlugin):
             This plugin is inactive if postprocess is disabled
     
     """
+class PostprocessRadialVelocityControl(PostprocessPlugin):
+    r"""
+        Postprocess side plugin of :any:`RadialVelocityControl`.
+        Responsible for performing the I/O.
+    
+    """
 class PostprocessStats(PostprocessPlugin):
     r"""
         Postprocess side plugin of :any:`SimulationStats`.
@@ -178,6 +196,12 @@ class PostprocessVelocityControl(PostprocessPlugin):
     r"""
         Postprocess side plugin of :any:`VelocityControl`.
         Responsible for performing the I/O.
+    
+    """
+class RadialVelocityControl(SimulationPlugin):
+    r"""
+        This plugin applies a radial force (decreasing as :math:`r^3`) to all the particles of the target PVS.
+        The force is adapted via a PID controller such that the average of the velocity times radial position of the particles matches a target value.
     
     """
 class ReportPinObject(PostprocessPlugin):
@@ -221,6 +245,13 @@ class VelocityControl(SimulationPlugin):
         The force is adapted bvia a PID controller such that the velocity average of the particles matches the target average velocity.
     
     """
+class VelocityInlet(SimulationPlugin):
+    r"""
+        This plugin inserts particles in a given :any:`ParticleVector`.
+        The particles are inserted on a given surface with given velocity inlet. 
+        The rate of insertion is governed by the velocity and the given number density.
+    
+    """
 class VirialPressure(SimulationPlugin):
     r"""
         This plugin compute the virial pressure from a given :any:`ParticleVector`.
@@ -233,6 +264,20 @@ class VirialPressureDumper(PostprocessPlugin):
     r"""
         Postprocess side plugin of :any:`VirialPressure`.
         Responsible for performing the I/O.
+    
+    """
+class WallForceCollector(SimulationPlugin):
+    r"""
+        This plugin collects and average the total force exerted on a given wall.
+        The result has 2 components:
+            - bounce back: force necessary to the momentum change
+            - frozen particles: total interaction force exerted on the frozen particles
+    
+    """
+class WallForceDumper(PostprocessPlugin):
+    r"""
+        Postprocess side plugin of :any:`WallForceCollector`.
+        Responsible for the I/O part.
     
     """
 class WallRepulsion(SimulationPlugin):
@@ -552,6 +597,37 @@ def createMembraneExtraForce():
     """
     pass
 
+def createParticleChannelSaver():
+    r"""createParticleChannelSaver(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, channelName: str, savedName: str) -> Tuple[Plugins.ParticleChannelSaver, Plugins.PostprocessPlugin]
+
+
+        Create :any:`ParticleChannelSaver` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            channelName: the name of the source channel
+            savedName: name of the extra channel
+    
+
+    """
+    pass
+
+def createParticleDisplacement():
+    r"""createParticleDisplacement(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, update_every: int) -> Tuple[Plugins.ParticleDisplacementPlugin, Plugins.PostprocessPlugin]
+
+
+        Create :any:`ParticleDisplacement` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            update_every: displacements are computed between positions separated by this amount of timesteps
+    
+
+    """
+    pass
+
 def createPinObject():
     r"""createPinObject(state: YmrState, name: str, ov: ParticleVectors.ObjectVector, dump_every: int, path: str, velocity: Tuple[float, float, float], angular_velocity: Tuple[float, float, float]) -> Tuple[Plugins.PinObject, Plugins.ReportPinObject]
 
@@ -567,6 +643,28 @@ def createPinObject():
                 If the corresponding component should not be restricted, set this value to :python:`PinObject::Unrestricted`
             angular_velocity: 3 floats, each component is the desired object angular velocity.
                 If the corresponding component should not be restricted, set this value to :python:`PinObject::Unrestricted`
+    
+
+    """
+    pass
+
+def createRadialVelocityControl():
+    r"""createRadialVelocityControl(state: YmrState, name: str, filename: str, pvs: List[ParticleVectors.ParticleVector], minRadius: float, maxRadius: float, sample_every: int, tune_every: int, dump_every: int, center: Tuple[float, float, float], target_vel: float, Kp: float, Ki: float, Kd: float) -> Tuple[Plugins.RadialVelocityControl, Plugins.PostprocessRadialVelocityControl]
+
+
+        Create :any:`VelocityControl` plugin
+        
+        Args:
+            name: name of the plugin
+            filename: dump file name 
+            pvs: list of concerned :class:`ParticleVector`
+            minRadius, maxRadius: only particles within this distance are considered 
+            sample_every: sample velocity every this many time-steps
+            tune_every: adapt the force every this many time-steps
+            dump_every: write files every this many time-steps
+            center: center of the radial coordinates
+            target_vel: the target mean velocity of the particles at :math:`r=1`
+            Kp, Ki, Kd: PID controller coefficients
     
 
     """
@@ -624,8 +722,27 @@ def createVelocityControl():
     """
     pass
 
+def createVelocityInlet():
+    r"""createVelocityInlet(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, implicit_surface_func: Callable[[Tuple[float, float, float]], float], velocity_field: Callable[[Tuple[float, float, float]], Tuple[float, float, float]], resolution: Tuple[float, float, float], number_density: float, kBT: float) -> Tuple[Plugins.VelocityInlet, Plugins.PostprocessPlugin]
+
+
+        Create :any:`VelocityInlet` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: the :any:`ParticleVector` that we ll work with 
+            implicit_surface_func: a scalar field function that has the required surface as zero level set
+            velocity_field: vector field that describes the velocity on the inlet (will be evaluated on the surface only)
+            resolution: grid size used to discretize the surface
+            number_density: number density of the inserted solvent
+            kBT: temperature of the inserted solvent
+    
+
+    """
+    pass
+
 def createVirialPressurePlugin():
-    r"""createVirialPressurePlugin(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, stress_mame: str, dump_every: int, path: str) -> Tuple[Plugins.VirialPressure, Plugins.VirialPressureDumper]
+    r"""createVirialPressurePlugin(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, regionFunc: Callable[[Tuple[float, float, float]], float], h: Tuple[float, float, float], dump_every: int, path: str) -> Tuple[Plugins.VirialPressure, Plugins.VirialPressureDumper]
 
 
         Create :any:`VirialPressure` plugin
@@ -633,9 +750,28 @@ def createVirialPressurePlugin():
         Args:
             name: name of the plugin
             pv: concerned :class:`ParticleVector`
-            stress_name: the extraData entry name of the stress per particle
+            regionFunc: predicate for the concerned region; positive inside the region and negative outside
+            h: grid size for representing the predicate onto a grid
             dump_every: report total pressure every this many time-steps
             path: the folder name in which the file will be dumped
+    
+
+    """
+    pass
+
+def createWallForceCollector():
+    r"""createWallForceCollector(state: YmrState, name: str, wall: Walls.Wall, pvFrozen: ParticleVectors.ParticleVector, sample_every: int, dump_every: int, filename: str) -> Tuple[Plugins.WallForceCollector, Plugins.WallForceDumper]
+
+
+        Create :any:`WallForceCollector` plugin
+        
+        Args:
+            name: name of the plugin            
+            wall: :any:`Wall` that we ll work with
+            pvFrozen: corresponding frozen :any:`ParticleVector`
+            sample_every: sample every this number of time steps
+            dump_every: dump every this amount of timesteps
+            filename: output filename
     
 
     """

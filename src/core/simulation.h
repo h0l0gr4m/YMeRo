@@ -1,18 +1,17 @@
 #pragma once
 
-#include <core/logger.h>
-#include <core/datatypes.h>
 #include <core/containers.h>
+#include <core/datatypes.h>
+#include <core/domain.h>
+#include <core/logger.h>
 #include <core/mpi/exchanger_interfaces.h>
 
-#include "domain.h"
-
-#include <tuple>
-#include <vector>
-#include <string>
 #include <functional>
 #include <map>
 #include <memory>
+#include <string>
+#include <tuple>
+#include <vector>
 
 // Some forward declarations
 class YmrState;
@@ -20,6 +19,7 @@ class ParticleVector;
 class ObjectVector;
 class CellList;
 class TaskScheduler;
+class InteractionManager;
 
 class Wall;
 class Interaction;
@@ -94,6 +94,8 @@ public:
     
     float getCurrentDt() const;
     float getCurrentTime() const;
+
+    float getMaxEffectiveCutoff() const;
     
     void saveDependencyGraph_GraphML(std::string fname) const;
 
@@ -113,12 +115,14 @@ private:
 
     std::unique_ptr<TaskScheduler> scheduler;
 
+    std::unique_ptr<InteractionManager> interactionManager;
+
     bool gpuAwareMPI;
 
     using ExchangeEngineUniquePtr = std::unique_ptr<ExchangeEngine>;
 
-    ExchangeEngineUniquePtr halo, redistributor;
-    ExchangeEngineUniquePtr objHalo, objRedistibutor, objHaloForces;
+    ExchangeEngineUniquePtr haloIntermediate, halo, redistributor;
+    ExchangeEngineUniquePtr objHaloIntermediate, objHalo, objRedistibutor, objHaloForces;
 
     std::map<std::string, int> pvIdMap;
     std::vector< std::shared_ptr<ParticleVector> > particleVectors;
@@ -190,11 +194,12 @@ private:
     std::vector<SplitterPrototype>            splitterPrototypes;
     std::vector<PvsCheckPointPrototype>       pvsCheckPointPrototype;
 
-    std::vector<std::function<void(cudaStream_t)>> initInteractions, regularInteractions, haloInteractions;
     std::vector<std::function<void(cudaStream_t)>> integratorsStage1, integratorsStage2;
     std::vector<std::function<void(cudaStream_t)>> regularBouncers, haloBouncers;
 
     std::map<std::string, std::string> pvsIntegratorMap;
+
+    
     
 private:
     

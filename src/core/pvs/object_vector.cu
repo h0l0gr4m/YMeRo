@@ -8,7 +8,10 @@
 
 #include "restart_helpers.h"
 
-__global__ void min_max_com(OVview ovView)
+namespace ObjectVectorKernels
+{
+
+__global__ void minMaxCom(OVview ovView)
 {
     const int gid = threadIdx.x + blockDim.x * blockIdx.x;
     const int objId = gid >> 5;
@@ -39,6 +42,8 @@ __global__ void min_max_com(OVview ovView)
         ovView.comAndExtents[objId] = {mycom / ovView.objSize, mymin, mymax};
 }
 
+} // namespace ObjectVectorKernels
+
 void ObjectVector::findExtentAndCOM(cudaStream_t stream, ParticleVectorType type)
 {
     bool isLocal = (type == ParticleVectorType::Local);
@@ -56,7 +61,7 @@ void ObjectVector::findExtentAndCOM(cudaStream_t stream, ParticleVectorType type
     const int nthreads = 128;
     OVview ovView(this, lov);
     SAFE_KERNEL_LAUNCH(
-            min_max_com,
+            ObjectVectorKernels::minMaxCom,
             (ovView.nObjects*32 + nthreads-1)/nthreads, nthreads, 0, stream,
             ovView );
 }
@@ -104,14 +109,14 @@ std::vector<int> ObjectVector::_restartParticleData(MPI_Comm comm, std::string p
     std::vector<int> map;
     
     _getRestartExchangeMap(comm, parts, map);
-    restart_helpers::exchangeData(comm, map, parts, objSize);    
-    restart_helpers::copyShiftCoordinates(state->domain, parts, local());
+    RestartHelpers::exchangeData(comm, map, parts, objSize);    
+    RestartHelpers::copyShiftCoordinates(state->domain, parts, local());
 
     local()->coosvels.uploadToDevice(0);
     
     // Do the ids
     // That's a kinda hack, will be properly fixed in the hdf5 per object restarts
-    auto ids = local()->extraPerObject.getData<int>("ids");
+    auto ids = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
     for (int i = 0; i < local()->nObjects; i++)
         (*ids)[i] = local()->coosvels[i*objSize].i1 / objSize;
     ids->uploadToDevice(0);
@@ -149,7 +154,7 @@ void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     std::string filename = path + "/" + name + ".obj-" + getStrZeroPadded(restartIdx);
     info("Checkpoint for object vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
-    auto coms_extents = local()->extraPerObject.getData<LocalObjectVector::COMandExtent>("com_extents");
+    auto coms_extents = local()->extraPerObject.getData<LocalObjectVector::COMandExtent>(ChannelNames::comExtents);
 
     coms_extents->downloadFromDevice(0, ContainersSynch::Synch);
     
@@ -165,7 +170,7 @@ void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     
     XDMF::write(filename, &grid, channels, comm);
 
-    restart_helpers::make_symlink(comm, path, name + ".obj", filename);
+    RestartHelpers::make_symlink(comm, path, name + ".obj", filename);
 
     debug("Checkpoint for object vector '%s' successfully written", name.c_str());
 }
@@ -179,11 +184,11 @@ void ObjectVector::_restartObjectData(MPI_Comm comm, std::string path, const std
 
     XDMF::readObjectData(filename, comm, this);
 
-    auto loc_ids = local()->extraPerObject.getData<int>("ids");
+    auto loc_ids = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
     
     std::vector<int> ids(loc_ids->begin(), loc_ids->end());
     
-    restart_helpers::exchangeData(comm, map, ids, 1);
+    RestartHelpers::exchangeData(comm, map, ids, 1);
 
     loc_ids->resize_anew(ids.size());
     std::copy(ids.begin(), ids.end(), loc_ids->begin());

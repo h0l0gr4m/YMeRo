@@ -1,11 +1,11 @@
-#include <string>
-
 #include "channel_dumper.h"
-#include "simple_serializer.h"
+#include "utils/simple_serializer.h"
+
+#include <core/simulation.h>
 #include <core/utils/folders.h>
 #include <core/utils/make_unique.h>
-#include <core/simulation.h>
 
+#include <string>
 
 UniformCartesianDumper::UniformCartesianDumper(std::string name, std::string path) :
         PostprocessPlugin(name), path(path)
@@ -67,7 +67,7 @@ static void convert(const std::vector<double> &src, std::vector<float> &dst)
 
 void UniformCartesianDumper::deserialize(MPI_Status& stat)
 {
-    float t;
+    TimeType t;
     SimpleSerializer::deserialize(data, t, recv_density, recv_containers);
 
     debug2("Plugin '%s' will dump right now: simulation time %f, time stamp %d",

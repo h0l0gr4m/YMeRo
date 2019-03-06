@@ -6,6 +6,8 @@
 
 #include "domain.h"
 
+using TimeType = double;
+
 /**
  * Global quantities accessible by all simulation objects in YMeRo
  */
@@ -13,8 +15,13 @@ class YmrState
 {
 public:
     YmrState(DomainInfo domain, float dt);
+    YmrState(const YmrState&);
+    YmrState& operator=(YmrState other);
+
     virtual ~YmrState();
 
+    void swap(YmrState& other);
+    
     void reinitTime();
     
     void checkpoint(MPI_Comm comm, std::string path);  /// Save state to file
@@ -24,7 +31,7 @@ public:
     DomainInfo domain;
 
     float dt;
-    double currentTime;
+    TimeType currentTime;
     int currentStep;
 };
 

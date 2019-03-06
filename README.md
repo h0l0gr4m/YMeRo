@@ -12,14 +12,129 @@ For more information, please refer to the online documentation: http://ymero.rea
 
 ## Changelog
 
+### unreleased
+
+* more robust computation of Lim forces
+
+### v0.11.4
+
+* **fix** Lim shear forces bug: triangle invariant
+* **fix** reset accumulated quantities in Juelicher ADE model
+* **fix** check MPI send requests
+
+### v0.11.3
+
+* **fix** Juelicher bending  forces sign
+* **fix** Lim shear forces sign
+* add possibility to compute membrane forces in double perecision
+
+### v0.11.2
+
+* **fix** wall thickness is larger when using MDPD
+* internal changes:
+  * cell lists do not know about special channels
+  * add interaction manager to manage interaction channels
+
+### v0.11.1
+
+* **fix** bounce back on multiple nodes for objects
+* minor fixes in documentation
+
+### v0.11.0
+
+* add Lim model for shear forces on membranes
+* add corresponding tests
+
+### v0.10.7
+
+* **interface change** membrane interactions take only one constructor (see docs)
+* **fix** warp reductions: all threads participate
+* internal changes:
+  * cosmetic changes: more consistent namespace style
+  * membrane interaction takes a functor for dihedral computations
+  * refactor membrane interactions: take functors for shear and bending forces
+
+### v0.10.6
+
+* Internal change: add before cell list plugin task
+* **fix**: pvs exchanger plugin: new particles are now correctly redistributed
+* **fix**: velocity inlet plugin: new particles are now correctly redistributed
+* **fix**: communication of persistent data to empty pvs
+* **fix**: average plugin asynchronous message to postprocessing
+
+### v0.10.5
+
+* add displacement plugin
+* add radial velocity control plugin 
+* **fix** reordering of extra data in celllists
+* **fix** pvsExchanger plugin also copies persistent channels
+* add test for pvsExchanger
+* add test for displacement plugin
+* internal changes:
+  * packers can copy to another packer
+  * defaultStream in `core/utils/cuda_common.h`
+
+### v0.10.4
+
+* add velocity inlet plugin
+* add very simple CPU marching cubes implementation in core
+* clean up units
+
+### v0.10.3
+
+* add wall force collector plugin
+* automated support of multiple GPUs on single nodes
+* **fix** in bounce
+* remove deprecate warings for python 3.7
+
+### v0.10.2
+
+* Adds support for different stress free shape than original mesh
+
+### v0.10.1
+
+* add plugin to save a channel of extra particle data (useful for intermediate quantities such as densities in MDPD)
+* **fix** reordering of persistent extra channels in primary cell lists
+* **fix** use local cell lists instead of primary ones in halo exchanger
+
+### v0.10.0
+
+* Add _MDPD_ interaction (**walls and solvent fully supported only**)
+* internal changes:
+  * generic pairwise interaction fetching
+  * 2-steps interaction support: extended task dependency graph
+  * cell lists are aware of which channels to clear, accumulate and reorder
+  * wip: more general object reverse exchangers
+* **interface change**: make frozen walls takes a list of interactions
+* **interface change**: make frozen rigid takes a list of interactions
+
+### v0.9.7
+
+* support for VOLTA architecture
+* internal changes
+  * generic pairwise interaction output: accumulators
+  * generic pairwise_interaction: pass views
+  * cell lists produce views; cellinfos don not know about particles and forces
+  * less magic numbers
+
+### v0.9.6
+
+* **fix**: LJ potential had swapped epsilon and sigma
+
+### v0.9.5
+
+* separate sdf grid implementation into more general core/field
+* field can be initialized from std::function
+* pressure plugin uses region
+
 ### v0.9.4
 
-* fix: stress free state can be used when the cell is grown
-* fix: MembraneMesh wrapper needs GPU
+* **fix**: stress free state can be used when the cell is grown
+* **fix**: MembraneMesh wrapper needs GPU
 
 ### v0.9.3
 
-* fix: the stress entries are now cleared before forces; could be cleared more by other interaction handlers
+* **fix**: the stress entries are now cleared before forces; could be cleared more by other interaction handlers
 * use ymero state inside the simulation objects; do not have current time, step and dt separate in simulation
 
 ### v0.9.2
@@ -33,10 +148,10 @@ For more information, please refer to the online documentation: http://ymero.rea
 
 ### v0.9.0
 
-Add common YmrState object.
-This changes the interface only slightly due to the python wrapping:
-* the time step is now passed to the coordinator constructor
-* the time step is not passed to any other object
+* Add common YmrState object.
+* **interface change**:
+  * the time step is now passed to the coordinator constructor
+  * the time step is not passed to any other object
 
 ### v0.8.0
 
@@ -81,7 +196,7 @@ This changes the interface only slightly due to the python wrapping:
 
 ### v0.4.1
 
-* change interface for wall oscillation: period is in dpd units now
+* **interface change**: wall oscillation: period is in dpd units now
 
 ### v0.4.0
 

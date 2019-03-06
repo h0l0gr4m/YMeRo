@@ -1,8 +1,10 @@
 #pragma once
 
-#include <tuple>
 #include "helper_math.h"
 
+#include <tuple>
+
+static const cudaStream_t defaultStream = 0;
 
 // shuffle instructions wrappers
 #if __CUDACC_VER_MAJOR__ >= 9
@@ -22,7 +24,7 @@
 #define warpShflDown(var, delta)   __shfl_down (var, delta)
 #define warpShflUp(var, delta)     __shfl_up   (var, delta)
 #define warpShflXor(var, laneMask) __shfl_xor  (var, laneMask)
-#define warpAll(predicate)     __all       (predicate)
+#define warpAll(predicate)         __all       (predicate)
 #define warpBallot(predicate)      __ballot    (predicate)
 
 #endif
@@ -185,6 +187,23 @@ __device__ inline  int warpReduce(int val, Operation op)
 }
 
 //=======================================================================================
+// per warp prefix sum
+//=======================================================================================
+
+__device__ inline int warpInclusiveScan(int val) {
+    int tid;
+    tid = threadIdx.x % warpSize;
+    for (int L = 1; L < warpSize; L <<= 1)
+        val += (tid >= L) * warpShflUp(val, L);
+    return val;
+}
+
+__device__ inline int warpExclusiveScan(int val) {
+    return warpInclusiveScan(val) - val;
+}
+
+
+//=======================================================================================
 // Atomics for vector types
 //=======================================================================================
 
@@ -284,20 +303,22 @@ __device__ inline uint getLaneId();
 template<>
 __device__ inline uint getLaneId<1>()
 {
-    return threadIdx.x & 31;
+    return threadIdx.x & (warpSize-1);
 }
 
 template<>
 __device__ inline uint getLaneId<2>()
 {
-    return ((threadIdx.y * blockDim.x) + threadIdx.x) & 31;
+    return ((threadIdx.y * blockDim.x) + threadIdx.x) & (warpSize-1);
 }
 
 template<>
 __device__ inline uint getLaneId<3>()
 {
-    return (threadIdx.z * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x) & 31;
+    return (threadIdx.z * (blockDim.x * blockDim.y) + (threadIdx.y * blockDim.x) + threadIdx.x) & (warpSize-1);
 }
+
+#if __CUDA_ARCH__ < 700
 
 template<int DIMS=1>
 __device__ inline int atomicAggInc(int *ctr)
@@ -316,6 +337,29 @@ __device__ inline int atomicAggInc(int *ctr)
     // each thread computes its own value
     return res + __popc(mask & ((1 << lane_id) - 1));
 }
+
+#else
+
+#include <cooperative_groups.h>
+namespace cg = cooperative_groups;
+
+__device__ inline int atomicAggInc(int *ptr)
+{
+    cg::coalesced_group g = cg::coalesced_threads();
+    int prev;
+
+    // elect the first active thread to perform atomic add
+    if (g.thread_rank() == 0) {
+        prev = atomicAdd(ptr, g.size());
+    }
+
+    // broadcast previous value within the warp
+    // and add each active thread’s rank to it
+    prev = g.thread_rank() + g.shfl(prev, 0);
+    return prev;
+}
+
+#endif
 
 
 

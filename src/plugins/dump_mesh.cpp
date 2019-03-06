@@ -1,12 +1,12 @@
 #include "dump_mesh.h"
-#include "simple_serializer.h"
-#include <core/utils/folders.h>
+#include "utils/simple_serializer.h"
 
-#include <core/simulation.h>
-#include <core/pvs/particle_vector.h>
-#include <core/pvs/object_vector.h>
 #include <core/celllist.h>
+#include <core/pvs/object_vector.h>
+#include <core/pvs/particle_vector.h>
+#include <core/simulation.h>
 #include <core/utils/cuda_common.h>
+#include <core/utils/folders.h>
 
 #include <regex>
 
@@ -26,7 +26,7 @@ void MeshPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_C
 
 void MeshPlugin::beforeForces(cudaStream_t stream)
 {
-    if (currentTimeStep % dumpEvery != 0 || currentTimeStep == 0) return;
+    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 
     srcVerts = ov->local()->getMeshVertices(stream);
     srcVerts->downloadFromDevice(stream);
@@ -34,7 +34,7 @@ void MeshPlugin::beforeForces(cudaStream_t stream)
 
 void MeshPlugin::serializeAndSend(cudaStream_t stream)
 {
-    if (currentTimeStep % dumpEvery != 0 || currentTimeStep == 0) return;
+    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 
     debug2("Plugin %s is sending now data", name.c_str());
 
@@ -47,21 +47,18 @@ void MeshPlugin::serializeAndSend(cudaStream_t stream)
     auto& mesh = ov->mesh;
 
     waitPrevSend();
-    SimpleSerializer::serialize(data, ov->name,
+    SimpleSerializer::serialize(sendBuffer, ov->name,
                                 mesh->getNvertices(), mesh->getNtriangles(), mesh->triangles,
                                 vertices);
 
-    send(data);
+    send(sendBuffer);
 }
 
 //=================================================================================
 
 template<typename T>
-void writeToMPI(const std::vector<T> data, MPI_File f, MPI_Comm comm)
-{
-    MPI_Offset base;
-    MPI_Check( MPI_File_get_position(f, &base));
-
+static MPI_Offset writeToMPI(const std::vector<T>& data, MPI_File f, MPI_Offset base, MPI_Comm comm)
+{    
     MPI_Offset offset = 0, nbytes = data.size()*sizeof(T);
     MPI_Check( MPI_Exscan(&nbytes, &offset, 1, MPI_OFFSET, MPI_SUM, comm));
 
@@ -70,16 +67,16 @@ void writeToMPI(const std::vector<T> data, MPI_File f, MPI_Comm comm)
     MPI_Offset ntotal = 0;
     MPI_Check( MPI_Allreduce(&nbytes, &ntotal, 1, MPI_OFFSET, MPI_SUM, comm) );
 
-    MPI_Check( MPI_File_seek(f, ntotal, MPI_SEEK_CUR));
+    return ntotal;
 }
 
-void writePLY(
+static void writePLY(
         MPI_Comm comm, std::string fname,
         int nvertices, int nverticesPerObject,
         int ntriangles, int ntrianglesPerObject,
         int nObjects,
-        std::vector<int3>& mesh,
-        std::vector<float3>& vertices)
+        const std::vector<int3>& mesh,
+        const std::vector<float3>& vertices)
 {
     int rank;
     MPI_Check( MPI_Comm_rank(comm, &rank) );
@@ -95,7 +92,8 @@ void writePLY(
     MPI_Check( MPI_File_close(&f) );
     MPI_Check( MPI_File_open(comm, fname.c_str(), MPI_MODE_WRONLY | MPI_MODE_CREATE, MPI_INFO_NULL, &f) );
 
-    int headerSize;
+    int headerSize = 0;
+    MPI_Offset fileOffset = 0;
 
     if (rank == 0)
     {
@@ -112,14 +110,14 @@ void writePLY(
 
         std::string content = ss.str();
         headerSize = content.length();
-        MPI_Check( MPI_File_write_at(f, 0, content.c_str(), headerSize, MPI_CHAR, MPI_STATUS_IGNORE) );
+        MPI_Check( MPI_File_write_at(f, fileOffset, content.c_str(), headerSize, MPI_CHAR, MPI_STATUS_IGNORE) );
     }
 
     MPI_Check( MPI_Bcast(&headerSize, 1, MPI_INT, 0, comm) );
-    MPI_Check( MPI_File_seek(f, headerSize, MPI_SEEK_CUR));
 
-
-    writeToMPI(vertices, f, comm);
+    fileOffset += headerSize;
+    
+    fileOffset += writeToMPI(vertices, f, fileOffset, comm);
 
     int verticesOffset = 0;
     MPI_Check( MPI_Exscan(&nvertices, &verticesOffset, 1, MPI_INT, MPI_SUM, comm));
@@ -132,7 +130,7 @@ void writePLY(
             connectivity.push_back({3, vertIds.x, vertIds.y, vertIds.z});
         }
 
-    writeToMPI(connectivity, f, comm);
+    fileOffset += writeToMPI(connectivity, f, fileOffset, comm);
 
     MPI_Check( MPI_File_close(&f));
 }

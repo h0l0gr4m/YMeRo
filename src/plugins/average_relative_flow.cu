@@ -1,19 +1,19 @@
 #include "average_relative_flow.h"
 
-#include <core/utils/kernel_launch.h>
-#include <core/simulation.h>
+#include "utils/sampling_helpers.h"
+#include "utils/simple_serializer.h"
+
+#include <core/celllist.h>
+#include <core/pvs/object_vector.h>
 #include <core/pvs/particle_vector.h>
 #include <core/pvs/views/pv.h>
 #include <core/rigid_kernels/rigid_motion.h>
-#include <core/pvs/object_vector.h>
-#include <core/celllist.h>
+#include <core/simulation.h>
 #include <core/utils/cuda_common.h>
+#include <core/utils/kernel_launch.h>
 
-#include "simple_serializer.h"
-#include "sampling_helpers.h"
-
-namespace average_relative_flow_kernels {
-
+namespace AverageRelativeFlowKernels
+{
 __global__ void sampleRelative(
         PVview pvView, CellListInfo cinfo,
         float* avgDensity,
@@ -32,10 +32,9 @@ __global__ void sampleRelative(
 
     atomicAdd(avgDensity + cid, 1);
 
-    sampling_helpers_kernels::sampleChannels(pid, cid, channelsInfo);
+    SamplingHelpersKernels::sampleChannels(pid, cid, channelsInfo);
 }
-
-}
+} // namespace AverageRelativeFlowKernels
 
 AverageRelative3D::AverageRelative3D(
     const YmrState *state, std::string name, std::vector<std::string> pvNames,
@@ -77,7 +76,7 @@ void AverageRelative3D::setup(Simulation* simulation, const MPI_Comm& comm, cons
     // Relative stuff
     relativeOV = simulation->getOVbyNameOrDie(relativeOVname);
 
-    if ( !relativeOV->local()->extraPerObject.checkChannelExists("motions") )
+    if ( !relativeOV->local()->extraPerObject.checkChannelExists(ChannelNames::motions) )
         die("Only rigid objects are supported for relative flow, but got OV '%s'", relativeOV->name.c_str());
 
     int locsize = relativeOV->local()->nObjects;
@@ -98,7 +97,7 @@ void AverageRelative3D::sampleOnePv(float3 relativeParam, ParticleVector *pv, cu
 
     const int nthreads = 128;
     SAFE_KERNEL_LAUNCH
-        (average_relative_flow_kernels::sampleRelative,
+        (AverageRelativeFlowKernels::sampleRelative,
          getNblocks(pvView.size, nthreads), nthreads, 0, stream,
          pvView, cinfo, density.devPtr(), gpuInfo, relativeParam);
 }
@@ -108,7 +107,7 @@ void AverageRelative3D::afterIntegration(cudaStream_t stream)
     const int TAG = 22;
     const int NCOMPONENTS = 2 * sizeof(float3) / sizeof(float);
     
-    if (currentTimeStep % sampleEvery != 0 || currentTimeStep == 0) return;
+    if (state->currentStep % sampleEvery != 0 || state->currentStep == 0) return;
 
     debug2("Plugin %s is sampling now", name.c_str());
 
@@ -118,8 +117,8 @@ void AverageRelative3D::afterIntegration(cudaStream_t stream)
     MPI_Request req;
     MPI_Check( MPI_Irecv(relativeParams, NCOMPONENTS, MPI_FLOAT, MPI_ANY_SOURCE, TAG, comm, &req) );
 
-    auto ids     = relativeOV->local()->extraPerObject.getData<int>("ids");
-    auto motions = relativeOV->local()->extraPerObject.getData<RigidMotion>("motions");
+    auto ids     = relativeOV->local()->extraPerObject.getData<int>(ChannelNames::globalIds);
+    auto motions = relativeOV->local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
 
     ids    ->downloadFromDevice(stream, ContainersSynch::Asynch);
     motions->downloadFromDevice(stream, ContainersSynch::Synch);
@@ -164,8 +163,7 @@ void AverageRelative3D::extractLocalBlock()
 
         int ncomponents = this->getNcomponents(type);
 
-        int3 globalResolution = resolution * simulation->nranks3D;
-        int3 rank3D = simulation->rank3D;
+        int3 globalResolution = resolution * nranks3D;
 
         double factor;
         int dstId = 0;
@@ -195,7 +193,7 @@ void AverageRelative3D::extractLocalBlock()
 
 void AverageRelative3D::serializeAndSend(cudaStream_t stream)
 {
-    if (currentTimeStep % dumpEvery != 0 || currentTimeStep == 0) return;
+    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 
     for (int i = 0; i < channelsInfo.n; i++) {
         auto& data = accumulated_average[i];
@@ -204,7 +202,7 @@ void AverageRelative3D::serializeAndSend(cudaStream_t stream)
             const int nthreads = 128;
 
             SAFE_KERNEL_LAUNCH
-                (sampling_helpers_kernels::correctVelocity,
+                (SamplingHelpersKernels::correctVelocity,
                  getNblocks(data.size() / 3, nthreads), nthreads, 0, stream,
                  data.size() / 3, (double3*)data.devPtr(), accumulated_density.devPtr(), averageRelativeVelocity / (float) nSamples);
 
@@ -230,7 +228,7 @@ void AverageRelative3D::serializeAndSend(cudaStream_t stream)
 
     debug2("Plugin '%s' is now packing the data", name.c_str());
     waitPrevSend();
-    SimpleSerializer::serialize(sendBuffer, currentTime, localDensity, localChannels);
+    SimpleSerializer::serialize(sendBuffer, state->currentTime, localDensity, localChannels);
     send(sendBuffer);
 }
 

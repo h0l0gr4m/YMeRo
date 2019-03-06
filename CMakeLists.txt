@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.8)
 
 if(POLICY CMP0060)
-    cmake_policy(SET CMP0060 NEW)
+  cmake_policy(SET CMP0060 NEW)
 endif()
+
+if(POLICY CMP0074)
+  cmake_policy(SET CMP0074 NEW)
+endif()
+
 
 project(YMeRo LANGUAGES C CXX CUDA)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -27,6 +32,9 @@ execute_process(COMMAND
 add_subdirectory(src/extern/pybind11)
 
 # CUDA
+# Dynamic linking should allegedly improve UCX-based MPI,
+# but it seriously affects other code aspects (maybe stream polling?)
+#set(CUDA_USE_STATIC_CUDA_RUNTIME OFF)
 find_package(CUDA REQUIRED)
 include_directories(${CUDA_INCLUDE_DIRS})
 
