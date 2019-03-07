@@ -304,6 +304,8 @@ struct NNInput
     }
 };
 
+//implement += and + operators for different datatypes
+
 __HD__ void inline operator+=(Stress& a, const Stress& b)
 {
     a.xx += b.xx; a.xy += b.xy; a.xz += b.xz;
@@ -311,6 +313,41 @@ __HD__ void inline operator+=(Stress& a, const Stress& b)
 }
 
 __HD__ Stress inline operator+(Stress a, const Stress& b)
+{
+    a += b;
+    return a;
+}
+
+__HD__ void inline operator+=(Aprox_Density& a, const Aprox_Density& b)
+{
+    a.x += b.x; a.y += b.y; a.z += b.z;
+}
+
+__HD__ Aprox_Density inline operator+(Aprox_Density a, const Aprox_Density& b)
+{
+    a += b;
+    return a;
+}
+
+__HD__ void inline operator+=(Vorticity& a, const Vorticity& b)
+{
+    a.x += b.x; a.y += b.y; a.z += b.z;
+}
+
+__HD__ Vorticity inline operator+(Vorticity a, const Vorticity& b)
+{
+    a += b;
+    return a;
+}
+
+__HD__ void inline operator+=(Velocity_Gradient& a, const Velocity_Gradient& b)
+{
+    a.xx += b.xx; a.xy += b.xy; a.xz += b.xz;
+    a.yx += b.yx; a.yy += b.yy; a.yz += b.yz;
+    a.zx += b.zx; a.zy += b.zy; a.zz += b.zz;
+}
+
+__HD__ Velocity_Gradient inline operator+(Velocity_Gradient a, const Velocity_Gradient& b)
 {
     a += b;
     return a;

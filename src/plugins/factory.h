@@ -39,24 +39,22 @@
 
 namespace PluginFactory
 {
-    template <typename T1, typename T2>
-    using pair_shared = std::pair<std::shared_ptr<T1>, std::shared_ptr<T2>>;
+template <typename T1, typename T2>
+using pair_shared = std::pair<std::shared_ptr<T1>, std::shared_ptr<T2>>;
 
-    static void extractChannelsInfos(const std::vector< std::pair<std::string, std::string> >& channels,
-                                     std::vector<std::string>& names, std::vector<Average3D::ChannelType>& types)
-    {
-        for (auto& p : channels) {
-            names.push_back(p.first);
-            std::string typeStr = p.second;
+static void extractChannelsInfos(const std::vector< std::pair<std::string, std::string> >& channels,
+                                 std::vector<std::string>& names, std::vector<Average3D::ChannelType>& types)
+{
+    for (auto& p : channels) {
+        names.push_back(p.first);
+        std::string typeStr = p.second;
 
-            if      (typeStr == "scalar")             types.push_back(Average3D::ChannelType::Scalar);
-            else if (typeStr == "vector")             types.push_back(Average3D::ChannelType::Vector_float3);
-            else if (typeStr == "vector_from_float4") types.push_back(Average3D::ChannelType::Vector_float4);
-            else if (typeStr == "vector_from_float8") types.push_back(Average3D::ChannelType::Vector_2xfloat4);
-            else if (typeStr == "tensor6")            types.push_back(Average3D::ChannelType::Tensor6);
-            else if (typeStr == "tensor9")            types.push_back(Average3D::ChannelType::Tensor9);
-            else die("Unable to get parse channel type '%s'", typeStr.c_str());
-        }
+        if      (typeStr == "scalar")             types.push_back(Average3D::ChannelType::Scalar);
+        else if (typeStr == "vector")             types.push_back(Average3D::ChannelType::Vector_float3);
+        else if (typeStr == "vector_from_float4") types.push_back(Average3D::ChannelType::Vector_float4);
+        else if (typeStr == "vector_from_float8") types.push_back(Average3D::ChannelType::Vector_2xfloat4);
+        else if (typeStr == "tensor6")            types.push_back(Average3D::ChannelType::Tensor6);
+        else die("Unable to get parse channel type '%s'", typeStr.c_str());
     }
 }
 
@@ -66,21 +64,20 @@ static void extractPVsNames(const std::vector<ParticleVector*>& pvs, std::vector
         pvNames.push_back(pv->name);
 }
 
-    static void extractChannelInfos(const std::vector< std::pair<std::string, std::string> >& channels,
-                                    std::vector<std::string>& names, std::vector<ParticleSenderPlugin::ChannelType>& types)
-    {
-        for (auto& p : channels) {
-            names.push_back(p.first);
-            std::string typeStr = p.second;
+static void extractChannelInfos(const std::vector< std::pair<std::string, std::string> >& channels,
+                                std::vector<std::string>& names, std::vector<ParticleSenderPlugin::ChannelType>& types)
+{
+    for (auto& p : channels) {
+        names.push_back(p.first);
+        std::string typeStr = p.second;
 
-            if      (typeStr == "scalar")    types.push_back(ParticleSenderPlugin::ChannelType::Scalar);
-            else if (typeStr == "vector")    types.push_back(ParticleSenderPlugin::ChannelType::Vector);
-            else if (typeStr == "tensor6")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor6);
-            else if (typeStr == "tensor9")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor9);
-            else die("Unable to get parse channel type '%s'", typeStr.c_str());
-        }
+        if      (typeStr == "scalar")    types.push_back(ParticleSenderPlugin::ChannelType::Scalar);
+        else if (typeStr == "vector")    types.push_back(ParticleSenderPlugin::ChannelType::Vector);
+        else if (typeStr == "tensor6")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor6);
+        else die("Unable to get parse channel type '%s'", typeStr.c_str());
     }
 }
+
 
 
 
@@ -263,21 +260,8 @@ createMembraneExtraForcePlugin(bool computeTask, const YmrState *state, std::str
     auto simPl = computeTask ?
         std::make_shared<MembraneExtraForcePlugin> (state, name, pv->name, forces) : nullptr;
 
-<<<<<<< HEAD
-    static pair_shared< PinObjectPlugin, ReportPinObjectPlugin >
-    createPinObjPlugin(bool computeTask, const YmrState *state, std::string name, ObjectVector* ov,
-                       int dumpEvery, std::string path,
-                       PyTypes::float3 velocity, PyTypes::float3 omega)
-    {
-        auto simPl  = computeTask ? std::make_shared<PinObjectPlugin> (state, name, ov->name,
-                                                                       make_float3(velocity), make_float3(omega),
-                                                                       dumpEvery) :
-            nullptr;
-        auto postPl = computeTask ? nullptr : std::make_shared<ReportPinObjectPlugin> (name, path);
-=======
     return { simPl, nullptr };
 }
->>>>>>> b60194b3b40086b40a49c5aa1d01e22186c67d32
 
 static pair_shared< ParticleChannelSaverPlugin, PostprocessPlugin >
 createParticleChannelSaverPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv,

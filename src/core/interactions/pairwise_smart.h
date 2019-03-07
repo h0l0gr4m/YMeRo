@@ -1,12 +1,12 @@
 #pragma once
 #include "interface.h"
-#include "pairwise_interactions/smartdpd.h"
-#include "calculations/FlowProperties.h"
-#include "calculations/NNInputs.h"
-
+#include <core/datatypes.h>
+#include <core/containers.h>
 
 
 #include <map>
+#include <core/datatypes.h>
+
 
 /**
  * Implementation of short-range symmetric pairwise interactions
@@ -15,15 +15,15 @@ template<class PairwiseInteraction>
 class InteractionPairSmart : public Interaction
 {
 public:
-    enum class InteractionType { Regular, Halo };
 
-    InteractionPairSmart(const YmrState *state,std::string name, std::string parameterName, PinnedBuffer<float> Weights,float a, float gamma,  float rc, PairwiseInteraction pair) :
-      ~InteractionPairSmart() = default;
+    InteractionPairSmart(const YmrState *state,std::string name, std::string parameterName, PinnedBuffer<float> Weights,float a, float gamma,  float rc, PairwiseInteraction pair);
+      ~InteractionPairSmart();
 
     void local(ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2,  cudaStream_t stream) override;
     void halo   (ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2,  cudaStream_t stream) override;
 
     void setSpecificPair(std::string pv1name, std::string pv2name, PairwiseInteraction pair);
+    void setPrerequisites(ParticleVector* pv1, ParticleVector* pv2,CellList* cl1, CellList* cl2) override ;
 
 private:
 

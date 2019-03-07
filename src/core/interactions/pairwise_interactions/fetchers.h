@@ -25,7 +25,7 @@ public:
 
     using ViewType     = PVview;
     using ParticleType = Particle;
-    
+
     ParticleFetcher(float rc) :
         rc(rc),
         rc2(rc*rc)
@@ -42,7 +42,7 @@ public:
     {
         return Particle(::readNoCache(view.particles + 2*id), make_float4(0.f, 0.f, 0.f, 0.f));
     }
-    
+
     __D__ inline void readCoordinates(ParticleType& p, const ViewType& view, int id) const { p.readCoordinate(view.particles, id); }
     __D__ inline void readExtraData  (ParticleType& p, const ViewType& view, int id) const { /* no velocity here */ }
 
@@ -52,7 +52,7 @@ public:
     }
 
     __D__ inline float3 getPosition(const ParticleType& p) const {return p.r;}
-    
+
 protected:
 
     float rc, rc2;
@@ -64,7 +64,7 @@ protected:
 class ParticleFetcherWithVelocity : public ParticleFetcher
 {
 public:
-    
+
     ParticleFetcherWithVelocity(float rc) :
         ParticleFetcher(rc)
     {}
@@ -95,7 +95,7 @@ public:
 
     using ViewType     = PVviewWithDensities;
     using ParticleType = ParticleWithDensity;
-    
+
     ParticleFetcherWithVelocityAndDensity(float rc) :
         ParticleFetcherWithVelocity(rc)
     {}
@@ -116,7 +116,7 @@ public:
     {
         ParticleFetcherWithVelocity::readCoordinates(p.p, view, id);
     }
-    
+
     __D__ inline void readExtraData  (ParticleType& p, const ViewType& view, int id) const
     {
         ParticleFetcherWithVelocity::readExtraData(p.p, view, id);

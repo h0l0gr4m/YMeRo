@@ -48,8 +48,8 @@ public:
         std::mt19937 gen(v);
         std::uniform_real_distribution<float> udistr(0.001, 1);
         seed = udistr(gen);
-        pv1DPDparameter = lpv1->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
-        pv2DPDparameter = lpv2->extraPerParticle.getData<DPDparameter>(parameterName)->devPtr();
+        pv1DPDparameter = lpv1->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+        pv2DPDparameter = lpv2->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
 
     }
 
@@ -57,7 +57,6 @@ public:
     {
         const float alpha_p = (pv1DPDparameter[dstId].alpha_p + pv2DPDparameter[srcId].alpha_p)/2;
         const float gamma_p = (pv1DPDparameter[dstId].gamma_p + pv2DPDparameter[srcId].gamma_p)/2;
-        // printf("a: %f , gamma : %f \n" ,alpha_p ,gamma_p);
         float sigma_p = sqrt(2 * gamma_p * kbT / dt);
         const float3 dr = dst.r - src.r;
         const float rij2 = dot(dr, dr);
@@ -67,7 +66,6 @@ public:
         const float rij = rij2 * invrij;
         const float argwr = 1.0f - rij * invrc;
         const float wr = fastPower(argwr, power);
-        // printf("dstId: %d , dstu.x : %f , srcId : %d , srcu.x: %f\n", dstId , dst.u.x, srcId , src.u.x);
         const float3 dr_r = dr * invrij;
         const float3 du = dst.u - src.u;
         const float rdotv = dot(dr_r, du);

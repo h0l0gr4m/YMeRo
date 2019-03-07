@@ -1,24 +1,41 @@
 #include "pairwise_smart.h"
 
+#include <core/datatypes.h>
 #include <core/utils/cuda_common.h>
 #include <core/utils/kernel_launch.h>
 #include <core/celllist.h>
 #include <core/pvs/particle_vector.h>
 #include <core/pvs/views/pv.h>
 #include <core/logger.h>
+#include <core/utils/common.h>
 
 #include "pairwise_kernels.h"
 #include "pairwise_interactions/stress_wrapper.h"
 #include "pairwise_interactions/dpd.h"
+#include "pairwise_interactions/smartdpd.h"
+
 #include "pairwise_interactions/lj.h"
 #include "pairwise_interactions/lj_object_aware.h"
 #include "pairwise_interactions/norandom_dpd.h"
 #include "pairwise_interactions/density.h"
 #include "pairwise_interactions/mdpd.h"
 
+
+//Copy kernel, for copying initial a and gamma value to every particles
+__global__ void copy_kernel(DPDparameter* devPointer1,DPDparameter* devPointer2,int np, float a, float gamma)
+{
+   const int dstId = blockIdx.x*blockDim.x + threadIdx.x;
+   if (dstId >= np) return;
+   devPointer1[dstId].alpha_p = a;
+   devPointer1[dstId].gamma_p = gamma;
+   devPointer2[dstId].alpha_p = a;
+   devPointer2[dstId].gamma_p = gamma;
+
+}
+
 template <class PairwiseInteraction>
-InteractionPairSmart<PairwiseInteraction>::InteractionPairSmart(const YmrState *state, std::string name, std::string parameterName, PinnedBuffer<float> Weights, float rc,float a, float gamma,PairwiseInteraction pair) :
-    Interaction(state, name, rc), defaultPair(pair),parameterName(parameterName),Weights(Weights),a(a),gamma(a)
+InteractionPairSmart<PairwiseInteraction>::InteractionPairSmart(const YmrState *state, std::string name, std::string parameterName, PinnedBuffer<float> Weights, float a, float gamma,float rc,PairwiseInteraction pair) :
+    Interaction(state, name, rc), defaultPair(pair),parameterName(parameterName),Weights(Weights),a(a),gamma(gamma)
 {}
 
 template <class PairwiseInteraction>
@@ -211,6 +228,49 @@ void InteractionPairSmart<PairwiseInteraction>::computeHalo(
             CHOOSE_EXTERNAL(InteractionOut::NeedAcc, InteractionOut::NeedAcc, InteractionMode::Dilute, pair );
 }
 
+
+template<class PairwiseInteraction>
+void InteractionPairSmart<PairwiseInteraction>::setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2)
+{
+    info("Interaction '%s' requires channel '%s' from PVs '%s' and '%s'",
+         name.c_str(), ChannelNames::DPDparameters.c_str(), pv1->name.c_str(), pv2->name.c_str());
+
+    pv1->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <DPDparameter> (ChannelNames::DPDparameters);
+    cl2->requireExtraDataPerParticle <DPDparameter> (ChannelNames::DPDparameters);
+
+    pv1->requireDataPerParticle <Vorticity> (ChannelNames::vorticities, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Vorticity> (ChannelNames::vorticities, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <Vorticity> (ChannelNames::vorticities);
+    cl2->requireExtraDataPerParticle <Vorticity> (ChannelNames::vorticities);
+
+    pv1->requireDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities);
+    cl2->requireExtraDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities);
+
+    pv1->requireDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients, ExtraDataManager::CommunicationMode::None, ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients);
+    cl2->requireExtraDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients);
+
+
+    auto pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+    auto pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+    int nth = 128;
+    int np = pv1->local()->size();
+    SAFE_KERNEL_LAUNCH(
+        copy_kernel,
+        getNblocks(np, nth), nth, 0, 0,
+        pv1DPDparameter,pv2DPDparameter,np,a,gamma);
+
+}
+
 template<class PairwiseInteraction>
 PairwiseInteraction& InteractionPairSmart<PairwiseInteraction>::getPairwiseInteraction(std::string pv1name, std::string pv2name)
 {
@@ -236,6 +296,4 @@ template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_DPD>>;
 template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJ>>;
 template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJObjectAware>>;
 template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_MDPD>>;
-
-// for testing purpose
-template class InteractionPairSmart<Pairwise_Norandom_DPD>;
+template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_SmartDPD>>;

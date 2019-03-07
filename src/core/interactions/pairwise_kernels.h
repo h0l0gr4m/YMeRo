@@ -55,40 +55,37 @@ enum class InteractionMode
  * forces, such that either p1 \<-\> p2 or p2 \<-\> p1 is ignored
  * based on particle ids
  */
-template<InteractionOut NeedDstAcc, InteractionOut NeedSrcAcc, InteractionWith InteractWith,
-         typename Interaction, typename Accumulator>
-__device__ inline void computeCell(
-        int pstart, int pend,
-        typename Interaction::ParticleType dstP, int dstId, typename Interaction::ViewType srcView, float rc2,
-        Interaction& interaction, Accumulator& accumulator)
-{
-    for (int srcId = pstart; srcId < pend; srcId++)
-    {
-        typename Interaction::ParticleType srcP;
-        interaction.readCoordinates(srcP, srcView, srcId);
-
-        bool interacting = interaction.withinCutoff(srcP, dstP);
-
+ template<InteractionOut NeedDstAcc, InteractionOut NeedSrcAcc, InteractionWith InteractWith,
+          typename Interaction, typename Accumulator>
+ __device__ inline void computeCell(
+         int pstart, int pend,
+         typename Interaction::ParticleType dstP, int dstId, typename Interaction::ViewType srcView, float rc2,
+         Interaction& interaction, Accumulator& accumulator)
+ {
      for (int srcId = pstart; srcId < pend; srcId++)
      {
-         Particle srcP;
-         srcP.readCoordinate(cinfo.particles, srcId);
-         bool interacting = distance2(srcP.r, dstP.r) < rc2;
+         typename Interaction::ParticleType srcP;
+         interaction.readCoordinates(srcP, srcView, srcId);
 
-        if (interacting)
-        {
-            interaction.readExtraData(srcP, srcView, srcId);
+         bool interacting = interaction.withinCutoff(srcP, dstP);
 
-            auto val = interaction(dstP, dstId, srcP, srcId);
+         if (InteractWith == InteractionWith::Self)
+             if (dstId <= srcId) interacting = false;
 
-            if (NeedDstAcc == InteractionOut::NeedAcc)
-                accumulator.add(val);
+         if (interacting)
+         {
+             interaction.readExtraData(srcP, srcView, srcId);
 
-            if (NeedSrcAcc == InteractionOut::NeedAcc)
-                accumulator.atomicAddToSrc(val, srcView, srcId);
-        }
-    }
-}
+             auto val = interaction(dstP, dstId, srcP, srcId);
+
+             if (NeedDstAcc == InteractionOut::NeedAcc)
+                 accumulator.add(val);
+
+             if (NeedSrcAcc == InteractionOut::NeedAcc)
+                 accumulator.atomicAddToSrc(val, srcView, srcId);
+         }
+     }
+ }
 
 /**
  * Compute interactions within a single ParticleVector.
@@ -114,13 +111,7 @@ __global__ void computeSelfInteractions(
         const float rc2, Interaction interaction)
 {
     const int dstId = blockIdx.x*blockDim.x + threadIdx.x;
-<<<<<<< HEAD
-    if (dstId >= np) return;
-    const Particle dstP(cinfo.particles, dstId);
-    // printf("dstId: %d ; dstPu.x: %f \n" , dstId , dstP.u.x);
-    float3 dstFrc = make_float3(0.0f);
-    const int3 cell0 = cinfo.getCellIdAlongAxes(dstP.r);
-=======
+
     if (dstId >= view.size) return;
 
     const auto dstP = interaction.read(view, dstId);
@@ -128,7 +119,7 @@ __global__ void computeSelfInteractions(
     auto accumulator = interaction.getZeroedAccumulator();
 
     const int3 cell0 = cinfo.getCellIdAlongAxes(interaction.getPosition(dstP));
->>>>>>> b60194b3b40086b40a49c5aa1d01e22186c67d32
+
 
     for (int cellZ = cell0.z-1; cellZ <= cell0.z+1; cellZ++)
         for (int cellY = cell0.y-1; cellY <= cell0.y; cellY++)
@@ -156,7 +147,6 @@ __global__ void computeSelfInteractions(
     accumulator.atomicAddToDst(accumulator.get(), view, dstId);
 }
 
-}
 
 /**
  * Compute interactions between particle of two different ParticleVector.

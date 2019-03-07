@@ -14,7 +14,7 @@
  * Implementation of short-range symmetric pairwise interactions
  */
 template<class PairwiseInteraction>
-class SmartInteractionPair_withStress : public Interaction
+class InteractionPairSmart_withStress : public Interaction
 {
 public:
     enum class InteractionType { Regular, Halo };
@@ -23,13 +23,13 @@ public:
     void halo   (ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2,  cudaStream_t stream) override;
     void setPrerequisites(ParticleVector* pv1, ParticleVector* pv2,CellList* cl1, CellList* cl2) override ;
 
-    SmartInteractionPair_withStress(const YmrState *state,std::string name,std::string parameterName,PinnedBuffer<float> Weights,float a,float gamma, std::string stressName, float rc, float stressPeriod, PairwiseInteraction pair);
+    InteractionPairSmart_withStress(const YmrState *state,std::string name,std::string parameterName,std::string stressName, PinnedBuffer<float> Weights,float a,float gamma, float rc, float stressPeriod, PairwiseInteraction pair);
 
     void setSpecificPair(std::string pv1name, std::string pv2name, PairwiseInteraction pair);
     std::vector<InteractionChannel> getFinalOutputChannels() const override;
 
 
-    ~SmartInteractionPair_withStress() = default;
+    ~InteractionPairSmart_withStress();
 
 private:
     float a;
