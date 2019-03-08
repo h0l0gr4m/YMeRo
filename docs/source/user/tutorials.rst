@@ -86,7 +86,7 @@ Additionally, the particle positions and velocities are dumped in the ``h5`` fol
     Visualisation made in `visit <https://wci.llnl.gov/simulation/computer-codes/visit>`_.
 
 
-Adding walls
+Adding Walls
 ************
 
 We extend the previous example by introducing :py:mod:`Walls <_ymero.Walls>` in the simulation.
@@ -126,4 +126,35 @@ Additionally, frozen and solvent particles, as well as the walls SDF are dumped 
     The white particles represent the solvent, the blue particles are the frozen wall particles and the surface is the 0 level set of the SDF file.
 
 
+Membranes
+*********
 
+:py:class:`Membranes <_ymero.ParticleVectors.MembraneVector>` are a set of particles connected into a triangle mesh.
+They can interact as normal :py:class:`PVs <_ymero.ParticleVectors.ParticleVector>` but have additional *internal* interactions, which we will use in this example.
+
+.. literalinclude:: ../../../tests/doc_scripts/membrane.py
+   :name: membrane-py
+   :caption: `membrane.py`
+
+.. note::
+   The interactions handle different combinations of shear and bending models.
+   Each model may require different parameters.
+   Refer to :py:meth:`_ymero.Interactions.MembraneForces` for more information on the models and their corresponding parameters.
+
+.. figure:: ../images/docs/membrane.gif
+    :figclass: align-center
+    :width: 25%
+
+    Sequence data dumped by executing the :ref:`membrane-py` script.    
+
+    
+Creating Cells with Different inner and outer liquids
+*****************************************************
+
+TODO
+
+
+Creating Rigid Objects
+**********************
+
+TODO
