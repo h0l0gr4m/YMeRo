@@ -1,10 +1,10 @@
 #pragma once
 #include "interface.h"
 #include "pairwise_smart.h"
-#include "pairwise_interactions/stress_wrapper.h"
 #include "pairwise_interactions/smartdpd.h"
 #include "calculations/FlowProperties.h"
 #include "calculations/FlowProperties_withStress.h"
+#include "pairwise_interactions/stress_wrapper.h"
 
 
 
@@ -44,6 +44,6 @@ private:
     std::string parameterName;
     PinnedBuffer<float> Weights;
 
-    InteractionPairSmart<FlowProperties<PairwiseInteraction>> interaction;
-    InteractionPairSmart<FlowProperties_withStress<PairwiseInteraction>> interactionWithStress;
+    InteractionPairSmart<PairwiseInteraction> interaction;
+    InteractionPairSmart<PairwiseStressWrapper<PairwiseInteraction>> interactionWithStress;
 };

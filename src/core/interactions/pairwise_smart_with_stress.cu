@@ -13,8 +13,8 @@ InteractionPairSmart_withStress<PairwiseInteraction>::InteractionPairSmart_withS
 
     Interaction(state, name, rc),
     stressPeriod(stressPeriod),
-    interaction(state, name,parameterName,Weights,a,gamma,rc, FlowProperties<PairwiseInteraction>(pair)),
-    interactionWithStress(state, name,parameterName,Weights,a,gamma, rc, FlowProperties_withStress<PairwiseInteraction>(pair))
+    interaction(state, name,parameterName,Weights,a,gamma,rc, pair),
+    interactionWithStress(state, name,parameterName,Weights,a,gamma, rc,PairwiseStressWrapper<PairwiseInteraction>(pair))
 {}
 
 template<class PairwiseInteraction>
@@ -87,15 +87,8 @@ template<class PairwiseInteraction>
 void InteractionPairSmart_withStress<PairwiseInteraction>::setSpecificPair(
         std::string pv1name, std::string pv2name, PairwiseInteraction pair)
 {
-    interaction.          setSpecificPair(pv1name, pv2name, FlowProperties<PairwiseInteraction>(pair));
-    interactionWithStress.setSpecificPair(pv1name, pv2name, FlowProperties_withStress<PairwiseInteraction>(pair));
+    interaction.          setSpecificPair(pv1name, pv2name, pair);
+    interactionWithStress.setSpecificPair(pv1name, pv2name, PairwiseStressWrapper<PairwiseInteraction>(pair));
 }
 
-
-template class InteractionPairSmart_withStress<Pairwise_DPD>;
-template class InteractionPairSmart_withStress<Pairwise_LJ>;
-template class InteractionPairSmart_withStress<Pairwise_LJObjectAware>;
-template class InteractionPairSmart_withStress<Pairwise_MDPD>;
 template class InteractionPairSmart_withStress<Pairwise_SmartDPD>;
-template class InteractionPairSmart_withStress<FlowProperties<Pairwise_SmartDPD>>;
-template class InteractionPairSmart_withStress<FlowProperties_withStress<Pairwise_SmartDPD>>;

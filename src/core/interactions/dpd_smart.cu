@@ -21,8 +21,8 @@ InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name
         memcpy(devP, &weights[0], weights.size() * sizeof(float));
         Weights.uploadToDevice(0);
         Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
-        FlowProperties<Pairwise_SmartDPD> fp (dpd);
-        impl = std::make_unique<InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>> (state,name,parameterName,Weights,a,gamma ,rc,fp);
+        // FlowProperties<Pairwise_SmartDPD> fp (dpd);
+        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (state,name,parameterName,Weights,a,gamma ,rc,dpd);
 
     }
 
@@ -69,8 +69,8 @@ void InteractionSmartDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* p
 
 
     Pairwise_SmartDPD dpd(parameterName,this->rc, a, gamma, kbt, state->dt, power);
-    FlowProperties<Pairwise_SmartDPD> fp (dpd);
-    auto ptr = static_cast< InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>* >(impl.get());
+    // FlowProperties<Pairwise_SmartDPD> fp (dpd);
+    auto ptr = static_cast< InteractionPairSmart<Pairwise_SmartDPD>* >(impl.get());
 
-    ptr->setSpecificPair(pv1->name, pv2->name, fp);
+    ptr->setSpecificPair(pv1->name, pv2->name, dpd);
 }

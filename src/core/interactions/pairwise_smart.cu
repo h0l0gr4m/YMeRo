@@ -288,13 +288,6 @@ PairwiseInteraction& InteractionPairSmart<PairwiseInteraction>::getPairwiseInter
     }
 }
 
+
 template class InteractionPairSmart<Pairwise_SmartDPD>;
-template class InteractionPairSmart<Pairwise_DPD>;
-template class InteractionPairSmart<Pairwise_LJ>;
-template class InteractionPairSmart<Pairwise_LJObjectAware>;
-template class InteractionPairSmart<Pairwise_density>;
-template class InteractionPairSmart<Pairwise_MDPD>;
-
-
-template class InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>;
-template class InteractionPairSmart<FlowProperties_withStress<Pairwise_SmartDPD>>;
+template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_SmartDPD>>;

@@ -2,6 +2,13 @@
 #include "interface.h"
 #include "pairwise.h"
 #include "pairwise_interactions/stress_wrapper.h"
+#include "pairwise_interactions/stress_wrapper.h"
+#include "pairwise_interactions/dpd.h"
+#include "pairwise_interactions/lj.h"
+#include "pairwise_interactions/lj_object_aware.h"
+#include "pairwise_interactions/norandom_dpd.h"
+#include "pairwise_interactions/density.h"
+#include "pairwise_interactions/mdpd.h"
 
 #include <core/datatypes.h>
 #include <map>
