@@ -13,6 +13,9 @@
 #include "pairwise_interactions/stress_wrapper.h"
 #include "pairwise_interactions/dpd.h"
 #include "pairwise_interactions/smartdpd.h"
+#include "calculations/FlowProperties.h"
+#include "calculations/FlowProperties_withStress.h"
+
 
 #include "pairwise_interactions/lj.h"
 #include "pairwise_interactions/lj_object_aware.h"
@@ -292,8 +295,6 @@ template class InteractionPairSmart<Pairwise_LJObjectAware>;
 template class InteractionPairSmart<Pairwise_density>;
 template class InteractionPairSmart<Pairwise_MDPD>;
 
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_DPD>>;
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJ>>;
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_LJObjectAware>>;
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_MDPD>>;
-template class InteractionPairSmart<PairwiseStressWrapper<Pairwise_SmartDPD>>;
+
+template class InteractionPairSmart<FlowProperties<Pairwise_SmartDPD>>;
+template class InteractionPairSmart<FlowProperties_withStress<Pairwise_SmartDPD>>;

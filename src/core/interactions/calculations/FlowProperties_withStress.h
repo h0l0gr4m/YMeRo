@@ -1,8 +1,9 @@
 //---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 #pragma once
 
+#include <core/interactions/calculations/FlowProperties.h>
 #include <core/datatypes.h>
-#include <core/interactions/accumulators/forceFlowProperties.h>
+#include <core/interactions/accumulators/forceStressFlowProperties.h>
 #include <core/utils/common.h>
 
 #ifndef __NVCC__
@@ -16,41 +17,19 @@ float fastPower(float x, float a)
 
 
 
-inline __device__ float der_eta_kernel(float r)
-{
-	float q = 0.574*(-8*fastPower(r,3)+8*fastPower(r,7));
-	return q;
-}
-
-inline __device__ float eta_kernel(float r)
-{
-	float q = 0.574*(-2*fastPower(r,4)+fastPower(r,8));
-	return q;
-}
-
-
-inline __device__ float symmetry_function(float r, float eta , float R_s)
-{
-  const float x = fastPower((r-R_s),2);
-	const float q = -eta*x;
-  const float y = exp(q);
-	return y;
-}
-
-
 class LocalParticleVector;
 class CellList;
 
 template<typename BasicPairwiseForce>
-class FlowProperties
+class FlowProperties_withStress
 {
 public:
 
     using BasicViewType = typename BasicPairwiseForce::ViewType;
-    using ViewType      = PVviewWithFlowProperties<BasicViewType>;
+    using ViewType      = PVviewWithStressFlowProperties<BasicViewType>;
     using ParticleType  = typename BasicPairwiseForce::ParticleType;
 
-    FlowProperties(BasicPairwiseForce basicForce) :
+    FlowProperties_withStress(BasicPairwiseForce basicForce) :
         basicForce(basicForce)
     {}
 
@@ -66,7 +45,7 @@ public:
     __D__ inline bool withinCutoff(const ParticleType& src, const ParticleType& dst) const { return basicForce.withinCutoff(src, dst);}
     __D__ inline float3 getPosition(const ParticleType& p) const {return basicForce.getPosition(p);}
 
-    __device__ inline ForceFlowProperty operator()(const ParticleType dst, int dstId, const ParticleType src, int srcId) const
+    __device__ inline ForceStressFlowProperty operator()(const ParticleType dst, int dstId, const ParticleType src, int srcId) const
     {
         float3 dr = getPosition(dst) - getPosition(src);
         float3 du = dst.u - src.u;
@@ -77,9 +56,17 @@ public:
         const float Vj  = 1.0/6.0;
         const float q = invrij*Vj*der_eta_kernel(rij);
 
+        Stress s;
         Vorticity vorticity;
         Aprox_Density aprox_density;
         Velocity_Gradient velocity_gradient;
+
+        s.xx = 0.5f * dr.x * f.x;
+        s.xy = 0.5f * dr.x * f.y;
+        s.xz = 0.5f * dr.x * f.z;
+        s.yy = 0.5f * dr.y * f.y;
+        s.yz = 0.5f * dr.y * f.z;
+        s.zz = 0.5f * dr.z * f.z;
 
         // calculate velocity gradient matrix
 
@@ -104,10 +91,10 @@ public:
         aprox_density.z = symmetry_function(rij,0.9,0.5)*eta_kernel(rij);
 
 
-        return {f,aprox_density,vorticity,velocity_gradient};
+        return {f,s,aprox_density,vorticity,velocity_gradient};
     }
 
-    __D__ inline ForceFlowPropertyAccumulator<BasicViewType> getZeroedAccumulator() const {return ForceFlowPropertyAccumulator<BasicViewType>();}
+    __D__ inline ForceStressFlowPropertyAccumulator<BasicViewType> getZeroedAccumulator() const {return ForceStressFlowPropertyAccumulator<BasicViewType>();}
 
 private:
 
