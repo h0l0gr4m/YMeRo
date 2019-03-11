@@ -27,14 +27,9 @@ void InteractionDPDWithStress::setSpecificPair(ParticleVector* pv1, ParticleVect
     if (kbt   == Default) kbt   = this->kbt;
     if (power == Default) power = this->power;
 
-<<<<<<< HEAD
-    Pairwise_DPD dpd(this->rc, a, gamma, kbt, state->dt, power);
-    auto ptr = static_cast< InteractionPair_withStress<Pairwise_DPD>* >(impl.get());
 
-=======
     PairwiseDPD dpd(this->rc, a, gamma, kbt, state->dt, power);
     auto ptr = static_cast< InteractionPair_withStress<PairwiseDPD>* >(impl.get());
-    
->>>>>>> 81edb937ff9697c0653c888cd848c75911046530
+
     ptr->setSpecificPair(pv1->name, pv2->name, dpd);
 }

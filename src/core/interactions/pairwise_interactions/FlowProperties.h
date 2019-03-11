@@ -2,7 +2,7 @@
 #pragma once
 
 #include <core/datatypes.h>
-#include <core/interactions/accumulators/forceFlowProperties.h>
+#include <core/interactions/accumulators/accFlowProperties.h>
 #include <core/utils/common.h>
 
 #ifndef __NVCC__
@@ -41,36 +41,26 @@ inline __device__ float symmetry_function(float r, float eta , float R_s)
 class LocalParticleVector;
 class CellList;
 
-template<typename BasicPairwiseForce>
-class FlowProperties
+
+class PairwiseFlowProperties : public ParticleFetcherWithVelocityandFlowProperties
 {
 public:
+    using ViewType     = PVviewWithFlowProperties;
+    using ParticleType = ParticleWithFlowProperties;
+    using HandlerType  = PairwiseFlowProperties;
 
-    using BasicViewType = typename BasicPairwiseForce::ViewType;
-    using ViewType      = PVviewWithFlowProperties<BasicViewType>;
-    using ParticleType  = typename BasicPairwiseForce::ParticleType;
 
-    FlowProperties(BasicPairwiseForce basicForce) :
-        basicForce(basicForce)
+    PairwiseFlowProperties(float rc) :
+        ParticleFetcherWithVelocityandFlowProperties(rc)
     {}
 
-    void setup(LocalParticleVector *lpv1, LocalParticleVector *lpv2, CellList *cl1, CellList *cl2, float t)
-    {
-        basicForce.setup(lpv1, lpv2, cl1, cl2, t);
-    }
+    void setup(LocalParticleVector *lpv1, LocalParticleVector *lpv2, CellList *cl1, CellList *cl2, const YmrState *state)
+    {}
 
-    __D__ inline ParticleType read(const ViewType& view, int id) const                     { return        basicForce.read(view, id); }
-    __D__ inline ParticleType readNoCache(const ViewType& view, int id) const              { return basicForce.readNoCache(view, id); }
-    __D__ inline void readCoordinates(ParticleType& p, const ViewType& view, int id) const { basicForce.readCoordinates(p, view, id); }
-    __D__ inline void readExtraData  (ParticleType& p, const ViewType& view, int id) const { basicForce.readExtraData  (p, view, id); }
-    __D__ inline bool withinCutoff(const ParticleType& src, const ParticleType& dst) const { return basicForce.withinCutoff(src, dst);}
-    __D__ inline float3 getPosition(const ParticleType& p) const {return basicForce.getPosition(p);}
-
-    __device__ inline ForceFlowProperty operator()(const ParticleType dst, int dstId, const ParticleType src, int srcId) const
+    __device__ inline flowproperties operator()(const ParticleType dst, int dstId, const ParticleType src, int srcId) const
     {
-        float3 dr = getPosition(dst) - getPosition(src);
-        float3 du = dst.u - src.u;
-        float3 f  = basicForce(dst, dstId, src, srcId);
+        float3 dr =dst.p.r - src.p.r;
+        float3 du = dst.p.u - src.p.u;
         const float rij2 = dot(dr, dr);
         const float invrij = rsqrtf(rij2);
         const float rij = rij2 * invrij;
@@ -104,12 +94,17 @@ public:
         aprox_density.z = symmetry_function(rij,0.9,0.5)*eta_kernel(rij);
 
 
-        return {f,aprox_density,vorticity,velocity_gradient};
+        return {aprox_density,vorticity,velocity_gradient};
+    }
+    const HandlerType& handler() const
+    {
+        return (const HandlerType&) (*this);
     }
 
-    __D__ inline ForceFlowPropertyAccumulator<BasicViewType> getZeroedAccumulator() const {return ForceFlowPropertyAccumulator<BasicViewType>();}
+
+    __D__ inline FlowPropertyAccumulator getZeroedAccumulator() const {return FlowPropertyAccumulator();}
 
 private:
 
-    BasicPairwiseForce basicForce;
+    float rc;
 };

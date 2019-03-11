@@ -362,6 +362,26 @@ void exportInteractions(py::module& m)
             Override some of the interaction parameters for a specific pair of Particle Vectors
     )");
 
+    py::handlers_class<InteractionFlowProperty> pyIntFlowProperty(m, "FlowProperty", pyInt, R"(
+        Compute MDPD density of particles, see [Warren2003]_
+
+        .. math::
+
+            \rho_i = \sum\limits_{j \neq i} w_\rho (r_{ij})
+        where the summation goes over the neighbours of particle :math:`i` within a cutoff range of :math:`r_c`, and
+        .. math::
+
+            w_\rho(r) = \begin{cases} \frac{15}{2\pi r_d^3}\left(1-\frac{r}{r_d}\right)^2, & r < r_d \\ 0, & r \geqslant r_d \end{cases}
+    )");
+
+    pyIntFlowProperty.def(py::init<const YmrState*, std::string, float>(),
+                     "state"_a, "name"_a, "rc"_a, R"(
+            Args:
+                name: name of the interaction
+                rc: interaction cut-off
+    )");
+
+
 
     py::handlers_class<InteractionSmartDPDWithStress> pyIntSmartDPDWithStress(m, "SmartDPDWithStress", pyIntSmartDPD, R"(
         wrapper of :any:`SmartDPD` with, in addition, stress computation

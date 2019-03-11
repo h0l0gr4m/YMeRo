@@ -67,39 +67,18 @@ struct PVviewWithStresses : public BasicView
     }
 };
 
-template <typename BasicView>
-struct PVviewWithFlowProperties : public BasicView
+
+struct PVviewWithFlowProperties : public PVview
 {
     Vorticity *vorticities = nullptr;
     Aprox_Density *aprox_densities = nullptr;
     Velocity_Gradient *velocity_gradients = nullptr;
 
     PVviewWithFlowProperties(ParticleVector *pv = nullptr, LocalParticleVector *lpv = nullptr) :
-        BasicView(pv, lpv)
+        PVview(pv, lpv)
     {
         if (lpv != nullptr)
         {
-            vorticities = lpv->extraPerParticle.getData<Vorticity>(ChannelNames::vorticities)->devPtr();
-            aprox_densities = lpv->extraPerParticle.getData<Aprox_Density>(ChannelNames::aprox_densities)->devPtr();
-            velocity_gradients = lpv->extraPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
-        }
-    }
-};
-
-template <typename BasicView>
-struct PVviewWithStressFlowProperties : public BasicView
-{
-    Stress *stresses = nullptr;
-    Vorticity *vorticities = nullptr;
-    Aprox_Density *aprox_densities = nullptr;
-    Velocity_Gradient *velocity_gradients = nullptr;
-
-    PVviewWithStressFlowProperties(ParticleVector *pv = nullptr, LocalParticleVector *lpv = nullptr) :
-        BasicView(pv, lpv)
-    {
-        if (lpv != nullptr)
-        {
-            stresses = lpv->extraPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
             vorticities = lpv->extraPerParticle.getData<Vorticity>(ChannelNames::vorticities)->devPtr();
             aprox_densities = lpv->extraPerParticle.getData<Aprox_Density>(ChannelNames::aprox_densities)->devPtr();
             velocity_gradients = lpv->extraPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();

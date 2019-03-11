@@ -1,14 +1,77 @@
 #include "dpd_smart.h"
 #include <memory>
-#include "pairwise_smart.h"
 #include "pairwise_interactions/dpd.h"
 #include "pairwise_interactions/smartdpd.h"
+#include "pairwise.impl.h"
+#include "particle_kernel.h"
 
-#include "calculations/FlowProperties.h"
+#include "pairwise_interactions/FlowProperties.h"
 
 
 #include <core/utils/make_unique.h>
 #include <core/pvs/particle_vector.h>
+
+
+
+
+InteractionFlowProperty::InteractionFlowProperty(const YmrState *state, std::string name, float rc) :
+    Interaction(state, name, rc)
+{
+    PairwiseFlowProperties fp(rc);
+    impl = std::make_unique<InteractionPair<PairwiseFlowProperties>> (state, name, rc, fp);
+}
+
+InteractionFlowProperty::~InteractionFlowProperty() = default;
+
+void InteractionFlowProperty::setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2)
+{
+    impl->setPrerequisites(pv1, pv2, cl1, cl2);
+
+    info("Interaction '%s' requires channel '%s' from PVs '%s' and '%s'",
+         name.c_str(), ChannelNames::DPDparameters.c_str(), pv1->name.c_str(), pv2->name.c_str());
+
+
+    pv1->requireDataPerParticle <Vorticity> (ChannelNames::vorticities,ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Vorticity> (ChannelNames::vorticities,ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <Vorticity> (ChannelNames::vorticities);
+    cl2->requireExtraDataPerParticle <Vorticity> (ChannelNames::vorticities);
+
+    pv1->requireDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities,ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities,ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities);
+    cl2->requireExtraDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities);
+
+    pv1->requireDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients,ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients,ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients);
+    cl2->requireExtraDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients);
+
+}
+
+std::vector<Interaction::InteractionChannel> InteractionFlowProperty::getIntermediateOutputChannels() const
+{
+    return {{ChannelNames::vorticities, Interaction::alwaysActive},{ChannelNames::aprox_densities, Interaction::alwaysActive},{ChannelNames::velocity_gradients, Interaction::alwaysActive}};
+}
+std::vector<Interaction::InteractionChannel> InteractionFlowProperty::getFinalOutputChannels() const
+{
+    return {};
+}
+
+void InteractionFlowProperty::local(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream)
+{
+    impl->local(pv1, pv2, cl1, cl2, stream);
+}
+
+void InteractionFlowProperty::halo (ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream)
+{
+    impl->halo(pv1, pv2, cl1, cl2, stream);
+}
+
+
+
 
 
 InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name, std::string parameterName,std::vector<float> weights, float rc, float a, float gamma, float kbt, float power, bool allocateImpl) :
@@ -20,9 +83,8 @@ InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name
         auto devP = Weights.hostPtr();
         memcpy(devP, &weights[0], weights.size() * sizeof(float));
         Weights.uploadToDevice(0);
-        Pairwise_SmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
-        // FlowProperties<Pairwise_SmartDPD> fp (dpd);
-        impl = std::make_unique<InteractionPairSmart<Pairwise_SmartDPD>> (state,name,parameterName,Weights,a,gamma ,rc,dpd);
+        PairwiseSmartDPD dpd(parameterName,rc, a, gamma, kbt, state->dt, power);
+        impl = std::make_unique<InteractionPair<PairwiseSmartDPD>> (state,name,rc,dpd);
 
     }
 
@@ -37,11 +99,32 @@ InteractionSmartDPD::~InteractionSmartDPD() = default;
 void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2,CellList *cl1, CellList *cl2)
 {
     impl->setPrerequisites(pv1, pv2,cl1,cl2);
+    pv1->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters,ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters,ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <DPDparameter> (ChannelNames::DPDparameters);
+    cl2->requireExtraDataPerParticle <DPDparameter> (ChannelNames::DPDparameters);
+
+    auto pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+    auto pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+    int nth = 128;
+    int np = pv1->local()->size();
+    SAFE_KERNEL_LAUNCH(
+        copy_kernel,
+        getNblocks(np, nth), nth, 0, 0,
+        pv1DPDparameter,pv2DPDparameter,np,a,gamma);
+
+
 }
 
 std::vector<Interaction::InteractionChannel> InteractionSmartDPD::getFinalOutputChannels() const
 {
     return impl->getFinalOutputChannels();
+}
+
+std::vector<Interaction::InteractionChannel> InteractionSmartDPD::getIntermediateInputChannels() const
+{
+    return {{ChannelNames::vorticities, Interaction::alwaysActive},{ChannelNames::aprox_densities, Interaction::alwaysActive},{ChannelNames::velocity_gradients, Interaction::alwaysActive}};
 }
 
 void InteractionSmartDPD::local(ParticleVector* pv1, ParticleVector* pv2,
@@ -68,9 +151,8 @@ void InteractionSmartDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* p
     if (power == Default) power = this->power;
 
 
-    Pairwise_SmartDPD dpd(parameterName,this->rc, a, gamma, kbt, state->dt, power);
-    // FlowProperties<Pairwise_SmartDPD> fp (dpd);
-    auto ptr = static_cast< InteractionPairSmart<Pairwise_SmartDPD>* >(impl.get());
+    PairwiseSmartDPD dpd(parameterName,this->rc, a, gamma, kbt, state->dt, power);
+    auto ptr = static_cast<InteractionPair<PairwiseSmartDPD>* >(impl.get());
 
     ptr->setSpecificPair(pv1->name, pv2->name, dpd);
 }

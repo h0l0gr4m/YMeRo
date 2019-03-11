@@ -21,7 +21,7 @@ public:
     {}
 
     ~InteractionPair_withStress() = default;
-    
+
     void setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2) override
     {
         info("Interaction '%s' requires channel '%s' from PVs '%s' and '%s'",
@@ -37,11 +37,11 @@ public:
     void local (ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream) override
     {
         float t = state->currentTime;
-        
+
         if (lastStressTime+stressPeriod <= t || lastStressTime == t)
         {
             debug("Executing interaction '%s' with stress", name.c_str());
-            
+
             interactionWithStress.local(pv1, pv2, cl1, cl2, stream);
             lastStressTime = t;
         }
@@ -50,11 +50,11 @@ public:
             interaction.local(pv1, pv2, cl1, cl2, stream);
         }
     }
-    
+
     void halo(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream) override
     {
         float t = state->currentTime;
-    
+
         if (lastStressTime+stressPeriod <= t || lastStressTime == t)
         {
             debug("Executing interaction '%s' with stress", name.c_str());
@@ -84,7 +84,7 @@ public:
         return {{ChannelNames::forces, Interaction::alwaysActive},
                 {ChannelNames::stresses, activePredicateStress}};
     }
-    
+
 private:
     float stressPeriod;
     float lastStressTime{-1e6};
