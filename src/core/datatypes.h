@@ -263,6 +263,10 @@ struct Stress
     float xx, xy, xz, yy, yz, zz;
 };
 
+struct Density_Gradient
+{
+  float x,y,z;
+};
 
 
 struct Aprox_Density
@@ -305,6 +309,12 @@ struct NNInput
 };
 
 //implement += and + operators for different datatypes
+__HD__ Stress inline operator+=(Stress& a, const float b )
+{
+  a.xx += b; a.xy += b; a.xz += b;
+  a.yy += b; a.yz += b; a.zz += b;
+}
+
 
 __HD__ void inline operator+=(Stress& a, const Stress& b)
 {
@@ -318,6 +328,14 @@ __HD__ Stress inline operator+(Stress a, const Stress& b)
     return a;
 }
 
+__HD__ Stress inline operator+(Stress a, const float b)
+{
+    a += b;
+    return a;
+}
+
+
+
 __HD__ void inline operator+=(Aprox_Density& a, const Aprox_Density& b)
 {
     a.x += b.x; a.y += b.y; a.z += b.z;
@@ -328,6 +346,19 @@ __HD__ Aprox_Density inline operator+(Aprox_Density a, const Aprox_Density& b)
     a += b;
     return a;
 }
+
+__HD__ void inline operator+=(Density_Gradient& a, const Density_Gradient& b)
+{
+    a.x += b.x; a.y += b.y; a.z += b.z;
+}
+
+
+__HD__ Density_Gradient inline operator+(Density_Gradient a, const Density_Gradient& b)
+{
+    a += b;
+    return a;
+}
+
 
 __HD__ void inline operator+=(Vorticity& a, const Vorticity& b)
 {
@@ -340,6 +371,7 @@ __HD__ Vorticity inline operator+(Vorticity a, const Vorticity& b)
     return a;
 }
 
+//Velocity_Gradient
 __HD__ void inline operator+=(Velocity_Gradient& a, const Velocity_Gradient& b)
 {
     a.xx += b.xx; a.xy += b.xy; a.xz += b.xz;
@@ -347,8 +379,23 @@ __HD__ void inline operator+=(Velocity_Gradient& a, const Velocity_Gradient& b)
     a.zx += b.zx; a.zy += b.zy; a.zz += b.zz;
 }
 
+__HD__ void inline operator*=(Velocity_Gradient& a,const float b)
+{
+    a.xx *= b; a.xy *= b; a.xz *= b;
+    a.yx *= b; a.yy *= b; a.yz *= b;
+    a.zx *= b; a.zy *= b; a.zz *= b;
+}
+
+
 __HD__ Velocity_Gradient inline operator+(Velocity_Gradient a, const Velocity_Gradient& b)
 {
     a += b;
+    return a;
+}
+
+
+__HD__ Velocity_Gradient inline operator*(const float b,Velocity_Gradient a)
+{
+    a *= b;
     return a;
 }

@@ -48,7 +48,7 @@ void ParticleSenderPlugin::handshake()
     send(sendBuffer);
 }
 
-void ParticleSenderPlugin::beforeForces(cudaStream_t stream)
+void ParticleSenderPlugin::beforeIntegration(cudaStream_t stream)
 {
     if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 

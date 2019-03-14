@@ -29,7 +29,7 @@
 #include "virial_pressure.h"
 #include "wall_force_collector.h"
 #include "wall_repulsion.h"
-
+#include "loss_function.h"
 #include <core/pvs/object_vector.h>
 #include <core/pvs/particle_vector.h>
 #include <core/utils/pytypes.h>
@@ -75,6 +75,7 @@ static void extractChannelInfos(const std::vector< std::pair<std::string, std::s
         if      (typeStr == "scalar")    types.push_back(ParticleSenderPlugin::ChannelType::Scalar);
         else if (typeStr == "vector")    types.push_back(ParticleSenderPlugin::ChannelType::Vector);
         else if (typeStr == "tensor6")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor6);
+        else if (typeStr == "tensor9")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor9);
         else die("Unable to get parse channel type '%s'", typeStr.c_str());
     }
 }
@@ -368,6 +369,20 @@ createVirialPressurePlugin(bool computeTask, const YmrState *state, std::string 
     auto postPl = computeTask ? nullptr : std::make_shared<VirialPressureDumper> (name, path);
     return { simPl, postPl };
 }
+
+
+static pair_shared< LossFunctionPlugin, LossFunctionDumper >
+createLossFunctionPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv,float viscosity,
+                            int dumpEvery, std::string path)
+{
+
+    auto simPl  = computeTask ? std::make_shared<LossFunctionPlugin> (state, name, pv->name,
+                                                                       viscosity, dumpEvery)
+        : nullptr;
+    auto postPl = computeTask ? nullptr : std::make_shared<LossFunctionDumper> (name, path);
+    return { simPl, postPl };
+}
+
 
 static pair_shared< VelocityInletPlugin, PostprocessPlugin >
 createVelocityInletPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv,

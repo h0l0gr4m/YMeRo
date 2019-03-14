@@ -51,7 +51,7 @@ public:
 
 
     PairwiseFlowProperties(float rc) :
-        ParticleFetcherWithVelocityandFlowProperties(rc)
+        ParticleFetcherWithVelocityandFlowProperties(rc),rc(rc)
     {}
 
     void setup(LocalParticleVector *lpv1, LocalParticleVector *lpv2, CellList *cl1, CellList *cl2, const YmrState *state)
@@ -70,6 +70,7 @@ public:
         Vorticity vorticity;
         Aprox_Density aprox_density;
         Velocity_Gradient velocity_gradient;
+        Density_Gradient density_gradient;
 
         // calculate velocity gradient matrix
 
@@ -89,12 +90,20 @@ public:
         vorticity.y = -q*(du.x*dr.z-du.z*dr.x);
         vorticity.z = -q*(du.y*dr.x-du.x*dr.z);
 
+        // calculate aprox_densities via symmetry functions
         aprox_density.x = symmetry_function(rij,0.5,1)*eta_kernel(rij);
         aprox_density.y = symmetry_function(rij,0.1,1)*eta_kernel(rij);
         aprox_density.z = symmetry_function(rij,0.9,0.5)*eta_kernel(rij);
 
+        //calculate (weighted) density gradient
+        density_gradient.x = q*dr.x;
+        density_gradient.y = q*dr.y;
+        density_gradient.z = q*dr.z;
 
-        return {aprox_density,vorticity,velocity_gradient};
+
+
+
+        return {aprox_density,vorticity,velocity_gradient,density_gradient};
     }
     const HandlerType& handler() const
     {

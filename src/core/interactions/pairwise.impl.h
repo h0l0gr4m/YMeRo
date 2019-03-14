@@ -20,12 +20,12 @@ template<class PairwiseInteraction>
 class InteractionPair : public Interaction
 {
 public:
-    
+
     InteractionPair(const YmrState *state, std::string name, float rc, PairwiseInteraction pair) :
         Interaction(state, name, rc),
         defaultPair(pair)
     {}
-    
+
     ~InteractionPair() = default;
 
     /**
@@ -81,7 +81,7 @@ public:
         if (pv1 != pv2)
             computeHalo(pv2, pv1, cl2, cl1, stream);
     }
-    
+
     void setSpecificPair(std::string pv1name, std::string pv2name, PairwiseInteraction pair)
     {
         intMap.insert({{pv1name, pv2name}, pair});
@@ -190,7 +190,7 @@ private:
 
         ViewType dstView(pv1, pv1->halo());
         auto srcView = cl2->getView<ViewType>();
-        
+
         const int nth = 128;
         if (np1 > 0 && np2 > 0)
             if (dynamic_cast<ObjectVector*>(pv1) == nullptr) // don't need forces for pure particle halo

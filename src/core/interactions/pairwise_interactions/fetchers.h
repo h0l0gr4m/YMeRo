@@ -142,6 +142,7 @@ public:
         Vorticity vorticity;
         Aprox_Density aprox_density;
         Velocity_Gradient velocity_gradient;
+        Density_Gradient density_gradient;
     };
 
     using ViewType     = PVviewWithFlowProperties;
@@ -154,13 +155,13 @@ public:
     __D__ inline ParticleType read(const ViewType& view, int id) const
     {
         return {ParticleFetcherWithVelocity::read(view, id),
-                view.vorticities[id],view.aprox_densities[id],view.velocity_gradients[id]};
+                view.vorticities[id],view.aprox_densities[id],view.velocity_gradients[id],view.density_gradients[id]};
     }
 
     __D__ inline ParticleType readNoCache(const ViewType& view, int id) const
     {
         return {ParticleFetcherWithVelocity::readNoCache(view, id),
-                view.vorticities[id],view.aprox_densities[id],view.velocity_gradients[id]};
+                view.vorticities[id],view.aprox_densities[id],view.velocity_gradients[id],view.density_gradients[id]};
     }
 
     __D__ inline void readCoordinates(ParticleType& p, const ViewType& view, int id) const
@@ -174,6 +175,7 @@ public:
         p.vorticity=view.vorticities[id];
         p.aprox_density=view.aprox_densities[id];
         p.velocity_gradient=view.velocity_gradients[id];
+        p.density_gradient = view.density_gradients[id];
     }
 
     __D__ inline bool withinCutoff(const ParticleType& src, const ParticleType& dst) const

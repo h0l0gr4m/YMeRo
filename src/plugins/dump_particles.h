@@ -17,7 +17,7 @@ class ParticleSenderPlugin : public SimulationPlugin
 public:
 
     enum class ChannelType {
-        Scalar, Vector, Tensor6, Tensor9  
+        Scalar, Vector, Tensor6, Tensor9
     };
 
     ParticleSenderPlugin(const YmrState *state, std::string name, std::string pvName, int dumpEvery,
@@ -27,7 +27,7 @@ public:
     void setup(Simulation *simulation, const MPI_Comm& comm, const MPI_Comm& interComm) override;
     void handshake() override;
 
-    void beforeForces(cudaStream_t stream) override;
+    void beforeIntegration(cudaStream_t stream) override;
     void serializeAndSend(cudaStream_t stream) override;
 
     bool needPostproc() override { return true; }

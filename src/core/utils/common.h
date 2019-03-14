@@ -14,6 +14,8 @@ static const std::string DPDparameters ="DPDparameters";
 static const std::string vorticities ="vorticities";
 static const std::string aprox_densities ="aprox_densities";
 static const std::string velocity_gradients ="velocity_gradients";
+static const std::string density_gradients   = "density_gradients";
+
 
 // per object fields
 static const std::string motions     = "motions";

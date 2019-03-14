@@ -42,6 +42,7 @@ struct PVviewWithOldParticles : public PVview
     }
 };
 
+
 struct PVviewWithDensities : public PVview
 {
     float *densities = nullptr;
@@ -51,6 +52,28 @@ struct PVviewWithDensities : public PVview
     {
         if (lpv != nullptr)
             densities = lpv->extraPerParticle.getData<float>(ChannelNames::densities)->devPtr();
+    }
+};
+
+
+
+struct PVviewWithFlowProperties : public PVview
+{
+    Vorticity *vorticities = nullptr;
+    Aprox_Density *aprox_densities = nullptr;
+    Velocity_Gradient *velocity_gradients = nullptr;
+    Density_Gradient *density_gradients = nullptr;
+
+    PVviewWithFlowProperties(ParticleVector *pv = nullptr, LocalParticleVector *lpv = nullptr) :
+        PVview(pv, lpv)
+    {
+        if (lpv != nullptr)
+        {
+            vorticities = lpv->extraPerParticle.getData<Vorticity>(ChannelNames::vorticities)->devPtr();
+            aprox_densities = lpv->extraPerParticle.getData<Aprox_Density>(ChannelNames::aprox_densities)->devPtr();
+            velocity_gradients = lpv->extraPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
+            density_gradients = lpv->extraPerParticle.getData<Density_Gradient>(ChannelNames::density_gradients)->devPtr();
+        }
     }
 };
 
@@ -64,24 +87,5 @@ struct PVviewWithStresses : public BasicView
     {
         if (lpv != nullptr)
             stresses = lpv->extraPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
-    }
-};
-
-
-struct PVviewWithFlowProperties : public PVview
-{
-    Vorticity *vorticities = nullptr;
-    Aprox_Density *aprox_densities = nullptr;
-    Velocity_Gradient *velocity_gradients = nullptr;
-
-    PVviewWithFlowProperties(ParticleVector *pv = nullptr, LocalParticleVector *lpv = nullptr) :
-        PVview(pv, lpv)
-    {
-        if (lpv != nullptr)
-        {
-            vorticities = lpv->extraPerParticle.getData<Vorticity>(ChannelNames::vorticities)->devPtr();
-            aprox_densities = lpv->extraPerParticle.getData<Aprox_Density>(ChannelNames::aprox_densities)->devPtr();
-            velocity_gradients = lpv->extraPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
-        }
     }
 };

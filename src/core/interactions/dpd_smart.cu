@@ -43,6 +43,12 @@ void InteractionFlowProperty::setPrerequisites(ParticleVector *pv1, ParticleVect
     cl1->requireExtraDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities);
     cl2->requireExtraDataPerParticle <Aprox_Density> (ChannelNames::aprox_densities);
 
+    pv1->requireDataPerParticle <Density_Gradient> (ChannelNames::density_gradients,ExtraDataManager::PersistenceMode::None);
+    pv2->requireDataPerParticle <Density_Gradient> (ChannelNames::density_gradients,ExtraDataManager::PersistenceMode::None);
+
+    cl1->requireExtraDataPerParticle <Density_Gradient> (ChannelNames::density_gradients);
+    cl2->requireExtraDataPerParticle <Density_Gradient> (ChannelNames::density_gradients);
+
     pv1->requireDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients,ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle <Velocity_Gradient> (ChannelNames::velocity_gradients,ExtraDataManager::PersistenceMode::None);
 
@@ -53,7 +59,7 @@ void InteractionFlowProperty::setPrerequisites(ParticleVector *pv1, ParticleVect
 
 std::vector<Interaction::InteractionChannel> InteractionFlowProperty::getIntermediateOutputChannels() const
 {
-    return {{ChannelNames::vorticities, Interaction::alwaysActive},{ChannelNames::aprox_densities, Interaction::alwaysActive},{ChannelNames::velocity_gradients, Interaction::alwaysActive}};
+    return {{ChannelNames::vorticities, Interaction::alwaysActive},{ChannelNames::aprox_densities, Interaction::alwaysActive},{ChannelNames::velocity_gradients, Interaction::alwaysActive},{ChannelNames::density_gradients, Interaction::alwaysActive}};
 }
 std::vector<Interaction::InteractionChannel> InteractionFlowProperty::getFinalOutputChannels() const
 {
@@ -124,7 +130,7 @@ std::vector<Interaction::InteractionChannel> InteractionSmartDPD::getFinalOutput
 
 std::vector<Interaction::InteractionChannel> InteractionSmartDPD::getIntermediateInputChannels() const
 {
-    return {{ChannelNames::vorticities, Interaction::alwaysActive},{ChannelNames::aprox_densities, Interaction::alwaysActive},{ChannelNames::velocity_gradients, Interaction::alwaysActive}};
+    return {{ChannelNames::vorticities, Interaction::alwaysActive},{ChannelNames::aprox_densities, Interaction::alwaysActive},{ChannelNames::velocity_gradients, Interaction::alwaysActive},{ChannelNames::density_gradients, Interaction::alwaysActive}};
 }
 
 void InteractionSmartDPD::local(ParticleVector* pv1, ParticleVector* pv2,

@@ -11,6 +11,7 @@ struct flowproperties
     Aprox_Density aprox_density;
     Vorticity vorticity;
     Velocity_Gradient velocity_gradient;
+    Density_Gradient density_gradient;
 };
 
 
@@ -19,9 +20,12 @@ class FlowPropertyAccumulator
 public:
 
     __D__ inline FlowPropertyAccumulator() :
-        flowpro({{0.f, 0.f, 0.f},
-                             {0.f, 0.f, 0.f},
-                             {0.f, 0.f, 0.f,0.f, 0.f, 0.f,0.f, 0.f, 0.f}})
+        flowpro({
+          {0.f, 0.f, 0.f},
+          {0.f, 0.f, 0.f},
+          {0.f, 0.f, 0.f,0.f, 0.f, 0.f,0.f, 0.f, 0.f},
+          {0.f, 0.f, 0.f}
+                })
     {}
 
     __D__ inline void atomicAddToDst(const flowproperties& fsfp, PVviewWithFlowProperties& view, int id) const
@@ -29,6 +33,8 @@ public:
         atomicAddAprox_Density(view.aprox_densities + id, fsfp.aprox_density);
         atomicAddVorticity(view.vorticities + id, fsfp.vorticity);
         atomicAddVelocity_Gradient(view.velocity_gradients + id , fsfp.velocity_gradient);
+        atomicAddDensity_Gradient(view.density_gradients + id, fsfp.density_gradient);
+
     }
 
     __D__ inline void atomicAddToSrc(const flowproperties& fsfp, PVviewWithFlowProperties& view, int id) const
@@ -36,6 +42,8 @@ public:
         atomicAddAprox_Density(view.aprox_densities + id, fsfp.aprox_density);
         atomicAddVorticity(view.vorticities + id, fsfp.vorticity);
         atomicAddVelocity_Gradient(view.velocity_gradients + id , fsfp.velocity_gradient);
+        atomicAddDensity_Gradient(view.density_gradients + id, fsfp.density_gradient);
+
     }
 
     __D__ inline flowproperties get() const {return flowpro;}
@@ -59,6 +67,10 @@ public:
         flowpro.velocity_gradient.zx += fsfp.velocity_gradient.zx;
         flowpro.velocity_gradient.zy += fsfp.velocity_gradient.zy;
         flowpro.velocity_gradient.zz += fsfp.velocity_gradient.zz;
+
+        flowpro.density_gradient.x += fsfp.density_gradient.x;
+        flowpro.density_gradient.y += fsfp.density_gradient.y;
+        flowpro.density_gradient.z += fsfp.density_gradient.z;
     }
 
 private:
@@ -89,5 +101,13 @@ private:
         atomicAdd(&dst->zx, s.zx);
         atomicAdd(&dst->zy, s.zy);
         atomicAdd(&dst->zz, s.zz);
+    }
+
+
+    __D__ inline void atomicAddDensity_Gradient(Density_Gradient *dst, const Density_Gradient& s) const
+    {
+        atomicAdd(&dst->x, s.x);
+        atomicAdd(&dst->y, s.y);
+        atomicAdd(&dst->z, s.z);
     }
 };
