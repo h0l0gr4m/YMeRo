@@ -12,6 +12,12 @@ Interaction::~Interaction() = default;
 void Interaction::setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2)
 {}
 
+void Interaction::localNeuralNetwork(ParticleVector *pv,CellList *cl, cudaStream_t stream)
+{}
+
+void Interaction::haloNeuralNetwork(ParticleVector *pv,CellList *cl, cudaStream_t stream)
+{}
+
 std::vector<Interaction::InteractionChannel> Interaction::getIntermediateOutputChannels() const
 {
     return {};

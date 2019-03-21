@@ -31,7 +31,7 @@ public:
      * Called from Simulation right after setup
      */
     virtual void setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2);
-    
+
     /**
      * Interface to compute local interactions.
      * For now order of \e pv1 and \e pv2 is important for computational reasons,
@@ -60,6 +60,14 @@ public:
                       CellList *cl2, cudaStream_t stream) = 0;
 
 
+
+    /*
+    computation which have to happend betwewen intermeddiate and final interaction
+    */
+    virtual void localNeuralNetwork(ParticleVector *pv,CellList *cl, cudaStream_t stream);
+
+
+    virtual void haloNeuralNetwork(ParticleVector *pv,CellList *cl,cudaStream_t stream);
     /// monitor activity of a channel
     using ActivePredicate = std::function<bool()>;
 
@@ -83,15 +91,15 @@ public:
      * default: nothing
      */
     virtual std::vector<InteractionChannel> getIntermediateInputChannels() const;
-    
+
     /**
-     * describe what channels are produced by the interaction 
+     * describe what channels are produced by the interaction
      * default: forces, always active
      */
     virtual std::vector<InteractionChannel> getFinalOutputChannels() const;
 
     static const ActivePredicate alwaysActive;
-    
+
 public:
     /// Cut-off raduis
     float rc;

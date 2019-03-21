@@ -20,6 +20,7 @@
  *    Thanks to Linh Hah for additions and fixes.
  */
 
+
 #ifndef HELPER_MATH_H
 #define HELPER_MATH_H
 
@@ -37,7 +38,6 @@ typedef unsigned short ushort;
 #if !defined(__CUDACC__) || defined(__clang__)
 #include <cmath>
 #include <cstdlib>
-
 ////////////////////////////////////////////////////////////////////////////////
 // host implementations of CUDA functions
 ////////////////////////////////////////////////////////////////////////////////
@@ -292,6 +292,7 @@ inline __HD__ float3 operator-(const float3 &a)
 {
     return make_float3(-a.x, -a.y, -a.z);
 }
+
 inline __HD__ int3 operator-(const int3 &a)
 {
     return make_int3(-a.x, -a.y, -a.z);

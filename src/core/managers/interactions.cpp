@@ -26,7 +26,7 @@ void InteractionManager::add(Interaction *interaction, ParticleVector *pv1, Part
 
     if (intermediateOutput.empty() && finalOutput.empty())
         die("Interaction '%s' has no output at all", interaction->name.c_str());
-    
+
     auto addChannels = [&](CellList *cl) {
                            _addChannels(intermediateOutput, cellIntermediateOutputChannels, cl);
                            _addChannels(intermediateInput,  cellIntermediateInputChannels, cl);
@@ -41,7 +41,7 @@ void InteractionManager::add(Interaction *interaction, ParticleVector *pv1, Part
     insertClist(cl2, cellListMap[pv2]);
 
     InteractionPrototype prototype {interaction, pv1, pv2, cl1, cl2};
-    
+
     if (!intermediateOutput.empty())
         intermediateInteractions.push_back(prototype);
 
@@ -133,6 +133,16 @@ void InteractionManager::executeLocalFinal(cudaStream_t stream)
     _executeLocal(finalInteractions, stream);
 }
 
+void InteractionManager::executelocalNeuralNetwork(ParticleVector *pv, cudaStream_t stream)
+{
+  _executelocalNeuralNetwork(pv,finalInteractions,stream);
+}
+
+void InteractionManager::executehaloNeuralNetwork(ParticleVector *pv,cudaStream_t stream)
+{
+  _executehaloNeuralNetwork(pv,finalInteractions,stream);
+}
+
 void InteractionManager::executeHaloIntermediate(cudaStream_t stream)
 {
     _executeHalo(intermediateInteractions, stream);
@@ -154,7 +164,7 @@ void InteractionManager::_addChannels(const std::vector<Interaction::Interaction
                                       CellList* cl) const
 {
     if (channels.empty()) return;
-    
+
     for (const auto& srcEntry : channels)
     {
         auto it = dst[cl].begin();
@@ -184,12 +194,12 @@ float InteractionManager::_getMaxCutoff(const std::map<CellList*, ChannelActivit
 CellList* InteractionManager::_getLargestCellListNeeded(ParticleVector *pv, const std::map<CellList*, ChannelActivityList>& cellChannels) const
 {
     CellList *clMax = nullptr;
-    
+
     auto clList = cellListMap.find(pv);
 
     if (clList == cellListMap.end())
         return nullptr;
-    
+
     for (const auto& cl : clList->second)
     {
         if (cellChannels.find(cl) != cellChannels.end())
@@ -226,7 +236,7 @@ std::vector<std::string> InteractionManager::_getExtraChannels(ParticleVector *p
     for (const auto& cl : clList->second)
     {
         auto it = cellChannels.find(cl);
-        
+
         if (it != cellChannels.end())
         {
             for (const auto& entry : it->second)
@@ -239,6 +249,7 @@ std::vector<std::string> InteractionManager::_getExtraChannels(ParticleVector *p
     }
     return {channels.begin(), channels.end()};
 }
+
 
 
 void InteractionManager::_executeLocal(std::vector<InteractionPrototype>& interactions, cudaStream_t stream)
@@ -260,7 +271,7 @@ std::vector<std::string> InteractionManager::_extractActiveChannels(const Channe
     for (auto& entry : activityMap)
         if (entry.second())
             activeChannels.push_back(entry.first);
-    
+
     return activeChannels;
 }
 
@@ -274,7 +285,7 @@ void InteractionManager::_clearChannels(ParticleVector *pv, const std::map<CellL
     for (auto cl : clList->second)
     {
         auto it = cellChannels.find(cl);
-        
+
         if (it != cellChannels.end()) {
             auto activeChannels = _extractActiveChannels(it->second);
             cl->clearChannels(activeChannels, stream);
@@ -289,7 +300,7 @@ void InteractionManager::_accumulateChannels(const std::map<CellList*, ChannelAc
         auto cl = entry.first;
         auto activeChannels = _extractActiveChannels(entry.second);
         cl->accumulateChannels(activeChannels, stream);
-    }    
+    }
 }
 
 void InteractionManager::_gatherChannels(const std::map<CellList*, ChannelActivityList>& cellChannels, cudaStream_t stream) const
@@ -300,4 +311,16 @@ void InteractionManager::_gatherChannels(const std::map<CellList*, ChannelActivi
         auto activeChannels = _extractActiveChannels(entry.second);
         cl->gatherChannels(activeChannels, stream);
     }
+}
+
+void InteractionManager::_executelocalNeuralNetwork(ParticleVector *pv,std::vector<InteractionPrototype>& interactions,cudaStream_t stream) const
+{
+  for(auto& p: interactions)
+    p.interaction->localNeuralNetwork(pv,p.cl1,stream);
+}
+
+void InteractionManager::_executehaloNeuralNetwork(ParticleVector *pv,std::vector<InteractionPrototype>& interactions,cudaStream_t stream) const
+{
+  for(auto& p: interactions)
+    p.interaction->haloNeuralNetwork(pv,p.cl1,stream);
 }

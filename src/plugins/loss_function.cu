@@ -32,6 +32,7 @@ __global__ void totalLoss(PVview view,const float viscosity, const Stress *stres
         const Stress s_new = s + tr_stress;
         //calculate Stress - v_g_new
 
+        //caluclate Frobeniusnorm
         const float a11 = s_new.xx-v_g_new2.xx;
         const float a12 = s_new.xy-v_g_new2.xy;
         const float a13 = s_new.xz-v_g_new2.xz;

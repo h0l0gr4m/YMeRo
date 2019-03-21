@@ -291,10 +291,11 @@ struct DPDparameter
 
 struct NNInput
 {
-   float g1,g2,g3,v1,d1,d2,d3,b1,b2;
+   float g1,g2,g3,v1,d1,d2,d3,b1=1,b2;
+
    __HD__ float &operator[]( size_t idx )
    {
-        switch( idx )
+        switch(idx)
         {
             case 0 : return g1;
             case 1 : return g2;
@@ -398,4 +399,13 @@ __HD__ Velocity_Gradient inline operator*(const float b,Velocity_Gradient a)
 {
     a *= b;
     return a;
+}
+
+
+inline __HD__ Aprox_Density operator-(Aprox_Density &a)
+{
+
+    a.x = -a.x;
+    a.y = -a.y;
+    a.z = -a.z;
 }

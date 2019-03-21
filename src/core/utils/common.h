@@ -15,6 +15,7 @@ static const std::string vorticities ="vorticities";
 static const std::string aprox_densities ="aprox_densities";
 static const std::string velocity_gradients ="velocity_gradients";
 static const std::string density_gradients   = "density_gradients";
+static const std::string NNInputs = "NNInputs";
 
 
 // per object fields

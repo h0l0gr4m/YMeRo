@@ -46,6 +46,10 @@ public:
     void local(ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, cudaStream_t stream) override;
     void halo   (ParticleVector* pv1, ParticleVector* pv2, CellList* cl1, CellList* cl2, cudaStream_t stream) override;
 
+    void localNeuralNetwork(ParticleVector* pv, CellList *cl, cudaStream_t stream) override;
+    void haloNeuralNetwork(ParticleVector* pv, CellList *cl, cudaStream_t stream) override;
+
+
 
     virtual void setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
                                  float a=Default, float gamma=Default, float kbt=Default,
@@ -61,5 +65,6 @@ protected:
     float a, gamma, kbt,  power,loss ;
     std::string parameterName;
     PinnedBuffer<float> Weights;
+    std::vector<float> weights;
 
 };

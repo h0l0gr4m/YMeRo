@@ -1,7 +1,9 @@
-template<typename Calculation>
-__global__ void computeNNInputs(const int np, Calculation calculation)
+#include "NNInputs.h"
+
+__global__ void computeNNInputs(typename NNInput_Computation::ViewType view, NNInput_Computation nninputs)
 {
     const int particleId= blockIdx.x*blockDim.x + threadIdx.x;
-    if (particleId >= np) return;
-    calculation(particleId);
+    if (particleId >= view.size) return;
+    const auto dstP = nninputs.read(view,particleId);
+    nninputs(dstP,particleId);
 };
