@@ -1,4 +1,4 @@
-#include "loss_function.h"
+#include "lossstress_function.h"
 #include "utils/simple_serializer.h"
 
 #include <core/datatypes.h>
@@ -10,18 +10,20 @@
 #include <core/utils/cuda_common.h>
 #include <core/utils/kernel_launch.h>
 
-namespace LossFunctionKernels
+namespace LossStressFunctionKernels
 {
-__global__ void totalLoss(PVview view,const float viscosity, const Stress *stress,const Velocity_Gradient *velocity_gradient,  LossFunction::ReductionType *loss)
+__global__ void totalLoss(PVview view,const float viscosity, const Stress *stress,const Velocity_Gradient *velocity_gradient,LossStressFunction::ReductionType *lossStress)
 {
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
-    LossFunction::ReductionType L = 0;
+    double L = 0;
     Particle p;
 
     if (tid < view.size) {
+        //calculate Stress part of Loss function
         Stress s = stress[tid];
         Velocity_Gradient v_g = velocity_gradient[tid];
+
         //calculate velocity_gradient + velocity_gradient transposed
         const Velocity_Gradient v_g_transposed = {v_g.xx , v_g.yx , v_g.zx , v_g.xy , v_g.yy ,v_g.zy,v_g.xz,v_g.yz,v_g.zz};
         Velocity_Gradient v_g_new = v_g + v_g_transposed;
@@ -32,7 +34,7 @@ __global__ void totalLoss(PVview view,const float viscosity, const Stress *stres
         const Stress s_new = s + tr_stress;
         //calculate Stress - v_g_new
 
-        //caluclate Frobeniusnorm
+        //caluclate Frobeniusnorm squared
         const float a11 = s_new.xx-v_g_new2.xx;
         const float a12 = s_new.xy-v_g_new2.xy;
         const float a13 = s_new.xz-v_g_new2.xz;
@@ -42,19 +44,23 @@ __global__ void totalLoss(PVview view,const float viscosity, const Stress *stres
         const float a31 = s_new.xz-v_g_new2.zx;
         const float a32 = s_new.yz-v_g_new2.zy;
         const float a33 = s_new.zz-v_g_new2.zz;
-        L = sqrt(a11*a11 +a12*a12 +a13*a13 +a21*a21 +a22*a22 +a23*a23 +a31*a31 +a32*a32+ a33*a33);
 
+        const float stress_part = (1/6)*(a11*a11 +a12*a12 +a13*a13 +a21*a21 +a22*a22 +a23*a23 +a31*a31 +a32*a32+ a33*a33);
+        L = stress_part;
+        printf(" stress_part : %f \n" ,stress_part);
+        //calculate density gradient part of Loss LossStressFunction
 
-    }
+      }
 
-    L = warpReduce(L, [](LossFunction::ReductionType a, LossFunction::ReductionType b) { return a+b; });
-
+    L= warpReduce(L, [](LossStressFunction::ReductionType a, LossStressFunction::ReductionType b) { return a+b; });
     if (__laneid() == 0)
-        atomicAdd(loss, L);
+        atomicAdd(lossStress, L);
+
+
 }
 }
 
-LossFunctionPlugin::LossFunctionPlugin(const YmrState *state, std::string name, std::string pvName,const float viscosity,
+LossStressFunctionPlugin::LossStressFunctionPlugin(const YmrState *state, std::string name, std::string pvName,const float viscosity,
                                             int dumpEvery) :
     SimulationPlugin(state, name),
     pvName(pvName),
@@ -62,9 +68,9 @@ LossFunctionPlugin::LossFunctionPlugin(const YmrState *state, std::string name, 
     viscosity(viscosity)
 {}
 
-LossFunctionPlugin::~LossFunctionPlugin() = default;
+LossStressFunctionPlugin::~LossStressFunctionPlugin() = default;
 
-void LossFunctionPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
+void LossStressFunctionPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Comm& interComm)
 {
     SimulationPlugin::setup(simulation, comm, interComm);
 
@@ -74,13 +80,13 @@ void LossFunctionPlugin::setup(Simulation* simulation, const MPI_Comm& comm, con
     info("Plugin %s initialized for the following particle vector: %s", name.c_str(), pvName.c_str());
 }
 
-void LossFunctionPlugin::handshake()
+void LossStressFunctionPlugin::handshake()
 {
     SimpleSerializer::serialize(sendBuffer, pvName);
     send(sendBuffer);
 }
 
-void LossFunctionPlugin::beforeIntegration(cudaStream_t stream)
+void LossStressFunctionPlugin::beforeIntegration(cudaStream_t stream)
 {
     if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 
@@ -89,20 +95,22 @@ void LossFunctionPlugin::beforeIntegration(cudaStream_t stream)
     const Velocity_Gradient *velocity_gradient = pv->local()->extraPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
 
 
-    localLossFunction.clear(stream);
+    localLossStressFunction.clear(stream);
+
 
     SAFE_KERNEL_LAUNCH(
-        LossFunctionKernels::totalLoss,
+        LossStressFunctionKernels::totalLoss,
         getNblocks(view.size, 128), 128, 0, stream,
-        view, viscosity,stress,velocity_gradient, localLossFunction.devPtr() );
+        view, viscosity,stress,velocity_gradient, localLossStressFunction.devPtr() );
 
-    localLossFunction.downloadFromDevice(stream, ContainersSynch::Synch);
+    localLossStressFunction.downloadFromDevice(stream, ContainersSynch::Synch);
+
 
     savedTime = state->currentTime;
     needToSend = true;
 }
 
-void LossFunctionPlugin::serializeAndSend(cudaStream_t stream)
+void LossStressFunctionPlugin::serializeAndSend(cudaStream_t stream)
 {
     if (!needToSend) return;
 
@@ -110,7 +118,7 @@ void LossFunctionPlugin::serializeAndSend(cudaStream_t stream)
     PVview view(pv, pv->local());
 
     waitPrevSend();
-    SimpleSerializer::serialize(sendBuffer, savedTime, localLossFunction[0]/view.size);
+    SimpleSerializer::serialize(sendBuffer, savedTime, localLossStressFunction[0]/view.size);
     send(sendBuffer);
 
     needToSend = false;
@@ -118,31 +126,31 @@ void LossFunctionPlugin::serializeAndSend(cudaStream_t stream)
 
 //=================================================================================
 
-LossFunctionDumper::LossFunctionDumper(std::string name, std::string path) :
+LossStressFunctionDumper::LossStressFunctionDumper(std::string name, std::string path) :
     PostprocessPlugin(name),
     path(path)
 {
-    if (std::is_same<LossFunction::ReductionType, float>::value)
+    if (std::is_same<LossStressFunction::ReductionType, float>::value)
         mpiReductionType = MPI_FLOAT;
-    else if (std::is_same<LossFunction::ReductionType, double>::value)
+    else if (std::is_same<LossStressFunction::ReductionType, double>::value)
         mpiReductionType = MPI_DOUBLE;
     else
         die("Incompatible type");
 }
 
-LossFunctionDumper::~LossFunctionDumper()
+LossStressFunctionDumper::~LossStressFunctionDumper()
 {
     if (activated)
         fclose(fdump);
 }
 
-void LossFunctionDumper::setup(const MPI_Comm& comm, const MPI_Comm& interComm)
+void LossStressFunctionDumper::setup(const MPI_Comm& comm, const MPI_Comm& interComm)
 {
     PostprocessPlugin::setup(comm, interComm);
     activated = createFoldersCollective(comm, path);
 }
 
-void LossFunctionDumper::handshake()
+void LossStressFunctionDumper::handshake()
 {
     auto req = waitData();
     MPI_Check( MPI_Wait(&req, MPI_STATUS_IGNORE) );
@@ -160,17 +168,17 @@ void LossFunctionDumper::handshake()
     }
 }
 
-void LossFunctionDumper::deserialize(MPI_Status& stat)
+void LossStressFunctionDumper::deserialize(MPI_Status& stat)
 {
     TimeType curTime;
-    LossFunction::ReductionType localLossFunction, totalLossFunction;
+    LossStressFunction::ReductionType localLossStressFunction, totalLossStressFunction;
 
-    SimpleSerializer::deserialize(data, curTime, localLossFunction);
+    SimpleSerializer::deserialize(data, curTime, localLossStressFunction);
 
     if (!activated) return;
 
-    MPI_Check( MPI_Reduce(&localLossFunction, &totalLossFunction, 1, mpiReductionType, MPI_SUM, 0, comm) );
+    MPI_Check( MPI_Reduce(&localLossStressFunction, &totalLossStressFunction, 1, mpiReductionType, MPI_SUM, 0, comm) );
 
 
-    fprintf(fdump, "%g %.6e\n", curTime, totalLossFunction);
+    fprintf(fdump, "%g %.6e\n", curTime, totalLossStressFunction);
 }

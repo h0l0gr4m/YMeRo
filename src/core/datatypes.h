@@ -291,26 +291,30 @@ struct DPDparameter
 
 struct NNInput
 {
-   float g1,g2,g3,v1,d1,d2,d3,b1=1,b2;
+   float i1,i2,i3,i4,i5,i6,v1,d1,d2,d3,b1=1;
 
    __HD__ float &operator[]( size_t idx )
    {
         switch(idx)
         {
-            case 0 : return g1;
-            case 1 : return g2;
-            case 2 : return g3;
-            case 3 : return v1;
-            case 4 : return d1;
-            case 5 : return d2;
-            case 6 : return d3;
-            case 7 : return b1;
+            case 0 : return i1;
+            case 1 : return i2;
+            case 2 : return i3;
+            case 3 : return i4;
+            case 4 : return i5;
+            case 5 : return i6;
+            case 6 : return v1;
+            case 7 : return d1;
+            case 8 : return d2;
+            case 9 : return d3;
+            case 10: return b1;
         }
+
     }
 };
 
 //implement += and + operators for different datatypes
-__HD__ Stress inline operator+=(Stress& a, const float b )
+__HD__ void inline operator+=(Stress& a, const float b )
 {
   a.xx += b; a.xy += b; a.xz += b;
   a.yy += b; a.yz += b; a.zz += b;
@@ -402,10 +406,12 @@ __HD__ Velocity_Gradient inline operator*(const float b,Velocity_Gradient a)
 }
 
 
-inline __HD__ Aprox_Density operator-(Aprox_Density &a)
+inline __HD__ Density_Gradient operator-(const Density_Gradient &a)
 {
 
-    a.x = -a.x;
-    a.y = -a.y;
-    a.z = -a.z;
+    Density_Gradient b;
+    b.x = -a.x;
+    b.y = -a.y;
+    b.z = -a.z;
+    return b ;
 }

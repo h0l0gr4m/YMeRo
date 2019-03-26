@@ -267,11 +267,19 @@ void exportPlugins(py::module& m)
     )");
 
 
-    py::handlers_class<LossFunctionPlugin>(m, "LossFunction",pysim,R"(
+    py::handlers_class<LossStressFunctionPlugin>(m, "LossStressFunction",pysim,R"(
       This plugin computes the LossFunction which is used to optimize the weights of neureal network in SmartDPD-
     )");
 
-    py::handlers_class<LossFunctionDumper>(m, "LossFunctionDumper",pypost,R"(
+    py::handlers_class<LossStressFunctionDumper>(m, "LossStressFunctionDumper",pypost,R"(
+      This plugin computes the LossFunction which is used to optimize the weights of neureal network in SmartDPD-
+        )");
+
+    py::handlers_class<LossDensityFunctionPlugin>(m, "LossDensityFunction",pysim,R"(
+      This plugin computes the LossFunction which is used to optimize the weights of neureal network in SmartDPD-
+    )");
+
+    py::handlers_class<LossDensityFunctionDumper>(m, "LossDensityFunctionDumper",pypost,R"(
       This plugin computes the LossFunction which is used to optimize the weights of neureal network in SmartDPD-
         )");
 
@@ -656,7 +664,18 @@ void exportPlugins(py::module& m)
             path: the folder name in which the file will be dumped
     )");
 
-    m.def("__createLossFunctionPlugin", &PluginFactory::createLossFunctionPlugin,
+    m.def("__createLossStressFunctionPlugin", &PluginFactory::createLossStressFunctionPlugin,
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a,"viscosity"_a, "dump_every"_a, "path"_a, R"(
+        Create :any:`LossFunction` plugin
+
+        Args:
+            name: name of the plugin
+            pv: concerned :class:`ParticleVector`
+            dump_every: report total pressure every this many time-steps
+            path: the folder name in which the file will be dumped
+    )");
+
+    m.def("__createLossDensityFunctionPlugin", &PluginFactory::createLossDensityFunctionPlugin,
           "compute_task"_a, "state"_a, "name"_a, "pv"_a,"viscosity"_a, "dump_every"_a, "path"_a, R"(
         Create :any:`LossFunction` plugin
 

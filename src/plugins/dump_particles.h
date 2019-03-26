@@ -17,7 +17,7 @@ class ParticleSenderPlugin : public SimulationPlugin
 public:
 
     enum class ChannelType {
-        Scalar, Vector, Tensor6, Tensor9
+        Scalar, Vector, Tensor6, Tensor9, NNInput
     };
 
     ParticleSenderPlugin(const YmrState *state, std::string name, std::string pvName, int dumpEvery,

@@ -17,7 +17,7 @@ int Channel::precision() const
 {
     return numberTypeToPrecision(numberType);
 }
-    
+
 std::string dataFormToXDMFAttribute(Channel::DataForm dataForm)
 {
     switch (dataForm)
@@ -26,6 +26,7 @@ std::string dataFormToXDMFAttribute(Channel::DataForm dataForm)
     case Channel::DataForm::Vector:     return "Vector";
     case Channel::DataForm::Tensor6:    return "Tensor6";
     case Channel::DataForm::Tensor9:    return "Tensor";
+    case Channel::DataForm::NNInput:    return "NNInput";
     case Channel::DataForm::Quaternion: return "Matrix";
     case Channel::DataForm::Triangle:   return "Matrix";
     case Channel::DataForm::Other:      return "Scalar";
@@ -40,6 +41,7 @@ int dataFormToNcomponents(Channel::DataForm dataForm)
     case Channel::DataForm::Vector:     return 3;
     case Channel::DataForm::Tensor6:    return 6;
     case Channel::DataForm::Tensor9:    return 9;
+    case Channel::DataForm::NNInput:    return 11;
     case Channel::DataForm::Quaternion: return 4;
     case Channel::DataForm::Triangle:   return 3;
     case Channel::DataForm::Other:      return 1;
@@ -54,23 +56,25 @@ std::string dataFormToDescription(Channel::DataForm dataForm)
     case Channel::DataForm::Vector:     return "Vector";
     case Channel::DataForm::Tensor6:    return "Tensor6";
     case Channel::DataForm::Tensor9:    return "Tensor";
+    case Channel::DataForm::NNInput:    return "NNInput";
     case Channel::DataForm::Quaternion: return "Quaternion";
     case Channel::DataForm::Triangle:   return "Triangle";
     case Channel::DataForm::Other:      return "Other";
     }
 }
-        
+
 Channel::DataForm descriptionToDataForm(std::string str)
 {
     if (str == "Scalar")      return Channel::DataForm::Scalar;
     if (str == "Vector")      return Channel::DataForm::Vector;
     if (str == "Tensor6")     return Channel::DataForm::Tensor6;
     if (str == "Tensor")      return Channel::DataForm::Tensor9;
+    if (str == "NNInput")     return Channel::DataForm::NNInput;
     if (str == "Quaternion")  return Channel::DataForm::Quaternion;
     if (str == "Trianle")     return Channel::DataForm::Triangle;
     return Channel::DataForm::Other;
 }
-    
+
 decltype (H5T_NATIVE_FLOAT) numberTypeToHDF5type(Channel::NumberType dt)
 {
     switch (dt)
@@ -80,7 +84,7 @@ decltype (H5T_NATIVE_FLOAT) numberTypeToHDF5type(Channel::NumberType dt)
     case Channel::NumberType::Int    : return H5T_NATIVE_INT;
     }
 }
-    
+
 std::string numberTypeToString(Channel::NumberType dt)
 {
     switch (dt)
@@ -100,7 +104,7 @@ int numberTypeToPrecision(Channel::NumberType dt)
     case Channel::NumberType::Int    : return sizeof(int);
     }
 }
-    
+
 Channel::NumberType infoToNumberType(std::string str, int precision)
 {
     if (precision == sizeof(float)  && str == "Float") return Channel::NumberType::Float;

@@ -42,7 +42,7 @@ public:
         atomicAddAprox_Density(view.aprox_densities + id, fsfp.aprox_density);
         atomicAddVorticity(view.vorticities + id, fsfp.vorticity);
         atomicAddVelocity_Gradient(view.velocity_gradients + id , fsfp.velocity_gradient);
-        atomicAddDensity_Gradient(view.density_gradients + id, fsfp.density_gradient);
+        atomicAddDensity_Gradient(view.density_gradients + id, -fsfp.density_gradient);
 
     }
 

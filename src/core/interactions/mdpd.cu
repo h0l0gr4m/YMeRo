@@ -28,7 +28,7 @@ void InteractionDensity::setPrerequisites(ParticleVector *pv1, ParticleVector *p
 
     pv1->requireDataPerParticle<float>(ChannelNames::densities, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<float>(ChannelNames::densities, ExtraDataManager::PersistenceMode::None);
-    
+
     cl1->requireExtraDataPerParticle<float>(ChannelNames::densities);
     cl2->requireExtraDataPerParticle<float>(ChannelNames::densities);
 }
@@ -79,7 +79,7 @@ void InteractionMDPD::setPrerequisites(ParticleVector *pv1, ParticleVector *pv2,
 
     pv1->requireDataPerParticle<float>(ChannelNames::densities, ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle<float>(ChannelNames::densities, ExtraDataManager::PersistenceMode::None);
-    
+
     cl1->requireExtraDataPerParticle<float>(ChannelNames::densities);
     cl2->requireExtraDataPerParticle<float>(ChannelNames::densities);
 }
@@ -108,7 +108,7 @@ void InteractionMDPD::halo(ParticleVector *pv1, ParticleVector *pv2,
     impl->halo(pv1, pv2, cl1, cl2, stream);
 }
 
-void InteractionMDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2, 
+void InteractionMDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
                                       float a, float b, float gamma, float kbt, float power)
 {
     if (a     == Default) a     = this->a;
@@ -119,8 +119,6 @@ void InteractionMDPD::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
 
     PairwiseMDPD mdpd(this->rc, this->rd, a, b, gamma, kbt, state->dt, power);
     auto ptr = static_cast< InteractionPair<PairwiseMDPD>* >(impl.get());
-    
+
     ptr->setSpecificPair(pv1->name, pv2->name, mdpd);
 }
-
-

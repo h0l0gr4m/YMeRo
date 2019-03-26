@@ -1,4 +1,4 @@
-#pragma once
+  #pragma once
 
 #include <core/containers.h>
 
@@ -6,18 +6,18 @@
 
 class ParticleVector;
 
-namespace LossFunction
+namespace LossStressFunction
 {
 using ReductionType = double;
 }
 
-class LossFunctionPlugin : public SimulationPlugin
+class LossStressFunctionPlugin : public SimulationPlugin
 {
 public:
-    LossFunctionPlugin(const YmrState *state, std::string name, std::string pvName,const float viscosity,
+    LossStressFunctionPlugin(const YmrState *state, std::string name, std::string pvName,const float viscosity,
                        int dumpEvery);
 
-    ~LossFunctionPlugin();
+    ~LossStressFunctionPlugin();
 
     void setup(Simulation *simulation, const MPI_Comm& comm, const MPI_Comm& interComm) override;
 
@@ -33,7 +33,7 @@ private:
     bool needToSend = false;
 
 
-    PinnedBuffer<LossFunction::ReductionType> localLossFunction {1};
+    PinnedBuffer<LossStressFunction::ReductionType> localLossStressFunction {1};
     TimeType savedTime = 0;
 
     std::vector<char> sendBuffer;
@@ -43,12 +43,12 @@ private:
 };
 
 
-class LossFunctionDumper : public PostprocessPlugin
+class LossStressFunctionDumper : public PostprocessPlugin
 {
 public:
-    LossFunctionDumper(std::string name, std::string path);
+    LossStressFunctionDumper(std::string name, std::string path);
 
-    ~LossFunctionDumper();
+    ~LossStressFunctionDumper();
 
     void deserialize(MPI_Status& stat) override;
     void setup(const MPI_Comm& comm, const MPI_Comm& interComm) override;

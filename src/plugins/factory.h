@@ -29,7 +29,8 @@
 #include "virial_pressure.h"
 #include "wall_force_collector.h"
 #include "wall_repulsion.h"
-#include "loss_function.h"
+#include "lossstress_function.h"
+#include "lossdensity_function.h"
 #include <core/pvs/object_vector.h>
 #include <core/pvs/particle_vector.h>
 #include <core/utils/pytypes.h>
@@ -55,6 +56,7 @@ static void extractChannelsInfos(const std::vector< std::pair<std::string, std::
         else if (typeStr == "vector_from_float8") types.push_back(Average3D::ChannelType::Vector_2xfloat4);
         else if (typeStr == "tensor6")            types.push_back(Average3D::ChannelType::Tensor6);
         else if (typeStr == "tensor9")            types.push_back(Average3D::ChannelType::Tensor9);
+        else if (typeStr == "NNInput")            types.push_back(Average3D::ChannelType::NNInput);
         else die("Unable to get parse channel type '%s'", typeStr.c_str());
     }
 }
@@ -76,6 +78,7 @@ static void extractChannelInfos(const std::vector< std::pair<std::string, std::s
         else if (typeStr == "vector")    types.push_back(ParticleSenderPlugin::ChannelType::Vector);
         else if (typeStr == "tensor6")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor6);
         else if (typeStr == "tensor9")   types.push_back(ParticleSenderPlugin::ChannelType::Tensor9);
+        else if (typeStr == "NNInput")   types.push_back(ParticleSenderPlugin::ChannelType::NNInput);
         else die("Unable to get parse channel type '%s'", typeStr.c_str());
     }
 }
@@ -371,17 +374,30 @@ createVirialPressurePlugin(bool computeTask, const YmrState *state, std::string 
 }
 
 
-static pair_shared< LossFunctionPlugin, LossFunctionDumper >
-createLossFunctionPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv,float viscosity,
+static pair_shared< LossStressFunctionPlugin, LossStressFunctionDumper >
+createLossStressFunctionPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv,float viscosity,
                             int dumpEvery, std::string path)
 {
 
-    auto simPl  = computeTask ? std::make_shared<LossFunctionPlugin> (state, name, pv->name,
+    auto simPl  = computeTask ? std::make_shared<LossStressFunctionPlugin> (state, name, pv->name,
                                                                        viscosity, dumpEvery)
         : nullptr;
-    auto postPl = computeTask ? nullptr : std::make_shared<LossFunctionDumper> (name, path);
+    auto postPl = computeTask ? nullptr : std::make_shared<LossStressFunctionDumper> (name, path);
     return { simPl, postPl };
 }
+
+static pair_shared< LossDensityFunctionPlugin, LossDensityFunctionDumper >
+createLossDensityFunctionPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv,float viscosity,
+                            int dumpEvery, std::string path)
+{
+
+    auto simPl  = computeTask ? std::make_shared<LossDensityFunctionPlugin> (state, name, pv->name,
+                                                                       viscosity, dumpEvery)
+        : nullptr;
+    auto postPl = computeTask ? nullptr : std::make_shared<LossDensityFunctionDumper> (name, path);
+    return { simPl, postPl };
+}
+
 
 
 static pair_shared< VelocityInletPlugin, PostprocessPlugin >

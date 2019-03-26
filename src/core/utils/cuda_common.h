@@ -79,6 +79,8 @@ __device__ inline  float2 warpReduce(float2 val, Operation op)
     return val;
 }
 
+
+
 template<typename Operation>
 __device__ inline  float warpReduce(float val, Operation op)
 {
@@ -227,6 +229,14 @@ __device__ inline float2 atomicAdd(float2* addr, float2 v)
     float2 res;
     res.x = atomicAdd((float*)addr,   v.x);
     res.y = atomicAdd((float*)addr+1, v.y);
+    return res;
+}
+
+__device__ inline double2 atomicAdd(double2* addr, double2 v)
+{
+    double2 res;
+    res.x = atomicAdd((double*)addr,   v.x);
+    res.y = atomicAdd((double*)addr+1, v.y);
     return res;
 }
 

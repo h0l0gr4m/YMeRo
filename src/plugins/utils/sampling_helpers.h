@@ -60,6 +60,14 @@ __device__ inline void sampleChannels(int pid, int cid, ChannelsInfo channelsInf
             atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 1, ((float3*)channelsInfo.data[i])[3*pid + 1] );
             atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 2, ((float3*)channelsInfo.data[i])[3*pid + 2] );
         }
+        if (channelsInfo.types[i] == Average3D::ChannelType::NNInput)
+        {
+            atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 0, ((float3*)channelsInfo.data[i])[4*pid + 0] );
+            atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 1, ((float3*)channelsInfo.data[i])[4*pid + 1] );
+            atomicAdd(((float3*)channelsInfo.average[i]) + 3*cid + 2, ((float3*)channelsInfo.data[i])[4*pid + 2] );
+            atomicAdd(((float2*)channelsInfo.average[i]) + 4*cid + 3, ((float2*)channelsInfo.data[i])[4*pid + 3] );
+
+        }
     }
 }
 

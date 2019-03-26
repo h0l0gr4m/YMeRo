@@ -102,7 +102,8 @@ InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,
 InteractionSmartDPD::~InteractionSmartDPD() = default;
 
 void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2,CellList *cl1, CellList *cl2)
-{     impl->setPrerequisites(pv1, pv2,cl1,cl2);
+{
+    impl->setPrerequisites(pv1, pv2,cl1,cl2);
     pv1->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters,ExtraDataManager::PersistenceMode::None);
     pv2->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters,ExtraDataManager::PersistenceMode::None);
 
@@ -115,16 +116,19 @@ void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* 
     cl1->requireExtraDataPerParticle <NNInput> (ChannelNames::NNInputs);
     cl2->requireExtraDataPerParticle <NNInput> (ChannelNames::NNInputs);
 
-    auto pv1DPDparameter = pv1->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
-    auto pv2DPDparameter = pv2->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+    auto pv1DPDparameterlocal = pv1->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+    auto pv2DPDparameterlocal = pv2->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+
     int nth = 128;
-    int np = pv1->local()->size();
+    int np_local = pv1->local()->size();
+    int np_halo = pv1->halo()->size();
     SAFE_KERNEL_LAUNCH(
         copy_kernel,
-        getNblocks(np, nth), nth, 0, 0,
-        pv1DPDparameter,pv2DPDparameter,np,a,gamma);
+        getNblocks(np_local, nth), nth, 0, 0,
+        pv1DPDparameterlocal,pv2DPDparameterlocal,np_local,a,gamma);
 
-    Weights.resize_anew(16);
+
+    Weights.resize_anew(22);
     auto hostPtr = Weights.hostPtr();
     memcpy(hostPtr, &weights[0], weights.size() * sizeof(float));
     Weights.uploadToDevice(0);
@@ -134,11 +138,12 @@ void InteractionSmartDPD::localNeuralNetwork (ParticleVector* pv, CellList* cl,c
 {
     NNInput_Computation nninputs(rc);
     using ViewType = typename NNInput_Computation::ViewType;
-    auto view = cl->getView<ViewType>();
+    ViewType view(pv,pv->local());
+    int size = view.size;
     nninputs.setup(pv->local());
     int nth = 128;
     SAFE_KERNEL_LAUNCH(
-      computeNNInputs,getNblocks(pv->local()->size(),nth),nth,0,stream,
+      computeNNInputs,getNblocks(size,nth),nth,0,stream,
       view,nninputs);
 
 
@@ -147,11 +152,9 @@ void InteractionSmartDPD::localNeuralNetwork (ParticleVector* pv, CellList* cl,c
     int iteration = 4;
     auto devPtr = Weights.devPtr();
     SAFE_KERNEL_LAUNCH(
-      NeuralNet,getNblocks(16*pv->local()->size(),nth),nth,0,stream,
-      pv->local()->size(),iteration,pv1DPDparameter,pv1NNInputs,devPtr
+      NeuralNet,getNblocks(32*size,nth),nth,0,stream,
+      size,iteration,pv1DPDparameter,pv1NNInputs,devPtr
     );
-
-
 
 }
 
@@ -159,11 +162,13 @@ void InteractionSmartDPD::haloNeuralNetwork(ParticleVector* pv,CellList *cl, cud
 {
   NNInput_Computation nninputs(rc);
   using ViewType = typename NNInput_Computation::ViewType;
-  auto view = cl->getView<ViewType>();
+  ViewType  view (pv,pv->halo());
+  int size =view.size;
   nninputs.setup(pv->halo());
   int nth = 128;
+
   SAFE_KERNEL_LAUNCH(
-    computeNNInputs,getNblocks(pv->halo()->size(),nth),nth,0,stream,
+    computeNNInputs,getNblocks(size,nth),nth,0,stream,
     view,nninputs);
 
 
@@ -172,8 +177,8 @@ void InteractionSmartDPD::haloNeuralNetwork(ParticleVector* pv,CellList *cl, cud
   int iteration = 4;
   auto devPtr = Weights.devPtr();
   SAFE_KERNEL_LAUNCH(
-    NeuralNet,getNblocks(16*pv->halo()->size(),nth),nth,0,stream,
-    pv->halo()->size(),iteration,pv1DPDparameter,pv1NNInputs,devPtr
+    NeuralNet,getNblocks(32*size,nth),nth,0,stream,
+    size,iteration,pv1DPDparameter,pv1NNInputs,devPtr
   );
 }
 
