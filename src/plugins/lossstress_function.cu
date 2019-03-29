@@ -45,9 +45,9 @@ __global__ void totalLoss(PVview view,const float viscosity, const Stress *stres
         const float a32 = s_new.yz-v_g_new2.zy;
         const float a33 = s_new.zz-v_g_new2.zz;
 
-        const float stress_part = (1/6)*(a11*a11 +a12*a12 +a13*a13 +a21*a21 +a22*a22 +a23*a23 +a31*a31 +a32*a32+ a33*a33);
+        const float stress_part = (a11*a11 +a12*a12 +a13*a13 +a21*a21 +a22*a22 +a23*a23 +a31*a31 +a32*a32+ a33*a33)/6;
         L = stress_part;
-        printf(" stress_part : %f \n" ,stress_part);
+        // printf(" stress_part : %f \n" ,stress_part);
         //calculate density gradient part of Loss LossStressFunction
 
       }

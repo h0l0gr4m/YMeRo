@@ -10,6 +10,7 @@
 #include <core/interactions/calculations/NNInputs.h>
 #include <core/pvs/views/pv.h>
 #include <cstdlib>
+#include <math.h>
 
 
 
@@ -78,6 +79,7 @@ __global__ void NeuralNet(int size, int iteration,DPDparameter *pv1DPDparameter,
   {
     if(weight_index<11)
     {
+       value = (value + sqrt(value*value +1))/2 ;
        pv1DPDparameter[particle].alpha_p = value;
        // printf("pv1DPDparameter[particle].alpha_p: %f , value: %f, particle: %d, laneid: %d , weight_index: %d  \n", pv1DPDparameter[particle].alpha_p ,value, particle, laneid,weight_index);
     }
@@ -85,6 +87,7 @@ __global__ void NeuralNet(int size, int iteration,DPDparameter *pv1DPDparameter,
 
     else
     {
+       value = (value + sqrt(value*value +1))/2 ;
        pv1DPDparameter[particle].gamma_p=value;
        // if (pv1DPDparameter[particle].gamma_p != 20.25)
        // printf("pv1DPDparameter[particle].gamma_p: %f , value: %f, particle: %d, laneid: %d , weight_index: %d , inpud_index: %d \n", pv1DPDparameter[particle].gamma_p ,value, particle, laneid,weight_index,input_index);
