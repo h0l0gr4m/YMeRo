@@ -149,11 +149,10 @@ void InteractionSmartDPD::localNeuralNetwork (ParticleVector* pv, CellList* cl,c
 
     auto pv1DPDparameter = pv->local()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
     auto pv1NNInputs = pv->local()->extraPerParticle.getData<NNInput>(ChannelNames::NNInputs)->devPtr();
-    int iteration = 4;
     auto devPtr = Weights.devPtr();
     SAFE_KERNEL_LAUNCH(
       NeuralNet,getNblocks(32*size,nth),nth,0,stream,
-      size,iteration,pv1DPDparameter,pv1NNInputs,devPtr
+      size,pv1DPDparameter,pv1NNInputs,devPtr
     );
 
 }
@@ -174,11 +173,10 @@ void InteractionSmartDPD::haloNeuralNetwork(ParticleVector* pv,CellList *cl, cud
 
   auto pv1DPDparameter = pv->halo()->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
   auto pv1NNInputs = pv->halo()->extraPerParticle.getData<NNInput>(ChannelNames::NNInputs)->devPtr();
-  int iteration = 4;
   auto devPtr = Weights.devPtr();
   SAFE_KERNEL_LAUNCH(
     NeuralNet,getNblocks(32*size,nth),nth,0,stream,
-    size,iteration,pv1DPDparameter,pv1NNInputs,devPtr
+    size,pv1DPDparameter,pv1NNInputs,devPtr
   );
 }
 

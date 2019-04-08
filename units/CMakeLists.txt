@@ -48,7 +48,7 @@ function (add_test_executable dirName)
     "${CMAKE_CURRENT_SOURCE_DIR}/${dirName}/*.cpp")
 
   set(EXEC_NAME "test_${dirName}")
-  
+
   add_executable(${EXEC_NAME} ${SOURCES})
   target_link_libraries(${EXEC_NAME} PRIVATE ${CUDA_LIBRARIES})
   target_link_libraries(${EXEC_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../build/libymero_main.so")
@@ -68,6 +68,7 @@ add_test_executable(scheduler)
 add_test_executable(serializer)
 add_test_executable(triangle_invariants)
 add_test_executable(warpScan)
+#add_test_executable(neural_net)
 
 
 # Setup nvcc flags
@@ -101,4 +102,3 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING
     "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
 endif()
-

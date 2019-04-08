@@ -41,7 +41,7 @@ __device__ inline  float warpReduce(float val)
 
 
 
-__global__ void NeuralNet(int size, int iteration,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
+__global__ void NeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
 {
   // printf("size: %d \n" ,size);
 	int thread = getGlobalIdx_3D_3D();

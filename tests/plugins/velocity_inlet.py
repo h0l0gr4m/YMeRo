@@ -66,7 +66,7 @@ elif args.geometry == "plane":
     # plane perpendicular to y direction with velocity in circular patch or radius R
     def inlet_surface(r):
         return r[1] - center[1]
-
+    
     def inlet_velocity(r):
         x = r[0] - center[0]
         z = r[2] - center[2]
@@ -77,7 +77,7 @@ elif args.geometry == "plane":
 
 else:
     exit(1)
-
+    
 u.registerPlugins(ymr.Plugins.createVelocityInlet('inlet', pv, inlet_surface, inlet_velocity, resolution, inlet_density, kBT))
 
 #dump_every   = 100

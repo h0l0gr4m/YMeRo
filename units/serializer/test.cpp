@@ -18,7 +18,7 @@ void myassert(bool condition, const std::string& message)
         fprintf(stderr, "%s\n", message.c_str());
         fflush(stdout);
     }
-        
+
     ASSERT_TRUE(condition);
 }
 
@@ -28,17 +28,17 @@ void test(Vec vals, Cmp cmp)
 {
     std::vector<char> buf;
     Cont dst;
-    
+
     {
         Cont src(vals.size());
         for (int i=0; i<vals.size(); i++)
             src[i] = vals[i];
-        
+
         SimpleSerializer::serialize(buf, src);
     }
-    
+
     SimpleSerializer::deserialize(buf, dst);
-    
+
     for (int i=0; i<vals.size(); i++)
         myassert(cmp(dst[i], vals[i]), "mismatch on " + std::to_string(i));
 }
@@ -74,17 +74,17 @@ TEST(Serializer, Mixed)
     std::vector<int> s4{2,3,4,5}, d4;
     std::vector<std::string> s5{"density", "velocity"},  d5;
     std::vector<char> buf;
-    
+
     SimpleSerializer::serialize  (buf, s1,s2,s3,s4,s5);
     SimpleSerializer::deserialize(buf, d1,d2,d3,d4,d5);
-    
+
     myassert(s1==d1, "mismatch on 1");
     myassert(s2==d2, "mismatch on 2");
     myassert(s3==d3, "mismatch on 3");
 
     for (int i = 0; i < s4.size(); i++)
-        myassert(s4[i] == d4[i], "mismatch on 4[" + std::to_string(i) + "]"); 
-    
+        myassert(s4[i] == d4[i], "mismatch on 4[" + std::to_string(i) + "]");
+
     for (int i = 0; i < s5.size(); i++)
         myassert(s5[i] == d5[i], "mismatch on 5[" + std::to_string(i) + "]");
 
@@ -96,8 +96,8 @@ int main(int argc, char **argv)
     logger.init(MPI_COMM_WORLD, "serializer.log", 9);
 
     testing::InitGoogleTest(&argc, argv);
-    auto ret = RUN_ALL_TESTS();    
-    
+    auto ret = RUN_ALL_TESTS();
+
     MPI_Finalize();
     return ret;
 }
