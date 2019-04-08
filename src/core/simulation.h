@@ -5,6 +5,7 @@
 #include <core/domain.h>
 #include <core/logger.h>
 #include <core/mpi/exchanger_interfaces.h>
+#include <core/ymero_object.h>
 
 #include <functional>
 #include <map>
@@ -28,9 +29,9 @@ class InitialConditions;
 class Bouncer;
 class ObjectBelongingChecker;
 class SimulationPlugin;
+struct SimulationTasks;
 
-
-class Simulation
+class Simulation : protected YmrObject
 {
 public:
     int3 nranks3D;
@@ -97,7 +98,7 @@ public:
 
     float getMaxEffectiveCutoff() const;
     
-    void saveDependencyGraph_GraphML(std::string fname) const;
+    void saveDependencyGraph_GraphML(std::string fname, bool current) const;
 
 
 private:    
@@ -114,6 +115,7 @@ private:
     int rank;
 
     std::unique_ptr<TaskScheduler> scheduler;
+    std::unique_ptr<SimulationTasks> tasks;
 
     std::unique_ptr<InteractionManager> interactionManager;
 
@@ -121,8 +123,10 @@ private:
 
     using ExchangeEngineUniquePtr = std::unique_ptr<ExchangeEngine>;
 
-    ExchangeEngineUniquePtr haloIntermediate, halo, redistributor;
-    ExchangeEngineUniquePtr objHaloIntermediate, objHalo, objRedistibutor, objHaloForces;
+    ExchangeEngineUniquePtr partRedistributor, objRedistibutor;
+    ExchangeEngineUniquePtr partHaloIntermediate, partHaloFinal;
+    ExchangeEngineUniquePtr objHaloIntermediate, objHaloReverseIntermediate;
+    ExchangeEngineUniquePtr objHaloFinal, objHaloReverseFinal;
 
     std::map<std::string, int> pvIdMap;
     std::vector< std::shared_ptr<ParticleVector> > particleVectors;
@@ -200,8 +204,9 @@ private:
     std::map<std::string, std::string> pvsIntegratorMap;
 
     
-    
 private:
+
+    std::vector<std::string> getExtraDataToExchange(ObjectVector *ov);
     
     void prepareCellLists();
     void prepareInteractions();
@@ -211,7 +216,13 @@ private:
     void prepareEngines();
     
     void execSplitters();
-    
-    void assemble();
+
+    void createTasks();
+
+    using YmrObject::restart;
+    using YmrObject::checkpoint;
+
+    void restartState(std::string folder);
+    void checkpointState();
 };
 

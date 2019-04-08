@@ -12,7 +12,50 @@ For more information, please refer to the online documentation: http://ymero.rea
 
 ## Changelog
 
-<!-- ### unreleased -->
+### unreleased
+
+* **interface change** linear EOS in SDPD needs an extra parameter `rho_0`
+* **fix** SDPD: correct use of mass density
+* checkpoint and restart interaction random state
+* internal changes:
+  * cleanup some implementations from interfaces
+  * adding rod vectors
+
+### v0.12.3
+
+* **interface changes**
+  * use checkpoint instead of restart in Ymero coordinator constructor
+  * add checkpoint_mode parameter to Ymero coordinator constructor
+* checkpoint/restart mechanism is more uniform
+
+### v0.12.2
+
+* densities computed from pairwise interactions are now mass density
+* internal changes: 
+  * add fetcher with mass
+  * add type trait for self interacting pairwise kernels
+
+### v0.12.1
+
+* add support of SDPD/MDPD for objects
+* **fix** belonging checkers for halo objects: needed rigid motions
+* **fix** reverse exchanger data taken from halo for the extra data
+
+### v0.12.0
+
+* **fix** `ymero.restart()` will now indeed restart the simulation
+* **interface change** Renamed and moved parameter for MPI communicator in the ymero constructor
+* **interface change** Density interaction needs a density kernel
+* add SDPD interactions
+* add more density kernels
+* **docs**: add tutorials
+* **docs**: minor fixes
+* **internal**:
+  * tests are more robust to DPD noise
+  * proper rng per time step in DPD/MDPD 
+* add density outlet plugin
+* add rate outlet plugin
+* add experimental version of density control plugin
 
 ### v0.11.5
 

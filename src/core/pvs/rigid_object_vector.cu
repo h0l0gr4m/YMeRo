@@ -1,20 +1,24 @@
+#include "restart_helpers.h"
 #include "rigid_object_vector.h"
 #include "views/rov.h"
 
-#include <core/utils/kernel_launch.h>
-#include <core/utils/folders.h>
 #include <core/rigid_kernels/integration.h>
+#include <core/utils/folders.h>
+#include <core/utils/kernel_launch.h>
+#include <core/xdmf/type_map.h>
 #include <core/xdmf/xdmf.h>
-#include <core/xdmf/typeMap.h>
 
-#include "restart_helpers.h"
+
+LocalRigidObjectVector::LocalRigidObjectVector(ParticleVector* pv, int objSize, int nObjects) :
+    LocalObjectVector(pv, objSize, nObjects)
+{}
 
 RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, float partMass,
                                      float3 J, const int objSize,
                                      std::shared_ptr<Mesh> mesh, const int nObjects) :
     ObjectVector( state, name, partMass, objSize,
-                  new LocalRigidObjectVector(this, objSize, nObjects),
-                  new LocalRigidObjectVector(this, objSize, 0) ),
+                  std::make_unique<LocalRigidObjectVector>(this, objSize, nObjects),
+                  std::make_unique<LocalRigidObjectVector>(this, objSize, 0) ),
     J(J)
 {
     this->mesh = std::move(mesh);
@@ -40,6 +44,8 @@ RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, fl
                                      std::shared_ptr<Mesh> mesh, const int nObjects) :
     RigidObjectVector( state, name, partMass, make_float3(J), objSize, mesh, nObjects )
 {}
+
+RigidObjectVector::~RigidObjectVector() = default;
 
 PinnedBuffer<Particle>* LocalRigidObjectVector::getMeshVertices(cudaStream_t stream)
 {
@@ -119,7 +125,7 @@ void RigidObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    std::string filename = path + "/" + name + ".obj-" + getStrZeroPadded(restartIdx);
+    auto filename = createCheckpointNameWithId(path, "ROV", "");
     info("Checkpoint for rigid object vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
     auto motions = local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
@@ -148,7 +154,7 @@ void RigidObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     
     XDMF::write(filename, &grid, channels, comm);
 
-    RestartHelpers::make_symlink(comm, path, name + ".obj", filename);
+    createCheckpointSymlink(comm, path, "ROV", "xmf");
 
     debug("Checkpoint for object vector '%s' successfully written", name.c_str());
 }
@@ -163,7 +169,7 @@ void RigidObjectVector::_restartObjectData(MPI_Comm comm, std::string path, cons
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    std::string filename = path + "/" + name + ".obj.xmf";
+    auto filename = createCheckpointName(path, "ROV", "xmf");
     info("Restarting rigid object vector %s from file %s", name.c_str(), filename.c_str());
 
     XDMF::readRigidObjectData(filename, comm, this);
@@ -171,8 +177,11 @@ void RigidObjectVector::_restartObjectData(MPI_Comm comm, std::string path, cons
     auto loc_ids     = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
     auto loc_motions = local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
     
-    std::vector<int>             ids(loc_ids    ->begin(), loc_ids    ->end());
-    std::vector<RigidMotion> motions(loc_motions->begin(), loc_motions->end());
+    std::vector<int>             ids(loc_ids->size());
+    std::vector<RigidMotion> motions(loc_motions->size());
+    
+    std::copy(loc_ids    ->begin(), loc_ids    ->end(), ids.begin());
+    std::copy(loc_motions->begin(), loc_motions->end(), motions.begin());
     
     RestartHelpers::exchangeData(comm, map, ids, 1);
     RestartHelpers::exchangeData(comm, map, motions, 1);

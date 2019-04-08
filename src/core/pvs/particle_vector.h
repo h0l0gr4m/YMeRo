@@ -1,15 +1,17 @@
 #pragma once
 
-#include <set>
-#include <string>
-
 #include <core/containers.h>
 #include <core/datatypes.h>
 #include <core/domain.h>
+#include <core/pvs/extra_data/extra_data_manager.h>
+#include <core/utils/make_unique.h>
 #include <core/utils/pytypes.h>
 #include <core/ymero_object.h>
 
-#include "extra_data/extra_data_manager.h"
+#include <memory>
+#include <set>
+#include <string>
+
 
 namespace XDMF {struct Channel;}
 
@@ -23,20 +25,20 @@ enum class ParticleVectorType {
 class LocalParticleVector
 {
 public:
-    ParticleVector* pv;
+    LocalParticleVector(ParticleVector *pv, int n = 0);
+    virtual ~LocalParticleVector();
 
- 
+    int size() { return np; }
+    virtual void resize(int n, cudaStream_t stream);
+    virtual void resize_anew(int n);
+
+public:
+    ParticleVector *pv;
+
+
     PinnedBuffer<Particle> coosvels;
     DeviceBuffer<Force> forces;
     ExtraDataManager extraPerParticle;
-
-    LocalParticleVector(ParticleVector* pv, int n=0);
-
-    int size() { return np; }
-    virtual void resize(const int n, cudaStream_t stream);
-    virtual void resize_anew(const int n);
-
-    virtual ~LocalParticleVector();
 
 protected:
     int np;
@@ -45,23 +47,13 @@ protected:
 
 class ParticleVector : public YmrSimulationObject
 {
-protected:
-
-    LocalParticleVector *_local, *_halo;
-
 public:
 
-    float mass;
-
-    bool haloValid = false;
-    bool redistValid = false;
-
-    int cellListStamp{0};
-
     ParticleVector(const YmrState *state, std::string name, float mass, int n=0);
+    ~ParticleVector() override;
 
-    LocalParticleVector* local() { return _local; }
-    LocalParticleVector* halo()  { return _halo;  }
+    LocalParticleVector* local() { return _local.get(); }
+    LocalParticleVector* halo()  { return _halo.get();  }
 
     void checkpoint(MPI_Comm comm, std::string path) override;
     void restart(MPI_Comm comm, std::string path) override;
@@ -81,9 +73,6 @@ public:
     void setVelocities_vector(PyTypes::VectorOfFloat3& velocities);
     void setForces_vector(PyTypes::VectorOfFloat3& forces);
 
-
-    ~ParticleVector() override;
-
     template<typename T>
     void requireDataPerParticle(std::string name, ExtraDataManager::PersistenceMode persistence)
     {
@@ -99,7 +88,8 @@ public:
 
 protected:
     ParticleVector(const YmrState *state, std::string name, float mass,
-                   LocalParticleVector *local, LocalParticleVector *halo );
+                   std::unique_ptr<LocalParticleVector>&& local,
+                   std::unique_ptr<LocalParticleVector>&& halo );
 
     virtual void _getRestartExchangeMap(MPI_Comm comm, const std::vector<Particle> &parts, std::vector<int>& map);
 
@@ -108,9 +98,6 @@ protected:
 
     virtual void _checkpointParticleData(MPI_Comm comm, std::string path);
     virtual std::vector<int> _restartParticleData(MPI_Comm comm, std::string path);
-
-    void advanceRestartIdx();
-    int restartIdx = 0;
 
 private:
 
@@ -121,4 +108,15 @@ private:
         lpv->extraPerParticle.setPersistenceMode(name, persistence);
         if (shiftDataSize != 0) lpv->extraPerParticle.requireShift(name, shiftDataSize);
     }
+
+public:
+    float mass;
+
+    bool haloValid   {false};
+    bool redistValid {false};
+
+    int cellListStamp{0};
+
+protected:
+    std::unique_ptr<LocalParticleVector> _local, _halo;
 };

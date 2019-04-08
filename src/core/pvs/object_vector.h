@@ -9,13 +9,22 @@
 
 class LocalObjectVector: public LocalParticleVector
 {
-protected:
-    int objSize  = 0;
+public:
+    LocalObjectVector(ParticleVector *pv, int objSize, int nObjects = 0);
+    virtual ~LocalObjectVector();
+
+    void resize(int np, cudaStream_t stream) override;
+    void resize_anew(int np) override;
+
+    virtual PinnedBuffer<Particle>* getMeshVertices(cudaStream_t stream);
+    virtual PinnedBuffer<Particle>* getOldMeshVertices(cudaStream_t stream);
+    virtual DeviceBuffer<Force>* getMeshForces(cudaStream_t stream);
+
 
 public:
-    int nObjects = 0;
+    int nObjects { 0 };
 
-    bool comExtentValid = false;
+    bool comExtentValid { false };
 
     ExtraDataManager extraPerObject;
 
@@ -24,86 +33,24 @@ public:
         float3 com, low, high;
     };
 
+protected:
+    int objSize { 0 };
 
-    LocalObjectVector(ParticleVector* pv, int objSize, int nObjects = 0) :
-        LocalParticleVector(pv, objSize*nObjects), objSize(objSize), nObjects(nObjects)
-    {
-        if (objSize <= 0)
-            die("Object vector should contain at least one particle per object instead of %d", objSize);
-
-        resize_anew(nObjects*objSize);
-    }
-
-    void resize(const int np, cudaStream_t stream) override
-    {
-        if (np % objSize != 0)
-            die("Incorrect number of particles in object: given %d, must be a multiple of %d", np, objSize);
-
-        nObjects = np / objSize;
-        LocalParticleVector::resize(np, stream);
-
-        extraPerObject.resize(nObjects, stream);
-    }
-
-    void resize_anew(const int np) override
-    {
-        if (np % objSize != 0)
-            die("Incorrect number of particles in object");
-
-        nObjects = np / objSize;
-        LocalParticleVector::resize_anew(np);
-
-        extraPerObject.resize_anew(nObjects);
-    }
-
-    virtual PinnedBuffer<Particle>* getMeshVertices(cudaStream_t stream)
-    {
-        return &coosvels;
-    }
-
-    virtual PinnedBuffer<Particle>* getOldMeshVertices(cudaStream_t stream)
-    {
-        return extraPerParticle.getData<Particle>(ChannelNames::oldParts);
-    }
-
-    virtual DeviceBuffer<Force>* getMeshForces(cudaStream_t stream)
-    {
-        return &forces;
-    }
-
-
-    virtual ~LocalObjectVector() = default;
+    int getNobjects(int np) const;
 };
 
 
 class ObjectVector : public ParticleVector
 {
-protected:
-    ObjectVector(const YmrState *state, std::string name, float mass, int objSize, LocalObjectVector *local, LocalObjectVector *halo) :
-        ParticleVector(state, name, mass, local, halo), objSize(objSize)
-    {
-        // center of mass and extents are not to be sent around
-        // it's cheaper to compute them on site
-        requireDataPerObject<LocalObjectVector::COMandExtent>(ChannelNames::comExtents, ExtraDataManager::PersistenceMode::None);
-
-        // object ids must always follow objects
-        requireDataPerObject<int>(ChannelNames::globalIds, ExtraDataManager::PersistenceMode::Persistent);
-    }
-
 public:
-    int objSize;
-    std::shared_ptr<Mesh> mesh;
-
-    ObjectVector(const YmrState *state, std::string name, float mass, const int objSize, const int nObjects = 0) :
-        ObjectVector( state, name, mass, objSize,
-                      new LocalObjectVector(this, objSize, nObjects),
-                      new LocalObjectVector(this, objSize, 0) )
-    {}
-
+    
+    ObjectVector(const YmrState *state, std::string name, float mass, int objSize, int nObjects = 0);
+    virtual ~ObjectVector();
+    
     void findExtentAndCOM(cudaStream_t stream, ParticleVectorType type);
 
-    LocalObjectVector* local() { return static_cast<LocalObjectVector*>(_local); }
-    LocalObjectVector* halo()  { return static_cast<LocalObjectVector*>(_halo);  }
+    LocalObjectVector* local() { return static_cast<LocalObjectVector*>(ParticleVector::local()); }
+    LocalObjectVector* halo()  { return static_cast<LocalObjectVector*>(ParticleVector::halo());  }
 
     void checkpoint (MPI_Comm comm, std::string path) override;
     void restart    (MPI_Comm comm, std::string path) override;
@@ -121,9 +68,14 @@ public:
         requireDataPerObject<T>(halo(),  name, persistence, shiftDataSize);
     }
 
-    virtual ~ObjectVector() = default;
-
+public:
+    int objSize;
+    std::shared_ptr<Mesh> mesh;
+    
 protected:
+    ObjectVector(const YmrState *state, std::string name, float mass, int objSize,
+                 std::unique_ptr<LocalParticleVector>&& local,
+                 std::unique_ptr<LocalParticleVector>&& halo);
 
     void _getRestartExchangeMap(MPI_Comm comm, const std::vector<Particle> &parts, std::vector<int>& map) override;
     std::vector<int> _restartParticleData(MPI_Comm comm, std::string path) override;

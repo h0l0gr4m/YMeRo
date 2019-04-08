@@ -1,29 +1,27 @@
 #pragma once
 
-#include <core/ymero_state.h>
-
-#include <limits>
+#include <fstream>
 #include <random>
 
-struct StepRandomGen
-{
-    StepRandomGen(long seed) :
-        gen(seed),
-        udistr(0.001f, 1.f)
-    {
-        lastSample = udistr(gen);
-    }
-    
-    float generate(const YmrState *state)
-    {        
-        if (state->currentStep != lastIteration)
-        {
-            lastIteration = state->currentStep;
-            lastSample = udistr(gen);
-        }
+class YmrState;
 
-        return lastSample;
-    }
+/** \brief A simple random generator wrapper for 
+ *         per time step random number generation
+ * 
+ * Used to generate independant random numbers at 
+ * every time step. Several calls at the same time 
+ * step will return the same random number
+ */
+class StepRandomGen
+{
+public:
+    explicit StepRandomGen(long seed);
+    ~StepRandomGen();
+    
+    float generate(const YmrState *state);
+
+    friend std::ofstream& operator<<(std::ofstream& stream, const StepRandomGen& gen);
+    friend std::ifstream& operator>>(std::ifstream& stream,       StepRandomGen& gen);
     
 private:
     int lastIteration {-1};

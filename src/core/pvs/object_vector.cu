@@ -44,6 +44,80 @@ __global__ void minMaxCom(OVview ovView)
 
 } // namespace ObjectVectorKernels
 
+
+LocalObjectVector::LocalObjectVector(ParticleVector *pv, int objSize, int nObjects) :
+    LocalParticleVector(pv, objSize*nObjects), objSize(objSize), nObjects(nObjects)
+{
+    if (objSize <= 0)
+        die("Object vector should contain at least one particle per object instead of %d", objSize);
+
+    resize_anew(nObjects*objSize);
+}
+
+LocalObjectVector::~LocalObjectVector() = default;
+
+void LocalObjectVector::resize(int np, cudaStream_t stream)
+{
+    nObjects = getNobjects(np);
+    LocalParticleVector::resize(np, stream);
+
+    extraPerObject.resize(nObjects, stream);
+}
+
+void LocalObjectVector::resize_anew(int np)
+{
+    nObjects = getNobjects(np);
+    LocalParticleVector::resize_anew(np);
+
+    extraPerObject.resize_anew(nObjects);
+}
+
+PinnedBuffer<Particle>* LocalObjectVector::getMeshVertices(cudaStream_t stream)
+{
+    return &coosvels;
+}
+
+PinnedBuffer<Particle>* LocalObjectVector::getOldMeshVertices(cudaStream_t stream)
+{
+    return extraPerParticle.getData<Particle>(ChannelNames::oldParts);
+}
+
+DeviceBuffer<Force>* LocalObjectVector::getMeshForces(cudaStream_t stream)
+{
+    return &forces;
+}
+
+int LocalObjectVector::getNobjects(int np) const
+{
+    if (np % objSize != 0)
+        die("Incorrect number of particles in object: given %d, must be a multiple of %d", np, objSize);
+
+    return np / objSize;
+}
+
+
+ObjectVector::ObjectVector(const YmrState *state, std::string name, float mass, int objSize, int nObjects) :
+    ObjectVector( state, name, mass, objSize,
+                  std::make_unique<LocalObjectVector>(this, objSize, nObjects),
+                  std::make_unique<LocalObjectVector>(this, objSize, 0) )
+{}
+
+ObjectVector::ObjectVector(const YmrState *state, std::string name, float mass, int objSize,
+                           std::unique_ptr<LocalParticleVector>&& local,
+                           std::unique_ptr<LocalParticleVector>&& halo) :
+    ParticleVector(state, name, mass, std::move(local), std::move(halo)),
+    objSize(objSize)
+{
+    // center of mass and extents are not to be sent around
+    // it's cheaper to compute them on site
+    requireDataPerObject<LocalObjectVector::COMandExtent>(ChannelNames::comExtents, ExtraDataManager::PersistenceMode::None);
+
+    // object ids must always follow objects
+    requireDataPerObject<int>(ChannelNames::globalIds, ExtraDataManager::PersistenceMode::Persistent);
+}
+
+ObjectVector::~ObjectVector() = default;
+
 void ObjectVector::findExtentAndCOM(cudaStream_t stream, ParticleVectorType type)
 {
     bool isLocal = (type == ParticleVectorType::Local);
@@ -100,26 +174,27 @@ std::vector<int> ObjectVector::_restartParticleData(MPI_Comm comm, std::string p
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    std::string filename = path + "/" + name + ".xmf";
+    auto filename = createCheckpointName(path, "PV", "xmf");
     info("Restarting object vector %s from file %s", name.c_str(), filename.c_str());
 
     XDMF::readParticleData(filename, comm, this, objSize);
 
-    std::vector<Particle> parts(local()->coosvels.begin(), local()->coosvels.end());
+    std::vector<Particle> parts(local()->size());
+    std::copy(local()->coosvels.begin(), local()->coosvels.end(), parts.begin());
     std::vector<int> map;
     
     _getRestartExchangeMap(comm, parts, map);
     RestartHelpers::exchangeData(comm, map, parts, objSize);    
     RestartHelpers::copyShiftCoordinates(state->domain, parts, local());
 
-    local()->coosvels.uploadToDevice(0);
+    local()->coosvels.uploadToDevice(defaultStream);
     
     // Do the ids
     // That's a kinda hack, will be properly fixed in the hdf5 per object restarts
     auto ids = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
     for (int i = 0; i < local()->nObjects; i++)
         (*ids)[i] = local()->coosvels[i*objSize].i1 / objSize;
-    ids->uploadToDevice(0);
+    ids->uploadToDevice(defaultStream);
 
     CUDA_Check( cudaDeviceSynchronize() );
 
@@ -151,7 +226,7 @@ void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    std::string filename = path + "/" + name + ".obj-" + getStrZeroPadded(restartIdx);
+    auto filename = createCheckpointNameWithId(path, "OV", "");
     info("Checkpoint for object vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
     auto coms_extents = local()->extraPerObject.getData<LocalObjectVector::COMandExtent>(ChannelNames::comExtents);
@@ -170,7 +245,7 @@ void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     
     XDMF::write(filename, &grid, channels, comm);
 
-    RestartHelpers::make_symlink(comm, path, name + ".obj", filename);
+    createCheckpointSymlink(comm, path, "OV", "xmf");
 
     debug("Checkpoint for object vector '%s' successfully written", name.c_str());
 }
@@ -179,21 +254,22 @@ void ObjectVector::_restartObjectData(MPI_Comm comm, std::string path, const std
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    std::string filename = path + "/" + name + ".obj.xmf";
+    auto filename = createCheckpointName(path, "OV", "xmf");
     info("Restarting object vector %s from file %s", name.c_str(), filename.c_str());
 
     XDMF::readObjectData(filename, comm, this);
 
     auto loc_ids = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
     
-    std::vector<int> ids(loc_ids->begin(), loc_ids->end());
+    std::vector<int> ids(loc_ids->size());
+    std::copy(loc_ids->begin(), loc_ids->end(), ids.begin());
     
     RestartHelpers::exchangeData(comm, map, ids, 1);
 
     loc_ids->resize_anew(ids.size());
     std::copy(ids.begin(), ids.end(), loc_ids->begin());
 
-    loc_ids->uploadToDevice(0);
+    loc_ids->uploadToDevice(defaultStream);
     CUDA_Check( cudaDeviceSynchronize() );
 
     info("Successfully read %d object infos", loc_ids->size());
@@ -203,7 +279,7 @@ void ObjectVector::checkpoint(MPI_Comm comm, std::string path)
 {
     _checkpointParticleData(comm, path);
     _checkpointObjectData(comm, path);
-    advanceRestartIdx();
+    advanceCheckpointId(state->checkpointMode);
 }
 
 void ObjectVector::restart(MPI_Comm comm, std::string path)

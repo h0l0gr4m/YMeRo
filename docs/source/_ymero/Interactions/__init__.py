@@ -38,12 +38,12 @@ class DPD(Interaction):
 
   
             Args:
-            name: name of the interaction
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                a: :math:`a`
-                gamma: :math:`\gamma`
-                kbt: :math:`k_B T`
-                power: :math:`p` in the weight function
+                name: name of the interaction
+                    rc: interaction cut-off (no forces between particles further than **rc** apart)
+                    a: :math:`a`
+                    gamma: :math:`\gamma`
+                    kbt: :math:`k_B T`
+                    power: :math:`p` in the weight function
     
 
         """
@@ -61,26 +61,42 @@ class DPD(Interaction):
 
 class Density(Interaction):
     r"""
-        Compute MDPD density of particles, see [Warren2003]_
+        Compute density of particles with a given kernel. 
     
         .. math::
         
             \rho_i = \sum\limits_{j \neq i} w_\rho (r_{ij})
 
-        where the summation goes over the neighbours of particle :math:`i` within a cutoff range of :math:`r_c`, and
+        where the summation goes over the neighbours of particle :math:`i` within a cutoff range of :math:`r_c`.
+        The implemented densities are listed below:
 
-        .. math::
+
+        kernel "MDPD":
             
-            w_\rho(r) = \begin{cases} \frac{15}{2\pi r_d^3}\left(1-\frac{r}{r_d}\right)^2, & r < r_d \\ 0, & r \geqslant r_d \end{cases}            
+            see [Warren2003]_
+            
+            .. math::
+            
+                w_\rho(r) = \begin{cases} \frac{15}{2\pi r_d^3}\left(1-\frac{r}{r_d}\right)^2, & r < r_d \\ 0, & r \geqslant r_d \end{cases}
+        
+        kernel "WendlandC2":
+        
+            .. math::
+
+                w_\rho(r) = \frac{21}{2\pi} \left( 1 - \frac{r}{r_c} \right)^4 \left( 1 + 4 \frac{r}{r_c} \right)
     
     """
     def __init__():
-        r"""__init__(name: str, rc: float) -> None
+        r"""__init__(name: str, rc: float, kernel: str) -> None
 
   
-            Args:
-                name: name of the interaction
-                rc: interaction cut-off
+        Args:
+            name: name of the interaction
+            rc: interaction cut-off
+            kernel: the density kernel to be used. possible choices are:
+            
+                * MDPD
+                * WendlandC2            
     
 
         """
@@ -106,7 +122,7 @@ class LJ(Interaction):
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 epsilon: :math:`\varepsilon`
                 sigma: :math:`\sigma`
-                max_force: force magnitude will be capped not exceed **max_force**
+                max_force: force magnitude will be capped to not exceed **max_force**
                 object_aware:
                     if True, the particles belonging to the same object in an object vector do not interact with each other.
                     That restriction only applies if both Particle Vectors in the interactions are the same and is actually an Object Vector. 
@@ -128,7 +144,7 @@ class LJ(Interaction):
 class MDPD(Interaction):
     r"""
         Compute MDPD interaction as described in [Warren2003].
-        Must be used together with :any:`Density` interaction.
+        Must be used together with :any:`Density` interaction with kernel "MDPD".
 
         The interaction forces are the same as described in :any:`DPD` with the modified conservative term
 
@@ -154,14 +170,14 @@ class MDPD(Interaction):
 
   
             Args:
-            name: name of the interaction
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                rd: density cutoff, assumed rd <= rc
-                a: :math:`a`
-                b: :math:`b`
-                gamma: :math:`\gamma`
-                kbt: :math:`k_B T`
-                power: :math:`p` in the weight function
+                name: name of the interaction
+                    rc: interaction cut-off (no forces between particles further than **rc** apart)
+                    rd: density cutoff, assumed rd <= rc
+                    a: :math:`a`
+                    b: :math:`b`
+                    gamma: :math:`\gamma`
+                    kbt: :math:`k_B T`
+                    power: :math:`p` in the weight function
     
 
         """
@@ -175,12 +191,12 @@ class MembraneForces(Interaction):
         The membrane interactions are composed of forces comming from:
             - bending of the membrane, potential :math:`U_b`
             - shear elasticity of the membrane, potential :math:`U_s`
-            - constrain: area conservation of the membrane (local and global), potential :math:`U_A`
-            - constrain: volume of the cell (assuming incompressible fluid), potential :math:`U_V`
+            - constraint: area conservation of the membrane (local and global), potential :math:`U_A`
+            - constraint: volume of the cell (assuming incompressible fluid), potential :math:`U_V`
             - membrane viscosity, pairwise force :math:`\mathbf{F}^v`
             - membrane fluctuations, pairwise force :math:`\mathbf{F}^R`
 
-        The form of the constrain potentials are given by (see [Fedosov2010]_ for more explanations):
+        The form of the constraint potentials are given by (see [Fedosov2010]_ for more explanations):
 
         .. math::
 
@@ -203,16 +219,17 @@ class MembraneForces(Interaction):
             U_b = 2 k_b \sum_{\alpha = 1}^{N_v} \frac {\left( M_{\alpha} - C_0\right)^2}{A_\alpha}, \\
             M_{\alpha} = \frac 1 4 \sum_{<i,j>}^{(\alpha)} l_{ij} \theta_{ij}.
 
-        It is improve with ADE model (TODO: ref).
+        It is improved with the ADE model (TODO: ref).
 
-        Currently, the stretching and shear energiy models are:
+        Currently, the stretching and shear energy models are:
+
         WLC model:
 
         .. math::
 
             U_s = \sum_{j \in {1 ... N_s}} \left[ \frac {k_s l_m \left( 3x_j^2 - 2x_j^3 \right)}{4(1-x_j)} + \frac{k_p}{l_0} \right].
 
-        Lim model, which is an extension of the Skalak shear energy (see [Lim2008]_).
+        Lim model: an extension of the Skalak shear energy (see [Lim2008]_).
 
         .. math::
         
@@ -254,8 +271,8 @@ class MembraneForces(Interaction):
 
                  * **tot_area**:   total area of the membrane at equilibrium
                  * **tot_volume**: total volume of the membrane at equilibrium
-                 * **ka_tot**:     constrain energy for total area
-                 * **kv_tot**:     constrain energy for total volume
+                 * **ka_tot**:     constraint energy for total area
+                 * **kv_tot**:     constraint energy for total volume
                  * **kBT**:        fluctuation temperature (set to zero will switch off fluctuation forces)
                  * **gammaC**:     central component of dissipative forces
                  * **gammaT**:     tangential component of dissipative forces (warning: if non zero, the interaction will NOT conserve angular momentum)
@@ -286,7 +303,59 @@ class MembraneForces(Interaction):
                  * **kb**:  local bending energy magnitude
                  * **C0**:  spontaneous curvature
                  * **kad**: area difference energy magnitude
-                 * **DA0**: spontaneous area difference
+                 * **DA0**: area difference at relaxed state divided by the offset of the leaflet midplanes
+    
+
+        """
+        pass
+
+class SDPD(Interaction):
+    r"""
+        Compute SDPD interaction with angular momentum conservation.
+        Must be used together with :any:`Density` interaction with the same density kernel.
+
+        The available density kernels are listed in :any:`Density`.
+        The available equations of state (EOS) are:
+
+        Linear equation of state:
+
+            .. math::
+
+                p(\rho) = c_S^2 \left(\rho - \rho_0 \right)
+ 
+            where :math:`c_S` is the speed of sound and :math:`\rho_0` is a parameter.
+
+        Quasi incompressible EOS:
+
+            .. math::
+
+                p(\rho) = p_0 \left[ \left( \frac {\rho}{\rho_r} \right)^\gamma - 1 \right],
+
+            where :math:`p_0`, :math:`\rho_r` and :math:`\gamma = 7` are parameters to be fitted to the desired fluid.
+    
+    """
+    def __init__():
+        r"""__init__(name: str, rc: float, viscosity: float, kBT: float, EOS: str, density_kernel: str, stress: bool = False, **kwargs) -> None
+
+  
+            Args:
+                name: name of the interaction
+                rc: interaction cut-off (no forces between particles further than **rc** apart)
+                viscosity: solvent viscosity
+                kBT: temperature (in :math:`k_B` units)
+                EOS: the desired equation of state 
+                density_kernel: the desired density kernel
+                stress: compute stresses if set to True (default: False); need the additional parameter **stress_period** if active.
+
+            **EOS = "Linear" parameters:**
+
+                * **sound_speed**: the speed of sound
+                * **rho_0**: background pressure in :math:`c_S` units
+
+            **EOS = "QuasiIncompressible" parameters:**
+
+                * **p0**: :math:`p_0`
+                * **rho_r**: :math:`\rho_r`
     
 
         """

@@ -34,3 +34,10 @@ static const std::string lenThetaTot    = "lenThetaTot";
 static const std::string globalIds   = "ids";
 
 } // namespace ChannelNames
+
+
+enum class CheckpointIdAdvanceMode
+{
+    PingPong,
+    Incremental
+};

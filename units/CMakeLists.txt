@@ -47,8 +47,10 @@ function (add_test_executable dirName)
     "${CMAKE_CURRENT_SOURCE_DIR}/${dirName}/*.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/${dirName}/*.cpp")
 
-  set(EXEC_NAME "test_${dirName}")
+  string(REGEX REPLACE "/" "_" execNameId ${dirName})
 
+  set(EXEC_NAME "test_${execNameId}")
+  
   add_executable(${EXEC_NAME} ${SOURCES})
   target_link_libraries(${EXEC_NAME} PRIVATE ${CUDA_LIBRARIES})
   target_link_libraries(${EXEC_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../build/libymero_main.so")
@@ -57,7 +59,7 @@ function (add_test_executable dirName)
 endfunction()
 
 add_test_executable(celllists)
-# add_test_executable(flagella)
+add_test_executable(flagella)
 add_test_executable(integration)
 add_test_executable(interaction)
 add_test_executable(marching_cubes)

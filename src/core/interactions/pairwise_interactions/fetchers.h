@@ -3,18 +3,9 @@
 #include <core/datatypes.h>
 #include <core/pvs/views/pv.h>
 #include <core/utils/cpu_gpu_defines.h>
+#include <core/utils/cuda_common.h>
 #include <core/utils/cuda_rng.h>
 #include <core/utils/helper_math.h>
-
-#ifndef __NVCC__
-static float4 readNoCache(const float4* addr)
-{
-    return *addr;
-}
-#else
-#include <core/utils/cuda_common.h>
-#endif
-
 
 /**
  * fetcher that reads positions only
@@ -34,7 +25,7 @@ public:
     __D__ inline ParticleType read(const ViewType& view, int id) const
     {
         Particle p;
-        p.readCoordinate(view.particles, id);
+        readCoordinates(p, view, id);
         return p;
     }
 
@@ -81,7 +72,7 @@ public:
 };
 
 /**
- * fetcher that reads positions and velocities
+ * fetcher that reads positions, velocities and densities
  */
 class ParticleFetcherWithVelocityAndDensity : public ParticleFetcherWithVelocity
 {
@@ -186,3 +177,52 @@ public:
     __D__ inline float3 getPosition(const ParticleType& p) const {return p.p.r;}
 
 };
+
+class ParticleFetcherWithVelocityDensityAndMass : public ParticleFetcherWithVelocity
+{
+public:
+
+    struct ParticleWithDensityAndMass
+    {
+        Particle p;
+        float d, m;
+    };
+
+    using ViewType     = PVviewWithDensities;
+    using ParticleType = ParticleWithDensityAndMass;
+
+    ParticleFetcherWithVelocityDensityAndMass(float rc) :
+        ParticleFetcherWithVelocity(rc)
+    {}
+
+    __D__ inline ParticleType read(const ViewType& view, int id) const
+    {
+        return {ParticleFetcherWithVelocity::read(view, id),
+                view.densities[id], view.mass};
+    }
+
+    __D__ inline ParticleType readNoCache(const ViewType& view, int id) const
+    {
+        return {ParticleFetcherWithVelocity::readNoCache(view, id),
+                view.densities[id], view.mass};
+    }
+
+    __D__ inline void readCoordinates(ParticleType& p, const ViewType& view, int id) const
+    {
+        ParticleFetcherWithVelocity::readCoordinates(p.p, view, id);
+    }
+
+    __D__ inline void readExtraData  (ParticleType& p, const ViewType& view, int id) const
+    {
+        ParticleFetcherWithVelocity::readExtraData(p.p, view, id);
+        p.d = view.densities[id];
+        p.m = view.mass;
+    }
+
+    __D__ inline bool withinCutoff(const ParticleType& src, const ParticleType& dst) const
+    {
+        return ParticleFetcherWithVelocity::withinCutoff(src.p, dst.p);
+    }
+
+    __D__ inline float3 getPosition(const ParticleType& p) const {return p.p.r;}
+}

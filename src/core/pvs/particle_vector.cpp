@@ -1,18 +1,22 @@
-#include <mpi.h>
-
-#include <core/xdmf/typeMap.h>
-#include <core/utils/folders.h>
-#include <core/xdmf/xdmf.h>
-
 #include "particle_vector.h"
 #include "restart_helpers.h"
 
-LocalParticleVector::LocalParticleVector(ParticleVector* pv, int n) : pv(pv)
+#include <core/utils/cuda_common.h>
+#include <core/utils/folders.h>
+#include <core/xdmf/type_map.h>
+#include <core/xdmf/xdmf.h>
+
+#include <mpi.h>
+
+LocalParticleVector::LocalParticleVector(ParticleVector *pv, int n) :
+    pv(pv)
 {
     resize_anew(n);
 }
 
-void LocalParticleVector::resize(const int n, cudaStream_t stream)
+LocalParticleVector::~LocalParticleVector() = default;
+
+void LocalParticleVector::resize(int n, cudaStream_t stream)
 {
     if (n < 0) die("Tried to resize PV to %d < 0 particles", n);
 
@@ -23,7 +27,7 @@ void LocalParticleVector::resize(const int n, cudaStream_t stream)
     np = n;
 }
 
-void LocalParticleVector::resize_anew(const int n)
+void LocalParticleVector::resize_anew(int n)
 {
     if (n < 0) die("Tried to resize PV to %d < 0 particles", n);
 
@@ -34,8 +38,6 @@ void LocalParticleVector::resize_anew(const int n)
     np = n;
 }
 
-LocalParticleVector::~LocalParticleVector() = default;
-
 
 //============================================================================
 // Particle Vector
@@ -43,8 +45,8 @@ LocalParticleVector::~LocalParticleVector() = default;
 
 ParticleVector::ParticleVector(const YmrState *state, std::string name, float mass, int n) :
     ParticleVector(state, name, mass,
-                   new LocalParticleVector(this, n),
-                   new LocalParticleVector(this, 0) )
+                   std::make_unique<LocalParticleVector>(this, n),
+                   std::make_unique<LocalParticleVector>(this, 0) )
 {}
 
 
@@ -200,18 +202,15 @@ void ParticleVector::setForces_vector(PyTypes::VectorOfFloat3& forces)
 }
 
 
-ParticleVector::~ParticleVector()
-{
-    delete _local;
-    delete _halo;
+ParticleVector::~ParticleVector() = default;
 
-}
-
-ParticleVector::ParticleVector(const YmrState *state, std::string name,  float mass, LocalParticleVector *local, LocalParticleVector *halo) :
+ParticleVector::ParticleVector(const YmrState *state, std::string name,  float mass,
+                               std::unique_ptr<LocalParticleVector>&& local,
+                               std::unique_ptr<LocalParticleVector>&& halo) :
     YmrSimulationObject(state, name),
     mass(mass),
-    _local(local),
-    _halo(halo)
+    _local(std::move(local)),
+    _halo(std::move(halo))
 {
     // usually old positions and velocities don't need to exchanged
     requireDataPerParticle<Particle> (ChannelNames::oldParts, ExtraDataManager::PersistenceMode::None);
@@ -281,7 +280,7 @@ void ParticleVector::_checkpointParticleData(MPI_Comm comm, std::string path)
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    std::string filename = path + "/" + name + "-" + getStrZeroPadded(restartIdx);
+    auto filename = createCheckpointNameWithId(path, "PV", "");
     info("Checkpoint for particle vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
     local()->coosvels.downloadFromDevice(0, ContainersSynch::Synch);
@@ -303,7 +302,7 @@ void ParticleVector::_checkpointParticleData(MPI_Comm comm, std::string path)
 
     XDMF::write(filename, &grid, channels, comm);
 
-    RestartHelpers::make_symlink(comm, path, name, filename);
+    createCheckpointSymlink(comm, path, "PV", "xmf");
 
     debug("Checkpoint for particle vector '%s' successfully written", name.c_str());
 }
@@ -327,6 +326,9 @@ void ParticleVector::_getRestartExchangeMap(MPI_Comm comm, const std::vector<Par
         int procId;
         MPI_Check( MPI_Cart_rank(comm, (int*)&procId3, &procId) );
         map[i] = procId;
+
+        int rank;
+        MPI_Comm_rank(comm, &rank);
     }
 }
 
@@ -334,19 +336,21 @@ std::vector<int> ParticleVector::_restartParticleData(MPI_Comm comm, std::string
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    std::string filename = path + "/" + name + ".xmf";
+    auto filename = createCheckpointName(path, "PV", "xmf");
     info("Restarting particle vector %s from file %s", name.c_str(), filename.c_str());
 
     XDMF::readParticleData(filename, comm, this);
 
-    std::vector<Particle> parts(local()->coosvels.begin(), local()->coosvels.end());
+    std::vector<Particle> parts(local()->size());
+    std::copy(local()->coosvels.begin(), local()->coosvels.end(), parts.begin());
+
     std::vector<int> map;
 
     _getRestartExchangeMap(comm, parts, map);
     RestartHelpers::exchangeData(comm, map, parts, 1);
     RestartHelpers::copyShiftCoordinates(state->domain, parts, local());
 
-    local()->coosvels.uploadToDevice(0);
+    local()->coosvels.uploadToDevice(defaultStream);
     CUDA_Check( cudaDeviceSynchronize() );
 
     info("Successfully read %d particles", local()->coosvels.size());
@@ -354,15 +358,10 @@ std::vector<int> ParticleVector::_restartParticleData(MPI_Comm comm, std::string
     return map;
 }
 
-void ParticleVector::advanceRestartIdx()
-{
-    restartIdx = restartIdx xor 1;
-}
-
 void ParticleVector::checkpoint(MPI_Comm comm, std::string path)
 {
     _checkpointParticleData(comm, path);
-    advanceRestartIdx();
+    advanceCheckpointId(state->checkpointMode);
 }
 
 void ParticleVector::restart(MPI_Comm comm, std::string path)

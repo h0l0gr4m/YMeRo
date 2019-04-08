@@ -1,11 +1,12 @@
+#include "celllist.h"
+
+#include <core/logger.h>
+#include <core/pvs/object_vector.h>
 #include <core/pvs/particle_vector.h>
 #include <core/pvs/views/pv.h>
-#include <core/pvs/object_vector.h>
-#include <core/celllist.h>
 #include <core/utils/cuda_common.h>
 #include <core/utils/kernel_launch.h>
-#include <core/utils/typeMap.h>
-#include <core/logger.h>
+#include <core/utils/type_map.h>
 
 #include <extern/cub/cub/device/device_scan.cuh>
 
@@ -234,17 +235,17 @@ void CellList::_computeCellSizes(cudaStream_t stream)
 
 void CellList::_computeCellStarts(cudaStream_t stream)
 {
-	// Scan is always working with the same number of cells
-	// Memory requirements can't change
-	size_t bufSize = scanBuffer.size();
-
-	if (bufSize == 0)
-	{
-		cub::DeviceScan::ExclusiveSum(nullptr, bufSize, cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
-		scanBuffer.resize_anew(bufSize);
-	}
+    // Scan is always working with the same number of cells
+    // Memory requirements can't change
+    size_t bufSize = scanBuffer.size();
+    
+    if (bufSize == 0)
+    {
+        cub::DeviceScan::ExclusiveSum(nullptr, bufSize, cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
+        scanBuffer.resize_anew(bufSize);
+    }
     cub::DeviceScan::ExclusiveSum(scanBuffer.devPtr(), bufSize,
-    							  cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
+                                  cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
 }
 
 void CellList::_reorderData(cudaStream_t stream)

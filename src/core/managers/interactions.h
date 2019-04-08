@@ -7,6 +7,7 @@
 #include <vector>
 
 class ParticleVector;
+class LocalParticleVector;
 class CellList;
 
 /**
@@ -35,6 +36,9 @@ public:
 
     void clearIntermediates (ParticleVector *pv, cudaStream_t stream);
     void clearFinal         (ParticleVector *pv, cudaStream_t stream);
+
+    void clearIntermediatesPV (ParticleVector *pv, LocalParticleVector *lpv, cudaStream_t stream) const;
+    void clearFinalPV         (ParticleVector *pv, LocalParticleVector *lpv, cudaStream_t stream) const;
 
     void accumulateIntermediates(cudaStream_t stream);
     void accumulateFinal(cudaStream_t stream);
@@ -85,12 +89,19 @@ private:
     void _executeHalo(std::vector<InteractionPrototype>& interactions, cudaStream_t stream);
 
     void _executelocalNeuralNetwork(ParticleVector *pv,std::vector<InteractionPrototype>& interactions,cudaStream_t stream) const;
-    void _executehaloNeuralNetwork(ParticleVector *pv,std::vector<InteractionPrototype>& interactions,cudaStream_t stream) const; 
+    void _executehaloNeuralNetwork(ParticleVector *pv,std::vector<InteractionPrototype>& interactions,cudaStream_t stream) const;
 
 
     std::vector<std::string> _extractActiveChannels(const ChannelActivityList& activityMap) const;
     std::vector<std::string> _extractAllChannels(const std::map<CellList*, ChannelActivityList>& cellChannels) const;
+    std::vector<std::string> _extractActiveChannels(ParticleVector *pv, const std::map<CellList*, ChannelActivityList>& cellChannels) const;
 
+    // clear ONLY PV channels
+    void _clearPVChannels(ParticleVector *pv, LocalParticleVector *lpv,
+                          const std::map<CellList*, ChannelActivityList>& cellChannels,
+                          cudaStream_t stream) const;
+
+    // clear cell list channels
     void _clearChannels     (ParticleVector *pv, const std::map<CellList*, ChannelActivityList>& cellChannels, cudaStream_t stream) const;
     void _accumulateChannels(                    const std::map<CellList*, ChannelActivityList>& cellChannels, cudaStream_t stream) const;
     void _gatherChannels    (                    const std::map<CellList*, ChannelActivityList>& cellChannels, cudaStream_t stream) const;

@@ -1,25 +1,17 @@
 #pragma once
 
 #include "fetchers.h"
+#include "interface.h"
 
 #include <core/interactions/accumulators/force.h>
 #include <core/interactions/utils/step_random_gen.h>
-#include <core/ymero_state.h>
+#include <core/utils/cuda_common.h>
+#include <core/utils/restart_helpers.h>
 
 #include <random>
 
 class CellList;
 class LocalParticleVector;
-
-#ifndef __NVCC__
-static float fastPower(float x, float a)
-{
-    return pow(x, a);
-}
-#else
-#include <core/utils/cuda_common.h>
-#endif
-
 
 class PairwiseDPDHandler : public ParticleFetcherWithVelocity
 {
@@ -68,7 +60,7 @@ protected:
     float seed;
 };
 
-class PairwiseDPD : public PairwiseDPDHandler
+class PairwiseDPD : public PairwiseKernel, public PairwiseDPDHandler
 {
 public:
 
@@ -84,21 +76,21 @@ public:
         return (const HandlerType&)(*this);
     }
 
-    void setup(LocalParticleVector* lpv1, LocalParticleVector* lpv2, CellList* cl1, CellList* cl2, const YmrState *state)
+    void setup(LocalParticleVector *lpv1, LocalParticleVector *lpv2, CellList *cl1, CellList *cl2, const YmrState *state) override
     {
-        // seed = t;
-        // better use random seed (time-based) instead of time
-        // time-based is IMPORTANT for momentum conservation!!
-        // t is float, use it's bit representation as int to seed RNG
-
-        float t = state->currentTime;
-        int v = *((int*)&t);
-        std::mt19937 gen(v);
-        std::uniform_real_distribution<float> udistr(0.001, 1);
-        seed = udistr(gen);
-
-        // seed = stepGen.generate(state);
+        this->seed = stepGen.generate(state);
     }
+
+    void writeState(std::ofstream& fout) override
+    {
+        TextIO::writeToStream(fout, stepGen);
+    }
+
+    bool readState(std::ifstream& fin) override
+    {
+        return TextIO::readFromStream(fin, stepGen);
+    }
+    
 
 protected:
 

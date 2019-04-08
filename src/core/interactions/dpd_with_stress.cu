@@ -10,8 +10,7 @@
 
 InteractionDPDWithStress::InteractionDPDWithStress(const YmrState *state, std::string name,
                                                    float rc, float a, float gamma, float kbt, float power, float stressPeriod) :
-    InteractionDPD(state, name, rc, a, gamma, kbt, power, false),
-    stressPeriod(stressPeriod)
+    InteractionDPD(state, name, rc, a, gamma, kbt, power, false)
 {
     PairwiseDPD dpd(rc, a, gamma, kbt, state->dt, power);
     impl = std::make_unique<InteractionPair_withStress<PairwiseDPD>> (state, name, rc, stressPeriod, dpd);
@@ -19,7 +18,11 @@ InteractionDPDWithStress::InteractionDPDWithStress(const YmrState *state, std::s
 
 InteractionDPDWithStress::~InteractionDPDWithStress() = default;
 
+<<<<<<< HEAD
 void InteractionDPDWithStress::setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
+=======
+void InteractionDPDWithStress::setSpecificPair(ParticleVector *pv1, ParticleVector *pv2, 
+>>>>>>> c86ae8f55aa2a8da7e962d4b3b68feef3033bca4
                                                float a, float gamma, float kbt, float power)
 {
     if (a     == Default) a     = this->a;

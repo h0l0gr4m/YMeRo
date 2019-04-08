@@ -17,7 +17,7 @@ public:
         Interaction(state, name, rc),
         stressPeriod(stressPeriod),
         interaction(state, name, rc, pair),
-        interactionWithStress(state, name, rc, PairwiseStressWrapper<PairwiseInteraction>(pair))
+        interactionWithStress(state, name + "_withStress", rc, PairwiseStressWrapper<PairwiseInteraction>(pair))
     {}
 
     ~InteractionPair_withStress() = default;
@@ -84,6 +84,19 @@ public:
         return {{ChannelNames::forces, Interaction::alwaysActive},
                 {ChannelNames::stresses, activePredicateStress}};
     }
+
+    void checkpoint(MPI_Comm comm, std::string path) override
+    {
+        interaction          .checkpoint(comm, path);
+        interactionWithStress.checkpoint(comm, path);
+    }
+
+    void restart(MPI_Comm comm, std::string path) override
+    {
+        interaction          .restart(comm, path);
+        interactionWithStress.restart(comm, path);
+    }
+
 
 private:
     float stressPeriod;
