@@ -42,7 +42,7 @@ class LocalParticleVector;
 class CellList;
 
 
-class PairwiseFlowProperties : public ParticleFetcherWithVelocityandFlowProperties
+class PairwiseFlowProperties : public ParticleFetcherWithVelocityandFlowProperties , public PairwiseKernel
 {
 public:
     using ViewType     = PVviewWithFlowProperties;

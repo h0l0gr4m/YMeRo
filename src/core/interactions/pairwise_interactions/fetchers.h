@@ -225,4 +225,4 @@ public:
     }
 
     __D__ inline float3 getPosition(const ParticleType& p) const {return p.p.r;}
-}
+};

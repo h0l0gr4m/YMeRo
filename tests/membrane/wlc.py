@@ -35,7 +35,7 @@ prm_rbc = {
     "kb"     : 0.0,
     "theta"  : 0.0
 }
-    
+
 int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Kantor", **prm_rbc, stress_free=args.stressFree)
 u.registerInteraction(int_rbc)
 u.setInteraction(int_rbc, pv_rbc, pv_rbc)

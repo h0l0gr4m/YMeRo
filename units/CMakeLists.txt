@@ -70,7 +70,7 @@ add_test_executable(scheduler)
 add_test_executable(serializer)
 add_test_executable(triangle_invariants)
 add_test_executable(warpScan)
-#add_test_executable(neural_net)
+add_test_executable(neural_net)
 
 
 # Setup nvcc flags

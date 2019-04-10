@@ -37,8 +37,8 @@
     _( partHaloFinalFinalize               , "Particle halo final finalize") \
     _( localForces                         , "Local forces")            \
     _( haloForces                          , "Halo forces")             \
-    _( haloNeuralNetwork                   , "Hal Neural Network")     \
-    _( task_localNeuralNetwork             , "Local Neural Netowork")
+    _( haloNeuralNetwork                   , "Halo Neural Network")     \
+    _( localNeuralNetwork                  , "Local Neural Netowork")  \
     _( accumulateInteractionFinal          , "Accumulate forces")       \
     _( objHaloFinalInit                    , "Object halo final init")  \
     _( objHaloFinalFinalize                , "Object halo final finalize") \
@@ -806,9 +806,9 @@ void Simulation::createTasks()
         scheduler->addTask(tasks->partClearFinal,
                            [this, pvPtr] (cudaStream_t stream) { interactionManager->clearFinal(pvPtr, stream); } );
 
-        scheduler->addTask(task_localNeuralNetwork,
+        scheduler->addTask(tasks->localNeuralNetwork,
                            [this,pvPtr]  (cudaStream_t stream) { interactionManager->executelocalNeuralNetwork(pvPtr,stream); } );
-	      scheduler->addTask(task_haloNeuralNetwork,
+	      scheduler->addTask(tasks->haloNeuralNetwork,
 			                     [this,pvPtr] (cudaStream_t stream) {interactionManager->executehaloNeuralNetwork(pvPtr,stream); } );
     }
 
@@ -1039,93 +1039,91 @@ static void createTasksDummy(TaskScheduler *scheduler, SimulationTasks *tasks)
 
 static void buildDependencies(TaskScheduler *scheduler, SimulationTasks *tasks)
 {
-    scheduler->addDependency(tasks->pluginsBeforeCellLists, { tasks->cellLists }, {});
+     scheduler->addDependency(tasks->pluginsBeforeCellLists, { tasks->cellLists }, {});
 
-    scheduler->addDependency(tasks->checkpoint, { tasks->partClearFinal }, { tasks->cellLists });
+     scheduler->addDependency(tasks->checkpoint, { tasks->partClearFinal }, { tasks->cellLists });
 
-    scheduler->addDependency(tasks->correctObjBelonging, { tasks->cellLists }, {});
+     scheduler->addDependency(tasks->correctObjBelonging, { tasks->cellLists }, {});
 
-    scheduler->addDependency(tasks->cellLists, {tasks->partClearFinal, tasks->partClearIntermediate, tasks->objClearLocalIntermediate}, {});
-
-
-    scheduler->addDependency(tasks->pluginsBeforeForces, {tasks->localForces, tasks->haloForces}, {tasks->partClearFinal});
-    scheduler->addDependency(tasks->pluginsSerializeSend, {tasks->pluginsBeforeIntegration, tasks->pluginsAfterIntegration}, {tasks->pluginsBeforeForces});
-
-    scheduler->addDependency(tasks->objClearHaloForces, {tasks->objHaloBounce}, {tasks->objHaloFinalFinalize});
-
-    scheduler->addDependency(tasks->objReverseFinalInit, {}, {tasks->haloForces});
-    scheduler->addDependency(tasks->objReverseFinalFinalize, {tasks->accumulateInteractionFinal}, {tasks->objReverseFinalInit});
-
-    scheduler->addDependency(tasks->localIntermediate, {}, {tasks->partClearIntermediate, tasks->objClearLocalIntermediate});
-    scheduler->addDependency(tasks->partHaloIntermediateInit, {}, {tasks->partClearIntermediate, tasks->cellLists});
-    scheduler->addDependency(tasks->partHaloIntermediateFinalize, {}, {tasks->partHaloIntermediateInit});
-
-    scheduler->addDependency(tasks->objClearHaloIntermediate, {}, {tasks->cellLists});
-    scheduler->addDependency(tasks->haloIntermediate, {}, {tasks->partHaloIntermediateFinalize, tasks->objClearHaloIntermediate});
-    scheduler->addDependency(tasks->objReverseIntermediateInit, {}, {tasks->haloIntermediate});
-    scheduler->addDependency(tasks->objReverseIntermediateFinalize, {}, {tasks->objReverseIntermediateInit});
+     scheduler->addDependency(tasks->cellLists, {tasks->partClearFinal, tasks->partClearIntermediate, tasks->objClearLocalIntermediate}, {});
 
 
-    scheduler->addDependency(task_pluginsBeforeForces, {task_localForces, task_haloForces}, {task_clearFinalOutput});
-    scheduler->addDependency(task_pluginsSerializeSend, {task_pluginsBeforeIntegration, task_pluginsAfterIntegration}, {task_pluginsBeforeForces});
+     scheduler->addDependency(tasks->pluginsBeforeForces, {tasks->localForces, tasks->haloForces}, {tasks->partClearFinal});
+     scheduler->addDependency(tasks->pluginsSerializeSend, {tasks->pluginsBeforeIntegration, tasks->pluginsAfterIntegration}, {tasks->pluginsBeforeForces});
 
-    scheduler->addDependency(task_clearObjHaloForces, {task_objHaloBounce}, {task_objHaloFinalize});
+     scheduler->addDependency(tasks->objClearHaloForces, {tasks->objHaloBounce}, {tasks->objHaloFinalFinalize});
 
-    scheduler->addDependency(task_objForcesInit, {}, {task_haloForces});
-    scheduler->addDependency(task_objForcesFinalize, {task_accumulateInteractionFinal}, {task_objForcesInit});
+     scheduler->addDependency(tasks->objReverseFinalInit, {}, {tasks->haloForces});
+     scheduler->addDependency(tasks->objReverseFinalFinalize, {tasks->accumulateInteractionFinal}, {tasks->objReverseFinalInit});
 
-    scheduler->addDependency(task_localIntermediate, {}, {task_clearIntermediate});
-    scheduler->addDependency(task_haloIntermediateInit, {}, {task_clearIntermediate, task_cellLists});
-    scheduler->addDependency(task_haloIntermediateFinalize, {}, {task_haloIntermediateInit});
-    scheduler->addDependency(task_haloIntermediate, {}, {task_haloIntermediateFinalize});
-    scheduler->addDependency(task_accumulateInteractionIntermediate, {}, {task_localIntermediate, task_haloIntermediate});
-    scheduler->addDependency(task_gatherInteractionIntermediate, {}, {task_accumulateInteractionIntermediate});
+     scheduler->addDependency(tasks->localIntermediate, {}, {tasks->partClearIntermediate, tasks->objClearLocalIntermediate});
+     scheduler->addDependency(tasks->partHaloIntermediateInit, {}, {tasks->partClearIntermediate, tasks->cellLists});
+     scheduler->addDependency(tasks->partHaloIntermediateFinalize, {}, {tasks->partHaloIntermediateInit});
 
+     scheduler->addDependency(tasks->objClearHaloIntermediate, {}, {tasks->cellLists});
+     scheduler->addDependency(tasks->haloIntermediate, {}, {tasks->partHaloIntermediateFinalize, tasks->objClearHaloIntermediate});
+     scheduler->addDependency(tasks->objReverseIntermediateInit, {}, {tasks->haloIntermediate});
+     scheduler->addDependency(tasks->objReverseIntermediateFinalize, {}, {tasks->objReverseIntermediateInit});
 
-    scheduler->addDependency(task_localNeuralNetwork,{task_localForces},{task_gatherInteractionIntermediate});
-    scheduler->addDependency(task_haloNeuralNetwork,{task_haloForces},{task_haloFinalize});
+     scheduler->addDependency(tasks->accumulateInteractionIntermediate, {}, {tasks->localIntermediate, tasks->haloIntermediate});
+     scheduler->addDependency(tasks->gatherInteractionIntermediate, {}, {tasks->accumulateInteractionIntermediate, tasks->objReverseIntermediateFinalize});
 
-    scheduler->addDependency(task_localForces, {}, {task_gatherInteractionIntermediate});
-    scheduler->addDependency(task_haloInit, {}, {task_pluginsBeforeForces, task_gatherInteractionIntermediate, task_cellLists});
-    scheduler->addDependency(task_haloFinalize, {}, {task_haloInit});
-    scheduler->addDependency(task_haloForces, {}, {task_haloFinalize});
-    scheduler->addDependency(task_accumulateInteractionFinal, {task_integration}, {task_haloForces, task_localForces});
+     scheduler->addDependency(tasks->localForces, {}, {tasks->gatherInteractionIntermediate});
 
-    scheduler->addDependency(task_pluginsBeforeIntegration, {task_integration}, {task_accumulateInteractionFinal});
-    scheduler->addDependency(task_wallBounce, {}, {task_integration});
-    scheduler->addDependency(task_wallCheck, {task_redistributeInit}, {task_wallBounce});
+     scheduler->addDependency(tasks->objHaloIntermediateInit, {}, {tasks->gatherInteractionIntermediate});
+     scheduler->addDependency(tasks->objHaloIntermediateFinalize, {}, {tasks->objHaloIntermediateInit});
 
-    scheduler->addDependency(task_objHaloInit, {}, {task_integration, task_objRedistFinalize});
-    scheduler->addDependency(task_objHaloFinalize, {}, {task_objHaloInit});
+     scheduler->addDependency(tasks->partHaloFinalInit, {}, {tasks->pluginsBeforeForces, tasks->gatherInteractionIntermediate});
+     scheduler->addDependency(tasks->partHaloFinalFinalize, {}, {tasks->partHaloFinalInit});
 
-    scheduler->addDependency(task_objLocalBounce, {task_objHaloFinalize}, {task_integration, task_clearObjLocalForces});
-    scheduler->addDependency(task_objHaloBounce, {}, {task_integration, task_objHaloFinalize, task_clearObjHaloForces});
+     scheduler->addDependency(tasks->haloForces, {}, {tasks->partHaloFinalFinalize, tasks->objHaloIntermediateFinalize});
+     scheduler->addDependency(tasks->accumulateInteractionFinal, {tasks->integration}, {tasks->haloForces, tasks->localForces});
 
-    scheduler->addDependency(task_pluginsAfterIntegration, {task_objLocalBounce, task_objHaloBounce}, {task_integration, task_wallBounce});
+     scheduler->addDependency(tasks->localNeuralNetwork,{tasks->localForces},{tasks->gatherInteractionIntermediate});
+     scheduler->addDependency(tasks->haloNeuralNetwork,{tasks->haloForces},{tasks->partHaloFinalFinalize});
 
-    scheduler->addDependency(task_pluginsBeforeParticlesDistribution, {},
-                             {task_integration, task_wallBounce, task_objLocalBounce, task_objHaloBounce, task_pluginsAfterIntegration});
-    scheduler->addDependency(task_redistributeInit, {}, {task_pluginsBeforeParticlesDistribution});
-    scheduler->addDependency(task_redistributeFinalize, {}, {task_redistributeInit});
+     scheduler->addDependency(tasks->pluginsBeforeIntegration, {tasks->integration}, {tasks->accumulateInteractionFinal});
+     scheduler->addDependency(tasks->wallBounce, {}, {tasks->integration});
+     scheduler->addDependency(tasks->wallCheck, {tasks->partRedistributeInit}, {tasks->wallBounce});
 
-    scheduler->addDependency(task_objRedistInit, {}, {task_integration, task_wallBounce, task_objForcesFinalize, task_pluginsAfterIntegration});
-    scheduler->addDependency(task_objRedistFinalize, {}, {task_objRedistInit});
-    scheduler->addDependency(task_clearObjLocalForces, {task_objLocalBounce}, {task_integration, task_objRedistFinalize});
+     scheduler->addDependency(tasks->objHaloFinalInit, {}, {tasks->integration, tasks->objRedistFinalize});
+     scheduler->addDependency(tasks->objHaloFinalFinalize, {}, {tasks->objHaloFinalInit});
 
-    scheduler->setHighPriority(task_objForcesInit);
-    scheduler->setHighPriority(task_haloIntermediateInit);
-    scheduler->setHighPriority(task_haloIntermediateFinalize);
-    scheduler->setHighPriority(task_haloIntermediate);
-    scheduler->setHighPriority(task_haloInit);
-    scheduler->setHighPriority(task_haloFinalize);
-    scheduler->setHighPriority(task_haloNeuralNetwork);
-    scheduler->setHighPriority(task_haloForces);
-    scheduler->setHighPriority(task_pluginsSerializeSend);
+     scheduler->addDependency(tasks->objLocalBounce, {tasks->objHaloFinalFinalize}, {tasks->integration, tasks->objClearLocalForces});
+     scheduler->addDependency(tasks->objHaloBounce, {}, {tasks->integration, tasks->objHaloFinalFinalize, tasks->objClearHaloForces});
 
-    scheduler->setHighPriority(task_clearObjLocalForces);
-    scheduler->setHighPriority(task_objLocalBounce);
+     scheduler->addDependency(tasks->pluginsAfterIntegration, {tasks->objLocalBounce, tasks->objHaloBounce}, {tasks->integration, tasks->wallBounce});
 
-    scheduler->compile();
+     scheduler->addDependency(tasks->pluginsBeforeParticlesDistribution, {},
+                              {tasks->integration, tasks->wallBounce, tasks->objLocalBounce, tasks->objHaloBounce, tasks->pluginsAfterIntegration});
+     scheduler->addDependency(tasks->partRedistributeInit, {}, {tasks->pluginsBeforeParticlesDistribution});
+     scheduler->addDependency(tasks->partRedistributeFinalize, {}, {tasks->partRedistributeInit});
+
+     scheduler->addDependency(tasks->objRedistInit, {}, {tasks->integration, tasks->wallBounce, tasks->objReverseFinalFinalize, tasks->pluginsAfterIntegration});
+     scheduler->addDependency(tasks->objRedistFinalize, {}, {tasks->objRedistInit});
+     scheduler->addDependency(tasks->objClearLocalForces, {tasks->objLocalBounce}, {tasks->integration, tasks->objRedistFinalize});
+
+     scheduler->setHighPriority(tasks->objReverseFinalInit);
+     scheduler->setHighPriority(tasks->partHaloIntermediateInit);
+     scheduler->setHighPriority(tasks->partHaloIntermediateFinalize);
+     scheduler->setHighPriority(tasks->localNeuralNetwork);
+     scheduler->setHighPriority(tasks->haloNeuralNetwork);
+     scheduler->setHighPriority(tasks->objHaloIntermediateInit);
+     scheduler->setHighPriority(tasks->objHaloIntermediateFinalize);
+     scheduler->setHighPriority(tasks->objClearHaloIntermediate);
+     scheduler->setHighPriority(tasks->objReverseFinalInit);
+     scheduler->setHighPriority(tasks->objReverseFinalFinalize);
+     scheduler->setHighPriority(tasks->haloIntermediate);
+     scheduler->setHighPriority(tasks->partHaloFinalInit);
+     scheduler->setHighPriority(tasks->partHaloFinalFinalize);
+     scheduler->setHighPriority(tasks->haloForces);
+     scheduler->setHighPriority(tasks->pluginsSerializeSend);
+
+     scheduler->setHighPriority(tasks->objClearLocalForces);
+     scheduler->setHighPriority(tasks->objLocalBounce);
+
+     scheduler->compile();
+
 }
 
 void Simulation::init()

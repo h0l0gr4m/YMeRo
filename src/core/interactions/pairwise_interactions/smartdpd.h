@@ -5,9 +5,11 @@
 #include <core/interactions/utils/step_random_gen.h>
 #include <core/ymero_state.h>
 #include <core/interactions/accumulators/force.h>
+#include <core/utils/restart_helpers.h>
 
 
 #include <random>
+#include "interface.h"
 
 
 class CellList;
@@ -79,7 +81,7 @@ public:
 
 
 
-class PairwiseSmartDPD : public PairwiseSmartDPDHandler
+class PairwiseSmartDPD : public PairwiseSmartDPDHandler, public PairwiseKernel
 {
 public:
 
@@ -109,6 +111,16 @@ public:
         pv1DPDparameter = lpv1->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
         pv2DPDparameter = lpv2->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
     }
+    void writeState(std::ofstream& fout) override
+    {
+        TextIO::writeToStream(fout, stepGen);
+    }
+
+    bool readState(std::ifstream& fin) override
+    {
+        return TextIO::readFromStream(fin, stepGen);
+    }
+
 protected:
     StepRandomGen stepGen;
 };
