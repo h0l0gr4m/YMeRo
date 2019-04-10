@@ -56,16 +56,16 @@ function (add_test_executable dirName)
   add_test(${EXEC_NAME} ${EXEC_NAME})
 endfunction()
 
-#add_test_executable(bounce)
+add_test_executable(bounce)
 add_test_executable(celllists)
-# add_test_executable(flagella)
+add_test_executable(flagella)
 add_test_executable(integration)
 add_test_executable(interaction)
 add_test_executable(onerank)
 add_test_executable(pid)
 add_test_executable(scheduler)
 add_test_executable(serializer)
-
+#add_test_executable(neural_net)
 
 # Setup nvcc flags
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --expt-extended-lambda")
