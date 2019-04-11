@@ -27,7 +27,7 @@ public:
     void setup(Simulation *simulation, const MPI_Comm& comm, const MPI_Comm& interComm) override;
     void handshake() override;
 
-    void beforeIntegration(cudaStream_t stream) override;
+    void beforeForces(cudaStream_t stream) override;
     void serializeAndSend(cudaStream_t stream) override;
 
     bool needPostproc() override { return true; }

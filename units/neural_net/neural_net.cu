@@ -12,7 +12,7 @@
 #include <typeinfo>
 #include <core/interactions/calculations/NeuralNet_kernel.h>
 #include <core/interactions/pairwise.impl.h>
-
+#include <math.h>
 #include <core/datatypes.h>
 #include <core/containers.h>
 #include <core/logger.h>
@@ -63,8 +63,8 @@ TEST(NeuralNet,parallel_vs_serial)
           result_gamma += NNInputs[i][input]*Weights[input+11];
 
         }
-      results_cpu[i].alpha_p = result_alpha;
-      results_cpu[i].gamma_p = result_gamma;
+      results_cpu[i].alpha_p = (result_alpha+sqrt(result_alpha*result_alpha+1))/2;
+      results_cpu[i].gamma_p = (result_gamma+sqrt(result_gamma*result_gamma+1))/2;
 
     }
 
@@ -86,17 +86,21 @@ TEST(NeuralNet,parallel_vs_serial)
 
   results_gpu.downloadFromDevice(0);
 
-  bool correct = true;
+  float l2 = 0, linf = -1;
   for(int i = 0 ; i < 20; i++)
   {
-    if (!(results_cpu[i].alpha_p == results_gpu[i].alpha_p && results_cpu[i].gamma_p == results_gpu[i].gamma_p))
-        correct = false;
-    if (correct == false)
-      break;
+    float err1 = fabs(results_cpu[i].gamma_p - results_gpu[i].gamma_p );
+    float err2 = fabs(results_cpu[i].gamma_p -  results_gpu[i].gamma_p);
+    linf = max(linf, err1);
+    linf = max(linf,err2);
+    l2 += err1*err1;
+    l2 += err2*err2;
   }
-  ASSERT_TRUE(correct);
+  l2 = sqrt(l2 / 40);
 
 
+  ASSERT_LE(linf, 0.00001);
+  ASSERT_LE(l2,   0.00001);
 }
 
 int main(int argc, char **argv)
