@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<Xdmf Version="3.0">
+	<Domain>
+		<Grid Name="mesh" GridType="Uniform">
+			<Topology TopologyType="3DCORECTMesh" Dimensions="33 33 33" />
+			<Geometry GeometryType="ORIGIN_DXDYDZ">
+				<DataItem Name="Origin" Dimensions="3" NumberType="Float" Precision="4" Format="XML">0.0 0.0 0.0</DataItem>
+				<DataItem Name="Spacing" Dimensions="3" NumberType="Float" Precision="4" Format="XML">1 1 1</DataItem>
+			</Geometry>
+			<Time Value="0.600000" />
+			<Attribute Name="density" AttributeType="Scalar" Center="Cell">
+				<Information Name="Typeinfo" Value="Scalar" Datatype="float" />
+				<DataItem Dimensions="32 32 32 1" NumberType="Float" Precision="4" Format="HDF">solvent-00005.h5:/density</DataItem>
+			</Attribute>
+		</Grid>
+	</Domain>
+</Xdmf>

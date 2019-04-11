@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<Xdmf Version="3.0">
+	<Domain>
+		<Grid Name="mesh" GridType="Uniform">
+			<Topology TopologyType="Triangle" NumberOfElements="992">
+				<DataItem Dimensions="992 3" NumberType="Int" Precision="4" Format="HDF">rbc-00010.h5:/triangle</DataItem>
+			</Topology>
+			<Geometry GeometryType="XYZ">
+				<DataItem Dimensions="498 3" NumberType="Float" Precision="4" Format="HDF">rbc-00010.h5:/position</DataItem>
+			</Geometry>
+			<Time Value="0.000000" />
+			<Attribute Name="velocity" AttributeType="Vector" Center="Node">
+				<Information Name="Typeinfo" Value="Vector" Datatype="float" />
+				<DataItem Dimensions="498 3" NumberType="Float" Precision="4" Format="HDF">rbc-00010.h5:/velocity</DataItem>
+			</Attribute>
+			<Attribute Name="id" AttributeType="Scalar" Center="Node">
+				<Information Name="Typeinfo" Value="Scalar" Datatype="int" />
+				<DataItem Dimensions="498 1" NumberType="Int" Precision="4" Format="HDF">rbc-00010.h5:/id</DataItem>
+			</Attribute>
+			<Attribute Name="areas" AttributeType="Scalar" Center="Node">
+				<Information Name="Typeinfo" Value="Scalar" Datatype="float" />
+				<DataItem Dimensions="498 1" NumberType="Float" Precision="4" Format="HDF">rbc-00010.h5:/areas</DataItem>
+			</Attribute>
+			<Attribute Name="meanCurvatures" AttributeType="Scalar" Center="Node">
+				<Information Name="Typeinfo" Value="Scalar" Datatype="float" />
+				<DataItem Dimensions="498 1" NumberType="Float" Precision="4" Format="HDF">rbc-00010.h5:/meanCurvatures</DataItem>
+			</Attribute>
+			<Attribute Name="forces" AttributeType="Vector" Center="Node">
+				<Information Name="Typeinfo" Value="Vector" Datatype="float" />
+				<DataItem Dimensions="498 3" NumberType="Float" Precision="4" Format="HDF">rbc-00010.h5:/forces</DataItem>
+			</Attribute>
+		</Grid>
+	</Domain>
+</Xdmf>

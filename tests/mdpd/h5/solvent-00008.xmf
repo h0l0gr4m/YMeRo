@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<Xdmf Version="3.0">
+	<Domain>
+		<Grid Name="mesh" GridType="Uniform">
+			<Topology TopologyType="3DCORECTMesh" Dimensions="17 17 9" />
+			<Geometry GeometryType="ORIGIN_DXDYDZ">
+				<DataItem Name="Origin" Dimensions="3" NumberType="Float" Precision="4" Format="XML">0.0 0.0 0.0</DataItem>
+				<DataItem Name="Spacing" Dimensions="3" NumberType="Float" Precision="4" Format="XML">1 1 0.5</DataItem>
+			</Geometry>
+			<Time Value="9.000000" />
+			<Attribute Name="density" AttributeType="Scalar" Center="Cell">
+				<Information Name="Typeinfo" Value="Scalar" Datatype="float" />
+				<DataItem Dimensions="8 16 16 1" NumberType="Float" Precision="4" Format="HDF">solvent-00008.h5:/density</DataItem>
+			</Attribute>
+			<Attribute Name="velocity" AttributeType="Vector" Center="Cell">
+				<Information Name="Typeinfo" Value="Vector" Datatype="float" />
+				<DataItem Dimensions="8 16 16 3" NumberType="Float" Precision="4" Format="HDF">solvent-00008.h5:/velocity</DataItem>
+			</Attribute>
+		</Grid>
+	</Domain>
+</Xdmf>

@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<Xdmf Version="3.0">
+	<Domain>
+		<Grid Name="mesh" GridType="Uniform">
+			<Topology TopologyType="Polyvertex" NumberOfElements="884" />
+			<Geometry GeometryType="XYZ">
+				<DataItem Dimensions="884 3" NumberType="Float" Precision="4" Format="HDF">inner-00006.h5:/position</DataItem>
+			</Geometry>
+			<Time Value="0.000000" />
+			<Attribute Name="velocity" AttributeType="Vector" Center="Node">
+				<Information Name="Typeinfo" Value="Vector" Datatype="float" />
+				<DataItem Dimensions="884 3" NumberType="Float" Precision="4" Format="HDF">inner-00006.h5:/velocity</DataItem>
+			</Attribute>
+			<Attribute Name="id" AttributeType="Scalar" Center="Node">
+				<Information Name="Typeinfo" Value="Scalar" Datatype="int" />
+				<DataItem Dimensions="884 1" NumberType="Int" Precision="4" Format="HDF">inner-00006.h5:/id</DataItem>
+			</Attribute>
+		</Grid>
+	</Domain>
+</Xdmf>
