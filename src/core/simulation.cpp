@@ -39,6 +39,7 @@
     _( haloForces                          , "Halo forces")             \
     _( haloNeuralNetwork                   , "Halo Neural Network")     \
     _( localNeuralNetwork                  , "Local Neural Netowork")  \
+    _( checkPV			           , "Check PV for Value")    \
     _( accumulateInteractionFinal          , "Accumulate forces")       \
     _( objHaloFinalInit                    , "Object halo final init")  \
     _( objHaloFinalFinalize                , "Object halo final finalize") \
@@ -90,6 +91,7 @@ Simulation::Simulation(const MPI_Comm &cartComm, const MPI_Comm &interComm, YmrS
     gpuAwareMPI(gpuAwareMPI),
     scheduler(std::make_unique<TaskScheduler>()),
     tasks(std::make_unique<SimulationTasks>()),
+    checker(std::make_unique<Checker>(state,"checker")),
     interactionManager(std::make_unique<InteractionManager>())
 {
     int nranks[3], periods[3], coords[3];
@@ -808,8 +810,10 @@ void Simulation::createTasks()
 
         scheduler->addTask(tasks->localNeuralNetwork,
                            [this,pvPtr]  (cudaStream_t stream) { interactionManager->executelocalNeuralNetwork(pvPtr,stream); } );
-	      scheduler->addTask(tasks->haloNeuralNetwork,
-			                     [this,pvPtr] (cudaStream_t stream) {interactionManager->executehaloNeuralNetwork(pvPtr,stream); } );
+        scheduler->addTask(tasks->haloNeuralNetwork,
+                           [this,pvPtr] (cudaStream_t stream) {interactionManager->executehaloNeuralNetwork(pvPtr,stream); } );
+        scheduler->addTask(tasks->checkPV,
+			   [this,pvPtr] (cudaStream_t stream) {checker->check(pvPtr,stream); } );
     }
 
     for (auto& pl : plugins)
@@ -1091,6 +1095,8 @@ static void buildDependencies(TaskScheduler *scheduler, SimulationTasks *tasks)
 
      scheduler->addDependency(tasks->objLocalBounce, {tasks->objHaloFinalFinalize}, {tasks->integration, tasks->objClearLocalForces});
      scheduler->addDependency(tasks->objHaloBounce, {}, {tasks->integration, tasks->objHaloFinalFinalize, tasks->objClearHaloForces});
+     
+     scheduler->addDependency(tasks->checkPV,{tasks->pluginsBeforeParticlesDistribution},{tasks->integration});
 
      scheduler->addDependency(tasks->pluginsAfterIntegration, {tasks->objLocalBounce, tasks->objHaloBounce}, {tasks->integration, tasks->wallBounce});
 

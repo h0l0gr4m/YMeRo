@@ -5,6 +5,7 @@
 #include <core/domain.h>
 #include <core/logger.h>
 #include <core/mpi/exchanger_interfaces.h>
+#include <core/checker.h>
 #include <core/ymero_object.h>
 
 #include <functional>
@@ -21,7 +22,7 @@ class ObjectVector;
 class CellList;
 class TaskScheduler;
 class InteractionManager;
-
+class Checker;
 class Wall;
 class Interaction;
 class Integrator;
@@ -118,6 +119,7 @@ private:
     std::unique_ptr<SimulationTasks> tasks;
 
     std::unique_ptr<InteractionManager> interactionManager;
+    std::unique_ptr<Checker> checker; 
 
     bool gpuAwareMPI;
 
