@@ -9,6 +9,8 @@ __global__ void check_pvs(PVview pv_view,int* flag,float dt)
     Particle p = Particle(pv_view.particles,particleId);
     if(!isfinite(dot(p.u,p.u)))
              *flag = 1;
+    if(!isfinite(dot(p.r,p.r)))
+    	     *flag = 1; 
 }
 
 
@@ -25,7 +27,6 @@ Checker::~Checker()=default;
 
 void Checker::check(ParticleVector *pv,cudaStream_t stream)
 {
-  printf("flag: %d \n " , flag[0]);
   using ViewType = PVview;
   ViewType  view (pv,pv->local());
   int nth = 128;
