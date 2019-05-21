@@ -18,7 +18,5 @@ public:
 	~Checker();	
        
         void check(ParticleVector *pv,cudaStream_t stream);
-
-private:
         PinnedBuffer<int> flag; 
 };

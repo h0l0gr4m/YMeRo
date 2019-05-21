@@ -1170,17 +1170,15 @@ void Simulation::run(int nsteps)
 
     info("Will run %d iterations now", nsteps);
 
-
-    for (state->currentStep = begin; state->currentStep < end; state->currentStep++)
-    {
-        debug("===============================================================================\n"
-                "Timestep: %d, simulation time: %f", state->currentStep, state->currentTime);
-
-        scheduler->run();
-
-        state->currentTime += state->dt;
-    }
-
+	for (state->currentStep = begin; state->currentStep < end; state->currentStep++)
+	{
+	debug("===============================================================================\n"
+		"Timestep: %d, simulation time: %f", state->currentStep, state->currentTime);
+	if(checker->flag[0]==1)
+		break;
+	scheduler->run();
+	state->currentTime += state->dt;
+	}
     // Finish the redistribution by rebuilding the cell-lists
     scheduler->forceExec( tasks->cellLists, defaultStream );
 
