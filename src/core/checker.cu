@@ -6,7 +6,7 @@ __global__ void check_pvs(PVview pv_view,int* flag,float dt)
 {
     const int particleId= blockIdx.x*blockDim.x + threadIdx.x;
     if (particleId >= pv_view.size) return;
-    Particle p = Particle(pv_view.particles,particleId);
+    Particle p = pv_view.readParticle(particleId);
     if(!isfinite(dot(p.u,p.u)))
              *flag = 1;
     if(!isfinite(dot(p.r,p.r)))

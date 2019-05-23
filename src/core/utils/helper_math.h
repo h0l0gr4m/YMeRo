@@ -890,10 +890,6 @@ inline __HD__ void operator*=(float2 &a, float b)
     a.y *= b;
 }
 
-inline __HD__ double2 operator+(double2 a, double2 b)
-{
-    return make_double2(a.x + b.x, a.y + b.y);
-}
 
 inline __HD__ double2 operator*(double2 a, double2 b)
 {
@@ -905,11 +901,6 @@ inline __HD__ void operator*=(double2 &a, double2 b)
     a.y *= b.y;
 }
 
-inline __HD__ void operator+=(double2 &a, double2 b)
-{
-    a.x += b.x;
-    a.y += b.y;
-}
 inline __HD__ double2 operator*(double2 a, double b)
 {
     return make_double2(a.x * b, a.y * b);

@@ -38,7 +38,7 @@ public:
 
     void setup(LocalParticleVector *lpv1)
     {
-      pv1NNInput = lpv1->extraPerParticle.getData<NNInput>(ChannelNames::NNInputs)->devPtr();
+      pv1NNInput = lpv1->dataPerParticle.getData<NNInput>(ChannelNames::NNInputs)->devPtr();
     }
 
     __D__ inline void operator()(const ParticleType dst, int dstId) const

@@ -91,8 +91,8 @@ void LossStressFunctionPlugin::beforeIntegration(cudaStream_t stream)
     if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 
     PVview view(pv, pv->local());
-    const Stress *stress = pv->local()->extraPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
-    const Velocity_Gradient *velocity_gradient = pv->local()->extraPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
+    const Stress *stress = pv->local()->dataPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
+    const Velocity_Gradient *velocity_gradient = pv->local()->dataPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
 
 
     localLossStressFunction.clear(stream);

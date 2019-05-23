@@ -108,8 +108,8 @@ public:
         std::mt19937 gen(v);
         std::uniform_real_distribution<float> udistr(0.001, 1);
         seed = udistr(gen);
-        pv1DPDparameter = lpv1->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
-        pv2DPDparameter = lpv2->extraPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+        pv1DPDparameter = lpv1->dataPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
+        pv2DPDparameter = lpv2->dataPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
     }
     void writeState(std::ofstream& fout) override
     {

@@ -129,10 +129,10 @@ struct PVviewWithFlowProperties : public PVview
     {
         if (lpv != nullptr)
         {
-            vorticities = lpv->extraPerParticle.getData<Vorticity>(ChannelNames::vorticities)->devPtr();
-            aprox_densities = lpv->extraPerParticle.getData<Aprox_Density>(ChannelNames::aprox_densities)->devPtr();
-            velocity_gradients = lpv->extraPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
-            density_gradients = lpv->extraPerParticle.getData<Density_Gradient>(ChannelNames::density_gradients)->devPtr();
+            vorticities = lpv->dataPerParticle.getData<Vorticity>(ChannelNames::vorticities)->devPtr();
+            aprox_densities = lpv->dataPerParticle.getData<Aprox_Density>(ChannelNames::aprox_densities)->devPtr();
+            velocity_gradients = lpv->dataPerParticle.getData<Velocity_Gradient>(ChannelNames::velocity_gradients)->devPtr();
+            density_gradients = lpv->dataPerParticle.getData<Density_Gradient>(ChannelNames::density_gradients)->devPtr();
         }
     }
 };

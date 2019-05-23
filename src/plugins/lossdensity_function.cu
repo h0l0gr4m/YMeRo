@@ -1,5 +1,10 @@
 #include "lossdensity_function.h"
 #include "utils/simple_serializer.h"
+#include <core/containers.h>
+#include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
+
+#include "interface.h"
 
 #include <core/datatypes.h>
 #include <core/pvs/particle_vector.h>
@@ -66,7 +71,7 @@ void LossDensityFunctionPlugin::beforeIntegration(cudaStream_t stream)
     if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
 
     PVview view(pv, pv->local());
-    const Density_Gradient *density_gradients = pv->local()->extraPerParticle.getData<Density_Gradient>(ChannelNames::density_gradients)->devPtr();
+    const Density_Gradient *density_gradients = pv->local()->dataPerParticle.getData<Density_Gradient>(ChannelNames::density_gradients)->devPtr();
 
 
     localLossDensityFunction.clear(stream);
@@ -80,7 +85,7 @@ void LossDensityFunctionPlugin::beforeIntegration(cudaStream_t stream)
     localLossDensityFunction.downloadFromDevice(stream, ContainersSynch::Synch);
 
 
-    savedTime = state->currentTime;
+    YmrState::savedTime = state->currentTime;
     needToSend = true;
 }
 

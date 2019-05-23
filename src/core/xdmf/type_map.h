@@ -35,6 +35,13 @@ template <> Channel::NumberType inline getNumberType<double> () {return Channel:
 template <> Channel::NumberType inline getNumberType<int>    () {return Channel::NumberType::Int;}
 template <> Channel::NumberType inline getNumberType<int64_t>() {return Channel::NumberType::Int64;}
 template <> Channel::NumberType inline getNumberType<Stress> () {return Channel::NumberType::Float;}
+template <> Channel::NumberType inline getNumberType<Vorticity> () {return Channel::NumberType::Float;}
+template <> Channel::NumberType inline getNumberType<Aprox_Density> () {return Channel::NumberType::Float;}
+template <> Channel::NumberType inline getNumberType<Velocity_Gradient> () {return Channel::NumberType::Float;}
+template <> Channel::NumberType inline getNumberType<Density_Gradient> () {return Channel::NumberType::Float;}
+template <> Channel::NumberType inline getNumberType<DPDparameter> () {return Channel::NumberType::Float;}
+template <> Channel::NumberType inline getNumberType<NNInput> () {return Channel::NumberType::Float;}
+
 
 template <typename T>
 Channel::NumberType inline getNumberType()

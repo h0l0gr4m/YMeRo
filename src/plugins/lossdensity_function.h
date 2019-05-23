@@ -1,6 +1,17 @@
 #pragma once
 
 #include <core/containers.h>
+#include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
+
+#include <core/datatypes.h>
+#include <core/pvs/particle_vector.h>
+#include <core/pvs/views/pv.h>
+#include <core/simulation.h>
+#include <core/utils/folders.h>
+#include <core/utils/common.h>
+#include <core/utils/cuda_common.h>
+#include <core/utils/kernel_launch.h>
 
 #include "interface.h"
 
@@ -34,7 +45,7 @@ private:
 
 
   PinnedBuffer<LossDensityFunction::ReductionType> localLossDensityFunction {1};
-  TimeType savedTime = 0;
+  YmrState::TimeType savedTime = 0;
 
   std::vector<char> sendBuffer;
 

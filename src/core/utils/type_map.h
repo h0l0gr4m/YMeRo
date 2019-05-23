@@ -17,6 +17,12 @@
     OP(Stress)       SEP                        \
     OP(RigidMotion)  SEP                        \
     OP(COMandExtent) SEP                        \
+    OP(Vorticity)    SEP                        \
+    OP(Aprox_Density)       SEP                        \
+    OP(Density_Gradient)       SEP                        \
+    OP(Velocity_Gradient)       SEP                        \
+    OP(DPDparameter)       SEP                        \
+    OP(NNInput)       SEP                        \
     OP(Force)
 
 

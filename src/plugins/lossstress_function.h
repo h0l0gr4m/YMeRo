@@ -34,7 +34,7 @@ private:
 
 
     PinnedBuffer<LossStressFunction::ReductionType> localLossStressFunction {1};
-    TimeType savedTime = 0;
+    YmrState::TimeType savedTime = 0;
 
     std::vector<char> sendBuffer;
 
