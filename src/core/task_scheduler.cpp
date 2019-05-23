@@ -14,6 +14,22 @@ TaskScheduler::TaskScheduler()
     CUDA_Check( cudaDeviceGetStreamPriorityRange(&cudaPriorityLow, &cudaPriorityHigh) );
 }
 
+TaskScheduler::~TaskScheduler()
+{
+    auto destroyStreams = [](std::queue<cudaStream_t>& streams)
+    {
+        while (!streams.empty())
+        {
+            CUDA_Check( cudaStreamDestroy(streams.front()) );
+            streams.pop();
+        }
+    };
+
+    destroyStreams(streamsLo);
+    destroyStreams(streamsHi);
+}
+
+
 TaskScheduler::TaskID TaskScheduler::createTask(const std::string& label)
 {
     auto id = getTaskId(label);
@@ -326,8 +342,10 @@ void TaskScheduler::run()
 
         cudaStream_t stream;
         if (node->streams->empty())
+	{
             CUDA_Check( cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, node->priority) );
-        else
+        }
+	else
         {
             stream = node->streams->front();
             node->streams->pop();
