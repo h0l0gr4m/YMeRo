@@ -170,7 +170,7 @@ void LossStressFunctionDumper::handshake()
 
 void LossStressFunctionDumper::deserialize(MPI_Status& stat)
 {
-    TimeType curTime;
+    YmrState::TimeType curTime;
     LossStressFunction::ReductionType localLossStressFunction, totalLossStressFunction;
 
     SimpleSerializer::deserialize(data, curTime, localLossStressFunction);

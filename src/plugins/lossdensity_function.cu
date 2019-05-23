@@ -85,7 +85,7 @@ void LossDensityFunctionPlugin::beforeIntegration(cudaStream_t stream)
     localLossDensityFunction.downloadFromDevice(stream, ContainersSynch::Synch);
 
 
-    YmrState::savedTime = state->currentTime;
+    savedTime = state->currentTime;
     needToSend = true;
 }
 
@@ -149,7 +149,7 @@ void LossDensityFunctionDumper::handshake()
 
 void LossDensityFunctionDumper::deserialize(MPI_Status& stat)
 {
-    TimeType curTime;
+    YmrState::TimeType curTime;
     LossDensityFunction::ReductionType localLossDensityFunction, totalLossDensityFunction;
 
     SimpleSerializer::deserialize(data, curTime, localLossDensityFunction);

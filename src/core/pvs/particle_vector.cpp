@@ -104,6 +104,7 @@ ParticleVector::~ParticleVector() = default;
 
 std::vector<int64_t> ParticleVector::getIndices_vector()
 {
+    auto& pos = local()->positions();
     auto& vel = local()->velocities();
     pos.downloadFromDevice(defaultStream, ContainersSynch::Asynch);
     vel.downloadFromDevice(defaultStream);

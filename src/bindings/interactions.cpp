@@ -104,7 +104,6 @@ createInteractionMDPD(const YmrState *state, std::string name, float rc, float r
         (state, name, rc, rd, a, b, gamma, kBT, power, stress, parameters);
 }
 
-
 void exportInteractions(py::module& m)
 {
     py::handlers_class<Interaction> pyInt(m, "Interaction", "Base interaction class");
@@ -488,8 +487,6 @@ void exportInteractions(py::module& m)
              In this case, the **E0** parameter is required.
              Only lists of 1, 2 and 11 states are supported.
     )");
-}
-
 
 
     py::handlers_class<InteractionSmartDPD> pyIntSmartDPD(m, "SmartDPD", pyInt, R"(
@@ -519,7 +516,7 @@ void exportInteractions(py::module& m)
     )");
 
 
-    pyIntSmartDPD.def(py::init<const YmrState*, std::string, std::string, std::vector<float>, float, float, float, float, float>(),
+    pyIntSmartDPD.def(py::init<const YmrState*,std::string,std::string,std::vector<float>,float,float,float,float,float>(),
                  "state"_a, "name"_a,"parameterName"_a,"weights"_a,"rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
             Args:
             name: name of the interaction
