@@ -6,7 +6,7 @@
 #include <core/integrators/interface.h>
 #include <core/interactions/interface.h>
 #include <core/managers/interactions.h>
-#include <core/mpi/api.h>
+#include <core/exchangers/api.h>
 #include <core/object_belonging/interface.h>
 #include <core/pvs/object_vector.h>
 #include <core/pvs/particle_vector.h>
@@ -80,7 +80,7 @@ struct SimulationTasks
 };
 
 Simulation::Simulation(const MPI_Comm &cartComm, const MPI_Comm &interComm, YmrState *state,
-                       int globalCheckpointEvery, std::string checkpointFolder,
+                       int globalCheckpointEvery, std::string checkpointFolder, CheckpointIdAdvanceMode checkpointMode,
                        bool gpuAwareMPI) :
     YmrObject("simulation"),
     nranks3D(nranks3D),
@@ -88,6 +88,7 @@ Simulation::Simulation(const MPI_Comm &cartComm, const MPI_Comm &interComm, YmrS
     state(state),
     globalCheckpointEvery(globalCheckpointEvery),
     checkpointFolder(checkpointFolder),
+    checkpointMode(checkpointMode),
     gpuAwareMPI(gpuAwareMPI),
     scheduler(std::make_unique<TaskScheduler>()),
     tasks(std::make_unique<SimulationTasks>()),
@@ -733,17 +734,17 @@ void Simulation::prepareEngines()
             objHaloReverseIntermediateImp->attach(ov, extraInt);
         }
     }
-
-    std::function< std::unique_ptr<ExchangeEngine>(std::unique_ptr<ParticleExchanger>) > makeEngine;
-
+    
+    std::function< std::unique_ptr<ExchangeEngine>(std::unique_ptr<Exchanger>) > makeEngine;
+    
     // If we're on one node, use a singleNode engine
     // otherwise use MPI
     if (nranks3D.x * nranks3D.y * nranks3D.z == 1)
-        makeEngine = [this] (std::unique_ptr<ParticleExchanger> exch) {
+        makeEngine = [this] (std::unique_ptr<Exchanger> exch) {
             return std::make_unique<SingleNodeEngine> (std::move(exch));
         };
     else
-        makeEngine = [this] (std::unique_ptr<ParticleExchanger> exch) {
+        makeEngine = [this] (std::unique_ptr<Exchanger> exch) {
             return std::make_unique<MPIExchangeEngine> (std::move(exch), cartComm, gpuAwareMPI);
         };
 
@@ -782,17 +783,6 @@ void Simulation::createTasks()
         scheduler->addTask(tasks->checkpoint,
                            [this](cudaStream_t stream) { this->checkpoint(); },
                            globalCheckpointEvery);
-
-    for (auto prototype : pvsCheckPointPrototype)
-        if (prototype.checkpointEvery > 0 && globalCheckpointEvery == 0) {
-            info("Will save checkpoint of particle vector '%s' every %d timesteps",
-                 prototype.pv->name.c_str(), prototype.checkpointEvery);
-
-            scheduler->addTask( tasks->checkpoint, [prototype, this] (cudaStream_t stream) {
-                prototype.pv->checkpoint(cartComm, checkpointFolder);
-            }, prototype.checkpointEvery );
-        }
-
 
     for (auto& clVec : cellListMap)
         for (auto& cl : clVec.second)
@@ -1166,9 +1156,10 @@ void Simulation::init()
 }
 
 
+
 void Simulation::run(int nsteps)
 {
-    int begin = state->currentStep, end = state->currentStep + nsteps;
+    YmrState::TimeType begin = state->currentStep, end = state->currentStep + nsteps;
 
     info("Will run %d iterations now", nsteps);
 
@@ -1190,51 +1181,37 @@ void Simulation::run(int nsteps)
     for (auto& pl : plugins)
         pl->finalize();
 
-    if (interComm != MPI_COMM_NULL)
-    {
-        int dummy = -1;
-        int tag = 424242;
-
-        MPI_Check( MPI_Send(&dummy, 1, MPI_INT, rank, tag, interComm) );
-        debug("Sending stopping message to the postprocess");
-    }
+    notifyPostProcess(stoppingTag, stoppingMsg);
 }
 
+void Simulation::notifyPostProcess(int tag, int msg) const
+{
+    if (interComm != MPI_COMM_NULL)
+    {
+        MPI_Check( MPI_Send(&msg, 1, MPI_INT, rank, tag, interComm) );
+        debug("notify postprocess with tag %d and message %d", tag, msg);
+    }
+}
 
 void Simulation::restartState(std::string folder)
 {
     auto filename = createCheckpointName(folder, "state", "txt");
-    TextIO::read(filename, state->currentTime, state->currentStep);
+    auto good = TextIO::read(filename, state->currentTime, state->currentStep, checkpointId);
+    if (!good) die("failed to read '%s'\n", filename.c_str());
 }
 
 void Simulation::checkpointState()
 {
-    auto filename = createCheckpointNameWithId(checkpointFolder, "state", "txt");
+    auto filename = createCheckpointNameWithId(checkpointFolder, "state", "txt", checkpointId);
 
     if (rank == 0)
-        TextIO::write(filename, state->currentTime, state->currentStep);
+        TextIO::write(filename, state->currentTime, state->currentStep, checkpointId);
 
-    createCheckpointSymlink(cartComm, checkpointFolder, "state", "txt");
+    createCheckpointSymlink(cartComm, checkpointFolder, "state", "txt", checkpointId);
 }
 
 void Simulation::restart(std::string folder)
 {
-//    bool beginning =  particleVectors    .empty() &&
-//                      wallMap            .empty() &&
-//                      interactionMap     .empty() &&
-//                      integratorMap      .empty() &&
-//                      bouncerMap         .empty() &&
-//                      belongingCheckerMap.empty() &&
-//                      plugins            .empty();
-//
-//    if (!beginning)
-//        die("Tried to restart partially initialized simulation! Please only call restart() before registering anything");
-//
-//    restartStatus = RestartStatus::RestartStrict;
-//    restartFolder = folder;
-//
-//    TextIO::read(folder + "_simulation.state", state->currentTime, state->currentStep);
-
     restartFolder = folder;
 
     this->restartState(restartFolder);
@@ -1267,6 +1244,14 @@ void Simulation::restart(std::string folder)
     CUDA_Check( cudaDeviceSynchronize() );
 }
 
+static void advanceCheckpointId(int& checkpointId, CheckpointIdAdvanceMode mode)
+{
+    if (mode == CheckpointIdAdvanceMode::PingPong)
+        checkpointId = checkpointId xor 1;
+    else
+        ++checkpointId;
+}
+
 void Simulation::checkpoint()
 {
     this->checkpointState();
@@ -1276,28 +1261,30 @@ void Simulation::checkpoint()
     info("Writing simulation state, into folder %s", checkpointFolder.c_str());
 
     for (auto& pv : particleVectors)
-        pv->checkpoint(cartComm, checkpointFolder);
-
+        pv->checkpoint(cartComm, checkpointFolder, checkpointId);
+    
     for (auto& handler : bouncerMap)
-        handler.second->checkpoint(cartComm, checkpointFolder);
-
+        handler.second->checkpoint(cartComm, checkpointFolder, checkpointId);
+    
     for (auto& handler : integratorMap)
-        handler.second->checkpoint(cartComm, checkpointFolder);
-
+        handler.second->checkpoint(cartComm, checkpointFolder, checkpointId);
+    
     for (auto& handler : interactionMap)
-        handler.second->checkpoint(cartComm, checkpointFolder);
-
+        handler.second->checkpoint(cartComm, checkpointFolder, checkpointId);
+    
     for (auto& handler : wallMap)
-        handler.second->checkpoint(cartComm, checkpointFolder);
-
+        handler.second->checkpoint(cartComm, checkpointFolder, checkpointId);
+    
     for (auto& handler : belongingCheckerMap)
-        handler.second->checkpoint(cartComm, checkpointFolder);
-
+        handler.second->checkpoint(cartComm, checkpointFolder, checkpointId);
+    
     for (auto& handler : plugins)
-        handler->checkpoint(cartComm, checkpointFolder);
+        handler->checkpoint(cartComm, checkpointFolder, checkpointId);
 
-    advanceCheckpointId(state->checkpointMode);
+    advanceCheckpointId(checkpointId, checkpointMode);
 
+    notifyPostProcess(checkpointTag, checkpointId);
+    
     CUDA_Check( cudaDeviceSynchronize() );
 }
 

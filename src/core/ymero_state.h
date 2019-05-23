@@ -7,15 +7,16 @@
 #include <mpi.h>
 #include <string>
 
-using TimeType = double;
-
 /**
  * Global quantities accessible by all simulation objects in YMeRo
  */
 class YmrState
 {
 public:
-    YmrState(DomainInfo domain, float dt, CheckpointIdAdvanceMode checkpointMode = CheckpointIdAdvanceMode::PingPong);
+    using TimeType = double;
+    using StepType = long long;
+    
+    YmrState(DomainInfo domain, float dt);
     YmrState(const YmrState&);
     YmrState& operator=(YmrState other);
 
@@ -33,8 +34,6 @@ public:
 
     float dt;
     TimeType currentTime;
-    int currentStep;
-
-    CheckpointIdAdvanceMode checkpointMode;
+    StepType currentStep;
 };
 

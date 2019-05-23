@@ -2,6 +2,7 @@
 
 #include "utils/sampling_helpers.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/celllist.h>
 #include <core/pvs/object_vector.h>
@@ -23,10 +24,10 @@ __global__ void sampleRelative(
     const int pid = threadIdx.x + blockIdx.x*blockDim.x;
     if (pid >= pvView.size) return;
 
-    Particle p(pvView.particles, pid);
-    p.r -= relativePoint;
+    float3 r = make_float3(pvView.readPosition(pid));
+    r -= relativePoint;
 
-    int3 cid3 = cinfo.getCellIdAlongAxes<CellListsProjection::NoClamp>(p.r);
+    int3 cid3 = cinfo.getCellIdAlongAxes<CellListsProjection::NoClamp>(r);
     cid3 = (cid3 + cinfo.ncells) % cinfo.ncells;
     const int cid = cinfo.encode(cid3);
 
@@ -70,13 +71,13 @@ void AverageRelative3D::setup(Simulation* simulation, const MPI_Comm& comm, cons
         channelsInfo.averagePtrs[i] = channelsInfo.average[i].devPtr();
     }
 
-    channelsInfo.averagePtrs.uploadToDevice(0);
-    channelsInfo.types.uploadToDevice(0);
+    channelsInfo.averagePtrs.uploadToDevice(defaultStream);
+    channelsInfo.types.uploadToDevice(defaultStream);
 
     // Relative stuff
     relativeOV = simulation->getOVbyNameOrDie(relativeOVname);
 
-    if ( !relativeOV->local()->extraPerObject.checkChannelExists(ChannelNames::motions) )
+    if ( !relativeOV->local()->dataPerObject.checkChannelExists(ChannelNames::motions) )
         die("Only rigid objects are supported for relative flow, but got OV '%s'", relativeOV->name.c_str());
 
     int locsize = relativeOV->local()->nObjects;
@@ -107,7 +108,7 @@ void AverageRelative3D::afterIntegration(cudaStream_t stream)
     const int TAG = 22;
     const int NCOMPONENTS = 2 * sizeof(float3) / sizeof(float);
     
-    if (state->currentStep % sampleEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, sampleEvery)) return;
 
     debug2("Plugin %s is sampling now", name.c_str());
 
@@ -117,8 +118,8 @@ void AverageRelative3D::afterIntegration(cudaStream_t stream)
     MPI_Request req;
     MPI_Check( MPI_Irecv(relativeParams, NCOMPONENTS, MPI_FLOAT, MPI_ANY_SOURCE, TAG, comm, &req) );
 
-    auto ids     = relativeOV->local()->extraPerObject.getData<int>(ChannelNames::globalIds);
-    auto motions = relativeOV->local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
+    auto ids     = relativeOV->local()->dataPerObject.getData<int64_t>(ChannelNames::globalIds);
+    auto motions = relativeOV->local()->dataPerObject.getData<RigidMotion>(ChannelNames::motions);
 
     ids    ->downloadFromDevice(stream, ContainersSynch::Asynch);
     motions->downloadFromDevice(stream, ContainersSynch::Synch);
@@ -193,7 +194,7 @@ void AverageRelative3D::extractLocalBlock()
 
 void AverageRelative3D::serializeAndSend(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
     for (int i = 0; i < channelsInfo.n; i++) {
         auto& data = accumulated_average[i];

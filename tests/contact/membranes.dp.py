@@ -43,7 +43,7 @@ ic_rbc   = ymr.InitialConditions.Membrane(ic_pos_rot)
 u.registerParticleVector(pv_rbc, ic_rbc)
 
 dpd = ymr.Interactions.DPD('dpd', 1.0, a=10.0, gamma=10.0, kbt=0.001, power=0.5)
-cnt = ymr.Interactions.LJ('cnt', 1.0, epsilon=0.35, sigma=0.4, max_force=400.0, object_aware=False)
+cnt = ymr.Interactions.LJ('cnt', 1.0, epsilon=0.35, sigma=0.4, max_force=400.0)
 
 prm_rbc = lina_parameters(1.0)
 int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Kantor", **prm_rbc, stress_free=True)
@@ -52,7 +52,7 @@ u.registerInteraction(dpd)
 u.registerInteraction(cnt)
 
 if args.substep:
-    integrator = ymr.Integrators.SubStepMembrane('substep_membrane', substeps, int_rbc)
+    integrator = ymr.Integrators.SubStep('substep_membrane', substeps, int_rbc)
     u.registerIntegrator(integrator)
     u.setIntegrator(integrator, pv_rbc)
 else:
@@ -72,8 +72,7 @@ u.registerIntegrator(vv_dp)
 u.setIntegrator(vv_dp, pv_flu)
 
 
-dump_mesh = ymr.Plugins.createDumpMesh("mesh_dump", pv_rbc, (int)(0.15/dt), "ply/")
-u.registerPlugins(dump_mesh)
+u.registerPlugins(ymr.Plugins.createDumpMesh("mesh_dump", pv_rbc, (int)(0.15/dt), "ply/"))
 
 
 nsteps = (int) (tend/dt)

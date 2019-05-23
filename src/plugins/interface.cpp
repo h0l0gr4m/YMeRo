@@ -1,4 +1,5 @@
 #include "interface.h"
+#include <core/logger.h>
 #include <core/hacker.h>
 Plugin::Plugin():
     comm(MPI_COMM_NULL),
@@ -14,6 +15,7 @@ if(comm != MPI_COMM_NULL)
 	MPI_Check(MPI_Comm_free(&comm));
 	DECREASE;
 }
+
 }
     
 void Plugin::handshake() {}

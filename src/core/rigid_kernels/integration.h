@@ -29,7 +29,7 @@ static __global__ void collectRigidForces(ROVview ovView)
         const int offset = (objId * ovView.objSize + i);
 
         const float3 frc = make_float3(ovView.forces[offset]);
-        const float3 r   = make_float3(ovView.particles[offset*2]) - com;
+        const float3 r   = make_float3(ovView.readPosition(offset)) - com;
 
         force += frc;
         torque += cross(r, frc);
@@ -113,10 +113,15 @@ static __global__ void integrateRigidMotion(ROVviewWithOldMotion ovView, const f
 //            L.x, L.y, L.z);
 }
 
+
+enum class ApplyRigidMotion { PositionsOnly, PositionsAndVelocities };
+
 /**
- * Rotates and translates the initial sample according to new position and orientation
+ * Rotates and translates the initial positions according to new position and orientation
+ * compute also velocity if template parameter set to corresponding value
  */
-static __global__ void applyRigidMotion(ROVview ovView, const float4 * __restrict__ initial)
+template <ApplyRigidMotion action>
+static __global__ void applyRigidMotion(ROVview ovView, const float4 *initialPositions)
 {
     const int pid = threadIdx.x + blockDim.x * blockIdx.x;
     const int objId = pid / ovView.objSize;
@@ -126,14 +131,22 @@ static __global__ void applyRigidMotion(ROVview ovView, const float4 * __restric
 
     const auto motion = toSingleMotion(ovView.motions[objId]);
 
-    Particle p(ovView.particles, pid);
+    Particle p;
+    ovView.readPosition(p, pid);
 
     // Some explicit conversions for double precision
-    p.r = motion.r + rotate( f4tof3(initial[locId]), motion.q );
-    p.u = motion.vel + cross(motion.omega, p.r - motion.r);
+    p.r = motion.r + rotate( f4tof3(initialPositions[locId]), motion.q );
 
-    ovView.particles[2*pid]   = p.r2Float4();
-    ovView.particles[2*pid+1] = p.u2Float4();
+    if (action == ApplyRigidMotion::PositionsAndVelocities)
+    {
+        ovView.readVelocity(p, pid);
+        p.u = motion.vel + cross(motion.omega, p.r - motion.r);
+        ovView.writeParticle(pid, p);
+    }
+    else
+    {
+        ovView.writePosition(pid, p.r2Float4());
+    }
 }
 
 static __global__ void clearRigidForces(ROVview ovView)

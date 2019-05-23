@@ -116,7 +116,8 @@ void InteractionManager::clearIntermediatesPV(ParticleVector *pv, LocalParticleV
 void InteractionManager::clearFinalPV(ParticleVector *pv, LocalParticleVector *lpv, cudaStream_t stream) const
 {
     _clearPVChannels(pv, lpv, cellFinalChannels, stream);
-    lpv->forces.clearDevice(stream);
+    lpv->forces().clearDevice(stream);
+    // forces are cleaned separately because of bounce back or substep integrators who don't appear here
 }
 
 
@@ -317,8 +318,8 @@ void InteractionManager::_clearPVChannels(ParticleVector *pv, LocalParticleVecto
 
     for (const auto& channelName : activeChannels)
     {
-        if (channelName == ChannelNames::forces) continue;
-        lpv->extraPerParticle.getGenericData(channelName)->clearDevice(stream);
+        if (channelName == ChannelNames::forces) continue; // already cleaned explicitely
+        lpv->dataPerParticle.getGenericData(channelName)->clearDevice(stream);
     }
 }
 

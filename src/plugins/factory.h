@@ -4,6 +4,7 @@
 
 #include "add_force.h"
 #include "add_torque.h"
+#include "anchor_particle.h"
 #include "average_flow.h"
 #include "average_relative_flow.h"
 #include "channel_dumper.h"
@@ -22,6 +23,8 @@
 #include "magnetic_orientation.h"
 #include "membrane_extra_force.h"
 #include "particle_channel_saver.h"
+#include "particle_checker.h"
+#include "particle_drag.h"
 #include "pin_object.h"
 #include "radial_velocity_control.h"
 #include "stats.h"
@@ -55,7 +58,6 @@ static void extractChannelsInfos(const std::vector< std::pair<std::string, std::
         if      (typeStr == "scalar")             types.push_back(Average3D::ChannelType::Scalar);
         else if (typeStr == "vector")             types.push_back(Average3D::ChannelType::Vector_float3);
         else if (typeStr == "vector_from_float4") types.push_back(Average3D::ChannelType::Vector_float4);
-        else if (typeStr == "vector_from_float8") types.push_back(Average3D::ChannelType::Vector_2xfloat4);
         else if (typeStr == "tensor6")            types.push_back(Average3D::ChannelType::Tensor6);
         else if (typeStr == "tensor9")            types.push_back(Average3D::ChannelType::Tensor9);
         else if (typeStr == "NNInput")            types.push_back(Average3D::ChannelType::NNInput);
@@ -89,17 +91,37 @@ static void extractChannelInfos(const std::vector< std::pair<std::string, std::s
 
 
 static pair_shared< AddForcePlugin, PostprocessPlugin >
-createAddForcePlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector* pv, PyTypes::float3 force)
+createAddForcePlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv, PyTypes::float3 force)
 {
     auto simPl = computeTask ? std::make_shared<AddForcePlugin> (state, name, pv->name, make_float3(force)) : nullptr;
     return { simPl, nullptr };
 }
 
 static pair_shared< AddTorquePlugin, PostprocessPlugin >
-createAddTorquePlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector* pv, PyTypes::float3 torque)
+createAddTorquePlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv, PyTypes::float3 torque)
 {
     auto simPl = computeTask ? std::make_shared<AddTorquePlugin> (state, name, pv->name, make_float3(torque)) : nullptr;
     return { simPl, nullptr };
+}
+
+static pair_shared< AnchorParticlePlugin, AnchorParticleStatsPlugin >
+createAnchorParticlePlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv,
+                           std::function<PyTypes::float3(float)> position,
+                           std::function<PyTypes::float3(float)> velocity,
+                           int pid, int reportEvery, const std::string& path)
+{
+    auto simPl = computeTask ?
+        std::make_shared<AnchorParticlePlugin> (state, name, pv->name,
+                                                [position](float t) {return make_float3(position(t));},
+                                                [velocity](float t) {return make_float3(velocity(t));},
+                                                pid, reportEvery)
+        : nullptr;
+
+    auto postPl = computeTask ?
+        nullptr :
+        std::make_shared<AnchorParticleStatsPlugin> (name, path);
+    
+    return { simPl, postPl };
 }
 
 static pair_shared< DensityControlPlugin, PostprocessDensityControl >
@@ -334,11 +356,27 @@ createParticleChannelSaverPlugin(bool computeTask, const YmrState *state, std::s
     return { simPl, nullptr };
 }
 
+static pair_shared< ParticleCheckerPlugin, PostprocessPlugin >
+createParticleCheckerPlugin(bool computeTask, const YmrState *state, std::string name, int checkEvery)
+{
+    auto simPl = computeTask ? std::make_shared<ParticleCheckerPlugin> (state, name, checkEvery) : nullptr;
+    return { simPl, nullptr };
+}
+
 static pair_shared< ParticleDisplacementPlugin, PostprocessPlugin >
 createParticleDisplacementPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv, int updateEvery)
 {
     auto simPl = computeTask ?
         std::make_shared<ParticleDisplacementPlugin> (state, name, pv->name, updateEvery) :
+        nullptr;
+    return { simPl, nullptr };
+}
+
+static pair_shared< ParticleDragPlugin, PostprocessPlugin >
+createParticleDragPlugin(bool computeTask, const YmrState *state, std::string name, ParticleVector *pv, float drag)
+{
+    auto simPl = computeTask ?
+        std::make_shared<ParticleDragPlugin> (state, name, pv->name, drag) :
         nullptr;
     return { simPl, nullptr };
 }

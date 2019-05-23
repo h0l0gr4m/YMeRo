@@ -2,6 +2,7 @@
 
 #include "utils/sampling_helpers.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/celllist.h>
 #include <core/pvs/particle_vector.h>
@@ -21,7 +22,7 @@ __global__ void sample(
     const int pid = threadIdx.x + blockIdx.x*blockDim.x;
     if (pid >= pvView.size) return;
 
-    Particle p(pvView.particles, pid);
+    Particle p(pvView.readParticle(pid));
 
     int cid = cinfo.getCellId(p.r);
 
@@ -77,12 +78,12 @@ void Average3D::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Co
 
     if (resolution.x <= 0 || resolution.y <= 0 || resolution.z <= 0)
     	die("Plugin '%s' has to have at least 1 cell per rank per dimension, got %dx%dx%d."
-    			"Please decrease the bin size", resolution.x, resolution.y, resolution.z);
+            "Please decrease the bin size", resolution.x, resolution.y, resolution.z);
 
     const int total = resolution.x * resolution.y * resolution.z;
 
     density.resize_anew(total);
-    density.clear(0);
+    density.clear(defaultStream);
 
     accumulated_density.resize_anew(total);
     accumulated_density.clear(0);
@@ -95,16 +96,17 @@ void Average3D::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Co
         channelsInfo.average[i].resize_anew(components * total);
         accumulated_average [i].resize_anew(components * total);
 
-        channelsInfo.average[i].clear(0);
-        accumulated_average [i].clear(0);
-
+        
+        channelsInfo.average[i].clear(defaultStream);
+        accumulated_average [i].clear(defaultStream);
+        
         channelsInfo.averagePtrs[i] = channelsInfo.average[i].devPtr();
 
         allChannels += ", " + channelsInfo.names[i];
     }
 
-    channelsInfo.averagePtrs.uploadToDevice(0);
-    channelsInfo.types.uploadToDevice(0);
+    channelsInfo.averagePtrs.uploadToDevice(defaultStream);
+    channelsInfo.types.uploadToDevice(defaultStream);
 
     for (const auto& pvName : pvNames)
         pvs.push_back(simulation->getPVbyNameOrDie(pvName));
@@ -159,7 +161,7 @@ void Average3D::accumulateSampledAndClear(cudaStream_t stream)
 
 void Average3D::afterIntegration(cudaStream_t stream)
 {
-    if (state->currentStep % sampleEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, sampleEvery)) return;
 
     debug2("Plugin %s is sampling now", name.c_str());
 
@@ -203,7 +205,7 @@ void Average3D::scaleSampled(cudaStream_t stream)
 
 void Average3D::serializeAndSend(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
     if (nSamples == 0) return;
 
     scaleSampled(stream);

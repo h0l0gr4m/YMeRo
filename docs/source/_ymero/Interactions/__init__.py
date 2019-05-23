@@ -34,16 +34,17 @@ class DPD(Interaction):
     
     """
     def __init__():
-        r"""__init__(name: str, rc: float, a: float, gamma: float, kbt: float, power: float) -> None
+        r"""__init__(name: str, rc: float, a: float, gamma: float, kbt: float, power: float, stress: bool = False, **kwargs) -> None
 
   
             Args:
                 name: name of the interaction
-                    rc: interaction cut-off (no forces between particles further than **rc** apart)
-                    a: :math:`a`
-                    gamma: :math:`\gamma`
-                    kbt: :math:`k_B T`
-                    power: :math:`p` in the weight function
+                rc: interaction cut-off (no forces between particles further than **rc** apart)
+                a: :math:`a`
+                gamma: :math:`\gamma`
+                kbt: :math:`k_B T`
+                power: :math:`p` in the weight function
+                stress: if **True**, activates virial stress computation every **stress_period** time units (given in kwars) 
     
 
         """
@@ -114,7 +115,7 @@ class LJ(Interaction):
     
     """
     def __init__():
-        r"""__init__(name: str, rc: float, epsilon: float, sigma: float, max_force: float = 1000.0, object_aware: bool) -> None
+        r"""__init__(name: str, rc: float, epsilon: float, sigma: float, max_force: float = 1000.0, aware_mode: str = 'None', stress: bool = False, **kwargs) -> None
 
 
             Args:
@@ -123,9 +124,15 @@ class LJ(Interaction):
                 epsilon: :math:`\varepsilon`
                 sigma: :math:`\sigma`
                 max_force: force magnitude will be capped to not exceed **max_force**
-                object_aware:
-                    if True, the particles belonging to the same object in an object vector do not interact with each other.
-                    That restriction only applies if both Particle Vectors in the interactions are the same and is actually an Object Vector. 
+                aware_mode:
+                    * if "None", all particles interact with each other.
+                    * if "Object", the particles belonging to the same object in an object vector do not interact with each other.
+                      That restriction only applies if both Particle Vectors in the interactions are the same and is actually an Object Vector. 
+                    * if "Rod", the particles interact with all other particles except with the ones which are below a given a distance
+                      (in number of segment) of the same rod vector. The distance is specified by the kwargs parameter **min_segments_distance**.
+                stress: 
+                    if **True**, will enable stress computations every **stress_period** time units (specified as kwargs parameter).
+                   
     
 
         """
@@ -166,18 +173,19 @@ class MDPD(Interaction):
     
     """
     def __init__():
-        r"""__init__(name: str, rc: float, rd: float, a: float, b: float, gamma: float, kbt: float, power: float) -> None
+        r"""__init__(name: str, rc: float, rd: float, a: float, b: float, gamma: float, kbt: float, power: float, stress: bool = False, **kwargs) -> None
 
   
             Args:
                 name: name of the interaction
-                    rc: interaction cut-off (no forces between particles further than **rc** apart)
-                    rd: density cutoff, assumed rd <= rc
-                    a: :math:`a`
-                    b: :math:`b`
-                    gamma: :math:`\gamma`
-                    kbt: :math:`k_B T`
-                    power: :math:`p` in the weight function
+                rc: interaction cut-off (no forces between particles further than **rc** apart)
+                rd: density cutoff, assumed rd <= rc
+                a: :math:`a`
+                b: :math:`b`
+                gamma: :math:`\gamma`
+                kbt: :math:`k_B T`
+                power: :math:`p` in the weight function
+                stress: if **True**, activates virial stress computation every **stress_period** time units (given in kwars) 
     
 
         """
@@ -309,6 +317,89 @@ class MembraneForces(Interaction):
         """
         pass
 
+class ObjRodBinding(Interaction):
+    r"""
+        Forces attaching a :any:`RodVector` to a :any:`RigidObjectVector`.
+    
+    """
+    def __init__():
+        r"""__init__(name: str, torque: float, rel_anchor: Tuple[float, float, float], k_bound: float) -> None
+
+
+            Args:
+                name: name of the interaction
+                torque: torque magnitude to apply to the rod
+                rel_anchor: position of the anchor relative to the rigid object
+                k_bound: anchor harmonic potential magnitude
+
+    
+
+        """
+        pass
+
+class RodForces(Interaction):
+    r"""
+        Forces acting on an elastic rod.
+
+        The rod interactions are composed of forces comming from:
+            - bending energy, :math:`E_{\text{bend}}`
+            - twist energy, :math:`E_{\text{twist}}`
+            - bounds energy,  :math:`E_{\text{bound}}`
+
+        The form of the bending energy is given by (for a bi-segment):
+
+        .. math::
+
+            E_{\mathrm{bend}}=\frac{1}{2 l} \sum_{j=0}^{1}\left(\omega^{j}-\overline{\omega}\right)^{T} B\left(\omega^{j}-\overline{\omega}\right),
+
+        where
+
+        .. math::
+
+        \omega^{j}=\left((\kappa \mathbf{b}) \cdot \mathbf{m}_{2}^{j},-(\kappa \mathbf{b}) \cdot \mathbf{m}_{1}^{j}\right).
+
+        See, e.g. [bergou2008]_ for more details.
+        The form of the twist energy is given by (for a bi-segment):
+
+        .. math::
+
+            E_{\mathrm{twist}}=k_{t} l\left(\frac{\theta^{1}-\theta^{0}}{l}-\overline{\tau}\right)^{2}.
+
+        The additional bound energy is a simple harmonic potential with a given equilibrium length.
+
+        .. [bergou2008] Bergou, M.; Wardetzky, M.; Robinson, S.; Audoly, B. & Grinspun, E. 
+                        Discrete elastic rods 
+                        ACM transactions on graphics (TOG), 2008, 27, 63
+
+    
+    """
+    def __init__():
+        r"""__init__(name: str, **kwargs) -> None
+
+ 
+             Args:
+                 name: name of the interaction
+
+             kwargs:
+
+                 * **a0** (float):           equilibrium length between 2 opposite cross vertices
+                 * **l0** (float):           equilibrium length between 2 consecutive vertices on the centerline 
+                 * **k_bounds** (float):     elastic bound force magnitude
+                 * **k_visc** (float):       viscous bound force magnitude
+                 * **k_bending** (float3):   Bending symmetric tensor :math:`B` in the order :math:`\left(B_{xx}, B_{xy}, B_{zz} \right)`
+                 * **omega0** (float2):      Spontaneous curvatures along the two material frames :math:`\overline{\omega}`
+                 * **k_twist** (float):      Twist energy magnitude :math:`k_\mathrm{twist}`
+                 * **tau0** (float):         Spontaneous twist :math:`\overline{\tau}`
+                 * **E0** (float):           (optional) energy ground state
+
+             The interaction can support multiple polymorphic states if **omega0**, **tau0** and **E0** are lists of equal size.
+             In this case, the **E0** parameter is required.
+             Only lists of 1, 2 and 11 states are supported.
+    
+
+        """
+        pass
+
 class SDPD(Interaction):
     r"""
         Compute SDPD interaction with angular momentum conservation.
@@ -356,96 +447,6 @@ class SDPD(Interaction):
 
                 * **p0**: :math:`p_0`
                 * **rho_r**: :math:`\rho_r`
-    
-
-        """
-        pass
-
-class DPDWithStress(DPD):
-    r"""
-        wrapper of :any:`DPD` with, in addition, stress computation
-    
-    """
-    def __init__():
-        r"""__init__(name: str, rc: float, a: float, gamma: float, kbt: float, power: float, stressPeriod: float) -> None
-
-  
-            Args:
-                name: name of the interaction
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                a: :math:`a`
-                gamma: :math:`\gamma`
-                kbt: :math:`k_B T`
-                power: :math:`p` in the weight function
-                stressPeriod: compute the stresses every this period (in simulation time units)
-    
-
-        """
-        pass
-
-    def setSpecificPair():
-        r"""setSpecificPair(pv1: ParticleVectors.ParticleVector, pv2: ParticleVectors.ParticleVector, a: float = inf, gamma: float = inf, kbt: float = inf, power: float = inf) -> None
-
-
-            Override some of the interaction parameters for a specific pair of Particle Vectors
-         
-
-        """
-        pass
-
-class LJWithStress(LJ):
-    r"""
-        wrapper of :any:`LJ` with, in addition, stress computation
-    
-    """
-    def __init__():
-        r"""__init__(name: str, rc: float, epsilon: float, sigma: float, max_force: float = 1000.0, object_aware: bool, stressPeriod: float) -> None
-
-
-            Args:
-                name: name of the interaction
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                epsilon: :math:`\varepsilon`
-                sigma: :math:`\sigma`
-                max_force: force magnitude will be capped not exceed **max_force**
-                object_aware:
-                    if True, the particles belonging to the same object in an object vector do not interact with each other.
-                    That restriction only applies if both Particle Vectors in the interactions are the same and is actually an Object Vector. 
-                stressPeriod: compute the stresses every this period (in simulation time units)
-    
-
-        """
-        pass
-
-    def setSpecificPair():
-        r"""setSpecificPair(pv1: ParticleVectors.ParticleVector, pv2: ParticleVectors.ParticleVector, epsilon: float, sigma: float, max_force: float) -> None
-
-
-            Override some of the interaction parameters for a specific pair of Particle Vectors
-        
-
-        """
-        pass
-
-class MDPDWithStress(MDPD):
-    r"""
-        wrapper of :any:`MDPD` with, in addition, stress computation
-    
-    """
-    def __init__():
-        r"""__init__(name: str, rc: float, rd: float, a: float, b: float, gamma: float, kbt: float, power: float, stressPeriod: float) -> None
-
-  
-            Args:
-                name: name of the interaction
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                rd: density cut-off, assumed rd < rc
-                a: :math:`a`
-                b: :math:`b`
-                gamma: :math:`\gamma`
-                kbt: :math:`k_B T`
-                power: :math:`p` in the weight function
-                stressPeriod: compute the stresses every this period (in simulation time units)
     
 
         """

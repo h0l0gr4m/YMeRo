@@ -19,6 +19,16 @@ class AddTorque(SimulationPlugin):
         This plugin will add constant torque :math:`\mathbf{T}_{extra}` to each *object* of a specific OV every time-step.
     
     """
+class AnchorParticle(SimulationPlugin):
+    r"""
+        This plugin will set a given particle at a given position and velocity.
+    
+    """
+class AnchorParticleStats(PostprocessPlugin):
+    r"""
+        Postprocessing side of :any:`AnchorParticle` responsible to dump the data.
+    
+    """
 class Average3D(SimulationPlugin):
     r"""
         This plugin will project certain quantities of the particle vectors on the grid (by simple binning),
@@ -150,10 +160,21 @@ class ParticleChannelSaver(SimulationPlugin):
         It copies the content of an extra channel of pv at each time step and make it accessible by other plugins.
     
     """
+class ParticleChecker(SimulationPlugin):
+    r"""
+        This plugin will check the positions and velocities of all particles in the simulation every given time steps.
+        To be used for debugging purpose.
+    
+    """
 class ParticleDisplacementPlugin(SimulationPlugin):
     r"""
         This plugin computes and save the displacement of the particles within a given particle vector.
         The result is stored inside the extra channel "displacements" as an array of float3.
+    
+    """
+class ParticleDrag(SimulationPlugin):
+    r"""
+        This plugin will add drag force :math:`\mathbf{f} = - C_d \mathbf{u}` to each particle of a specific PV every time-step.
     
     """
 class ParticleDumperPlugin(PostprocessPlugin):
@@ -366,6 +387,25 @@ def createAddTorque():
     """
     pass
 
+def createAnchorParticle():
+    r"""createAnchorParticle(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, position: Callable[[float], Tuple[float, float, float]], velocity: Callable[[float], Tuple[float, float, float]], pid: int, report_every: int, path: str) -> Tuple[Plugins.AnchorParticle, Plugins.AnchorParticleStats]
+
+
+        Create :any:`AnchorParticle` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            position: position (at given time) of the particle
+            velocity: velocity (at given time) of the particle
+            pid: id of the particle in the given particle vector
+            report_every: report the time averaged force acting on the particle every this amount of timesteps
+            path: folder where to dump the stats
+    
+
+    """
+    pass
+
 def createDensityControl():
     r"""createDensityControl(state: YmrState, name: str, file_name: str, pvs: List[ParticleVectors.ParticleVector], target_density: float, region: Callable[[Tuple[float, float, float]], float], resolution: Tuple[float, float, float], level_lo: float, level_hi: float, level_space: float, Kp: float, Ki: float, Kd: float, tune_every: int, dump_every: int, sample_every: int) -> Tuple[Plugins.DensityControlPlugin, Plugins.PostprocessDensityControl]
 
@@ -426,21 +466,16 @@ def createDumpAverage():
             channels: list of pairs name - type.
                 Name is the channel (per particle) name. Always available channels are:
                     
-                * 'velocity' with type "float8"             
-                * 'force' with type "float4"
+                * 'velocity' with type "float4"
                 
                 Type is to provide the type of quantity to extract from the channel.                                            
                 Type can also define a simple transformation from the channel internal structure                 
                 to the datatype supported in HDF5 (i.e. scalar, vector, tensor)                                  
                 Available types are:                                                                             
                                                                                                                 
-                * 'scalar': 1 float per particle                                                                   
-                * 'vector': 3 floats per particle                                                                  
-                * 'vector_from_float4': 4 floats per particle. 3 first floats will form the resulting vector       
-                * 'vector_from_float8' 8 floats per particle. 5th, 6th, 7th floats will form the resulting vector. 
-                    This type is primarity made to be used with velocity since it is stored together with          
-                    the coordinates as 8 consecutive float numbers: (x,y,z) coordinate, followed by 1 padding value
-                    and then (x,y,z) velocity, followed by 1 more padding value                                    
+                * 'scalar': 1 float per particle
+                * 'vector': 3 floats per particle
+                * 'vector_from_float4': 4 floats per particle. 3 first floats will form the resulting vector
                 * 'tensor6': 6 floats per particle, symmetric tensor in order xx, xy, xz, yy, yz, zz
                 
     
@@ -678,6 +713,20 @@ def createParticleChannelSaver():
     """
     pass
 
+def createParticleChecker():
+    r"""createParticleChecker(state: YmrState, name: str, check_every: int) -> Tuple[Plugins.ParticleChecker, Plugins.PostprocessPlugin]
+
+
+        Create :any:`ParticleChecker` plugin
+        
+        Args:
+            name: name of the plugin
+            check_every: check every this amount of time steps
+    
+
+    """
+    pass
+
 def createParticleDisplacement():
     r"""createParticleDisplacement(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, update_every: int) -> Tuple[Plugins.ParticleDisplacementPlugin, Plugins.PostprocessPlugin]
 
@@ -688,6 +737,21 @@ def createParticleDisplacement():
             name: name of the plugin
             pv: :any:`ParticleVector` that we'll work with
             update_every: displacements are computed between positions separated by this amount of timesteps
+    
+
+    """
+    pass
+
+def createParticleDrag():
+    r"""createParticleDrag(state: YmrState, name: str, pv: ParticleVectors.ParticleVector, drag: float) -> Tuple[Plugins.ParticleDrag, Plugins.PostprocessPlugin]
+
+
+        Create :any:`ParticleDrag` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            drag: drag coefficient
     
 
     """

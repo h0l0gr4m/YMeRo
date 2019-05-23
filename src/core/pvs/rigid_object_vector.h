@@ -7,16 +7,16 @@
 class LocalRigidObjectVector : public LocalObjectVector
 {
 public:
-    LocalRigidObjectVector(ParticleVector* pv, int objSize, int nObjects = 0);
+    LocalRigidObjectVector(ParticleVector *pv, int objSize, int nObjects = 0);
 
-    PinnedBuffer<Particle>* getMeshVertices(cudaStream_t stream) override;
-    PinnedBuffer<Particle>* getOldMeshVertices(cudaStream_t stream) override;
-    DeviceBuffer<Force>* getMeshForces(cudaStream_t stream) override;
+    PinnedBuffer<float4>* getMeshVertices(cudaStream_t stream) override;
+    PinnedBuffer<float4>* getOldMeshVertices(cudaStream_t stream) override;
+    PinnedBuffer<Force>* getMeshForces(cudaStream_t stream) override;
 
 protected:
-    PinnedBuffer<Particle> meshVertices;
-    PinnedBuffer<Particle> meshOldVertices;
-    DeviceBuffer<Force>    meshForces;
+    PinnedBuffer<float4> meshVertices;
+    PinnedBuffer<float4> meshOldVertices;
+    PinnedBuffer<Force>  meshForces;
 };
 
 class RigidObjectVector : public ObjectVector
@@ -34,7 +34,7 @@ protected:
     RigidObjectVector(const YmrState *state, std::string name, float partMass, float3 J, const int objSize,
                       std::shared_ptr<Mesh> mesh, const int nObjects = 0);
 
-    void _checkpointObjectData(MPI_Comm comm, std::string path) override;
+    void _checkpointObjectData(MPI_Comm comm, std::string path, int checkpointId) override;
     void _restartObjectData(MPI_Comm comm, std::string path, const std::vector<int>& map) override;
 
 public:

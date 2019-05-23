@@ -21,7 +21,8 @@ EOF
 
 set -eu
 
-if test $# -ne 0 && test "$1" = -h; then usage; fi
+if test $# -ne 0 && test "$1" = -h;     then usage; fi
+if test $# -ne 0 && test "$1" = --help; then usage; fi
 
 VERSION=$1; shift
 
@@ -30,3 +31,5 @@ git tag -a "v${VERSION}" -m "version v${VERSION}"
 echo "created tag v${VERSION}"
 echo "you can push the tags by invoking"
 echo "git push origin master --tags"
+echo "or delete this tag with"
+echo "git tag -d v${VERSION}"

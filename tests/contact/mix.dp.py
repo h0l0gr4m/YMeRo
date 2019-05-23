@@ -47,7 +47,7 @@ ic_rbc   = ymr.InitialConditions.Membrane(com_q_rbc)
 u.registerParticleVector(pv_rbc, ic_rbc)
 
 dpd = ymr.Interactions.DPD('dpd', 1.0, a=10.0, gamma=10.0, kbt=0.01, power=0.25)
-cnt = ymr.Interactions.LJ('cnt', 1.0, epsilon=0.35, sigma=0.8, max_force=400.0, object_aware=False)
+cnt = ymr.Interactions.LJ('cnt', 1.0, epsilon=0.35, sigma=0.8, max_force=400.0)
 
 prm_rbc = lina_parameters(1.0)    
 int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Kantor", **prm_rbc, stress_free=True)
@@ -65,7 +65,7 @@ u.registerInteraction(dpd)
 u.registerInteraction(cnt)
 
 if args.substep:
-    integrator = ymr.Integrators.SubStepMembrane('substep_membrane', substeps, int_rbc)
+    integrator = ymr.Integrators.SubStep('substep_membrane', substeps, int_rbc)
     u.registerIntegrator(integrator)
     u.setIntegrator(integrator, pv_rbc)
 else:
@@ -98,18 +98,12 @@ if args.bounceBack:
 
 
 debug = 0
+
 if debug:
     dump_every=(int)(0.15/dt)
-
-    dump_mesh = ymr.Plugins.createDumpMesh("mesh_dump", pv_rbc, dump_every, "ply/")
-    u.registerPlugins(dump_mesh)
-
-    ovStats = ymr.Plugins.createDumpObjectStats("objStats", ov=pv_ell, dump_every=dump_every, path="stats")
-    u.registerPlugins(ovStats)
-
-    xyz = ymr.Plugins.createDumpXYZ('xyz', pv_ell, dump_every, "xyz/")
-    u.registerPlugins(xyz)
-
+    u.registerPlugins(ymr.Plugins.createDumpMesh("mesh_dump", pv_rbc, dump_every, "ply/"))
+    u.registerPlugins(ymr.Plugins.createDumpObjectStats("objStats", ov=pv_ell, dump_every=dump_every, path="stats"))
+    u.registerPlugins(ymr.Plugins.createDumpXYZ('xyz', pv_ell, dump_every, "xyz/"))
 
 nsteps = (int) (tend/dt)
 u.run(nsteps)

@@ -30,7 +30,7 @@ void UniformCartesianDumper::handshake()
     grid = std::make_unique<XDMF::UniformGrid>(resolution, h, cartComm);
 
     auto init_channel = [] (XDMF::Channel::DataForm dataForm, const std::string& str) {
-        return XDMF::Channel(str, nullptr, dataForm, XDMF::Channel::NumberType::Float, typeTokenize<float>());
+        return XDMF::Channel(str, nullptr, dataForm, XDMF::Channel::NumberType::Float, DataTypeWrapper<float>());
     };
 
     // Density is a special channel which is always present
@@ -68,7 +68,7 @@ static void convert(const std::vector<double> &src, std::vector<float> &dst)
 
 void UniformCartesianDumper::deserialize(MPI_Status& stat)
 {
-    TimeType t;
+    YmrState::TimeType t;
     SimpleSerializer::deserialize(data, t, recv_density, recv_containers);
 
     debug2("Plugin '%s' will dump right now: simulation time %f, time stamp %d",

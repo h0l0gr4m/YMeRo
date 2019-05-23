@@ -25,9 +25,9 @@ __global__ void minMaxCom(OVview ovView)
 #pragma unroll 3
     for (int i = tid; i < ovView.objSize; i += warpSize)
     {
-        const int offset = (objId * ovView.objSize + i) * 2;
+        const int offset = objId * ovView.objSize + i;
 
-        const float3 coo = make_float3(ovView.particles[offset]);
+        const float3 coo = make_float3(ovView.readPosition(offset));
 
         mymin = fminf(mymin, coo);
         mymax = fmaxf(mymax, coo);
@@ -60,31 +60,52 @@ void LocalObjectVector::resize(int np, cudaStream_t stream)
 {
     nObjects = getNobjects(np);
     LocalParticleVector::resize(np, stream);
-
-    extraPerObject.resize(nObjects, stream);
+    dataPerObject.resize(nObjects, stream);
 }
 
 void LocalObjectVector::resize_anew(int np)
 {
     nObjects = getNobjects(np);
     LocalParticleVector::resize_anew(np);
-
-    extraPerObject.resize_anew(nObjects);
+    dataPerObject.resize_anew(nObjects);
 }
 
-PinnedBuffer<Particle>* LocalObjectVector::getMeshVertices(cudaStream_t stream)
+void LocalObjectVector::computeGlobalIds(MPI_Comm comm, cudaStream_t stream)
 {
-    return &coosvels;
+    LocalParticleVector::computeGlobalIds(comm, stream);
+
+    if (np == 0) return;
+
+    Particle p0( positions()[0], velocities()[0]);
+    int64_t rankStart = p0.getId();
+    
+    if ((rankStart % objSize) != 0)
+        die("Something went wrong when computing ids of '%s':"
+            "got rankStart = '%ld' while objectSize is '%d'",
+            pv->name.c_str(), rankStart, objSize);
+
+    auto& ids = *dataPerObject.getData<int64_t>(ChannelNames::globalIds);
+    int64_t id = (int64_t) (rankStart / objSize);
+    
+    for (auto& i : ids)
+        i = id++;
+
+    ids.uploadToDevice(stream);
 }
 
-PinnedBuffer<Particle>* LocalObjectVector::getOldMeshVertices(cudaStream_t stream)
+PinnedBuffer<float4>* LocalObjectVector::getMeshVertices(cudaStream_t stream)
 {
-    return extraPerParticle.getData<Particle>(ChannelNames::oldParts);
+    return &positions();
 }
 
-DeviceBuffer<Force>* LocalObjectVector::getMeshForces(cudaStream_t stream)
+PinnedBuffer<float4>* LocalObjectVector::getOldMeshVertices(cudaStream_t stream)
 {
-    return &forces;
+    return dataPerParticle.getData<float4>(ChannelNames::oldPositions);
+}
+
+PinnedBuffer<Force>* LocalObjectVector::getMeshForces(cudaStream_t stream)
+{
+    return &forces();
 }
 
 int LocalObjectVector::getNobjects(int np) const
@@ -110,10 +131,10 @@ ObjectVector::ObjectVector(const YmrState *state, std::string name, float mass, 
 {
     // center of mass and extents are not to be sent around
     // it's cheaper to compute them on site
-    requireDataPerObject<LocalObjectVector::COMandExtent>(ChannelNames::comExtents, ExtraDataManager::PersistenceMode::None);
+    requireDataPerObject<COMandExtent>(ChannelNames::comExtents, DataManager::PersistenceMode::None);
 
     // object ids must always follow objects
-    requireDataPerObject<int>(ChannelNames::globalIds, ExtraDataManager::PersistenceMode::Persistent);
+    requireDataPerObject<int64_t>(ChannelNames::globalIds, DataManager::PersistenceMode::Persistent);
 }
 
 ObjectVector::~ObjectVector() = default;
@@ -122,13 +143,6 @@ void ObjectVector::findExtentAndCOM(cudaStream_t stream, ParticleVectorType type
 {
     bool isLocal = (type == ParticleVectorType::Local);
     auto lov = isLocal ? local() : halo();
-
-    if (lov->comExtentValid)
-    {
-        debug("COM and extent computation for %s OV '%s' skipped",
-              isLocal ? "local" : "halo", name.c_str());
-        return;
-    }
 
     debug("Computing COM and extent OV '%s' (%s)", name.c_str(), isLocal ? "local" : "halo");
 
@@ -140,19 +154,19 @@ void ObjectVector::findExtentAndCOM(cudaStream_t stream, ParticleVectorType type
             ovView );
 }
 
-void ObjectVector::_getRestartExchangeMap(MPI_Comm comm, const std::vector<Particle> &parts, std::vector<int>& map)
+void ObjectVector::_getRestartExchangeMap(MPI_Comm comm, const std::vector<float4>& pos, std::vector<int>& map)
 {
     int dims[3], periods[3], coords[3];
     MPI_Check( MPI_Cart_get(comm, 3, dims, periods, coords) );
 
-    int nObjs = parts.size() / objSize;
+    int nObjs = pos.size() / objSize;
     map.resize(nObjs);
     
     for (int i = 0, k = 0; i < nObjs; ++i) {
         auto com = make_float3(0);
 
         for (int j = 0; j < objSize; ++j, ++k)
-            com += parts[k].r;
+            com += make_float3(pos[k]);
 
         com /= objSize;
 
@@ -179,31 +193,28 @@ std::vector<int> ObjectVector::_restartParticleData(MPI_Comm comm, std::string p
 
     XDMF::readParticleData(filename, comm, this, objSize);
 
-    std::vector<Particle> parts(local()->size());
-    std::copy(local()->coosvels.begin(), local()->coosvels.end(), parts.begin());
+    std::vector<float4> pos4(local()->size()), vel4(local()->size());
     std::vector<int> map;
     
-    _getRestartExchangeMap(comm, parts, map);
-    RestartHelpers::exchangeData(comm, map, parts, objSize);    
-    RestartHelpers::copyShiftCoordinates(state->domain, parts, local());
-
-    local()->coosvels.uploadToDevice(defaultStream);
+    std::copy(local()->positions ().begin(), local()->positions ().end(), pos4.begin());
+    std::copy(local()->velocities().begin(), local()->velocities().end(), vel4.begin());
     
-    // Do the ids
-    // That's a kinda hack, will be properly fixed in the hdf5 per object restarts
-    auto ids = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
-    for (int i = 0; i < local()->nObjects; i++)
-        (*ids)[i] = local()->coosvels[i*objSize].i1 / objSize;
-    ids->uploadToDevice(defaultStream);
+    _getRestartExchangeMap(comm, pos4, map);
+    RestartHelpers::exchangeData(comm, map, pos4, objSize);
+    RestartHelpers::exchangeData(comm, map, vel4, objSize);
+    RestartHelpers::copyShiftCoordinates(state->domain, pos4, vel4, local());
 
+    local()->positions ().uploadToDevice(defaultStream);
+    local()->velocities().uploadToDevice(defaultStream);
+    
     CUDA_Check( cudaDeviceSynchronize() );
 
-    info("Successfully read %d particles", local()->coosvels.size());
+    info("Successfully read %d particles", local()->size());
 
     return map;
 }
 
-static void splitCom(DomainInfo domain, const PinnedBuffer<LocalObjectVector::COMandExtent>& com_extents, std::vector<float> &positions)
+static void splitCom(DomainInfo domain, const PinnedBuffer<COMandExtent>& com_extents, std::vector<float> &positions)
 {
     int n = com_extents.size();
     positions.resize(3 * n);
@@ -218,20 +229,20 @@ static void splitCom(DomainInfo domain, const PinnedBuffer<LocalObjectVector::CO
 
 void ObjectVector::_extractPersistentExtraObjectData(std::vector<XDMF::Channel>& channels, const std::set<std::string>& blackList)
 {
-    auto& extraData = local()->extraPerObject;
+    auto& extraData = local()->dataPerObject;
     _extractPersistentExtraData(extraData, channels, blackList);
 }
 
-void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
+void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path, int checkpointId)
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    auto filename = createCheckpointNameWithId(path, "OV", "");
+    auto filename = createCheckpointNameWithId(path, "OV", "", checkpointId);
     info("Checkpoint for object vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
-    auto coms_extents = local()->extraPerObject.getData<LocalObjectVector::COMandExtent>(ChannelNames::comExtents);
+    auto coms_extents = local()->dataPerObject.getData<COMandExtent>(ChannelNames::comExtents);
 
-    coms_extents->downloadFromDevice(0, ContainersSynch::Synch);
+    coms_extents->downloadFromDevice(defaultStream, ContainersSynch::Synch);
     
     auto positions = std::make_shared<std::vector<float>>();
 
@@ -245,7 +256,7 @@ void ObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     
     XDMF::write(filename, &grid, channels, comm);
 
-    createCheckpointSymlink(comm, path, "OV", "xmf");
+    createCheckpointSymlink(comm, path, "OV", "xmf", checkpointId);
 
     debug("Checkpoint for object vector '%s' successfully written", name.c_str());
 }
@@ -259,7 +270,7 @@ void ObjectVector::_restartObjectData(MPI_Comm comm, std::string path, const std
 
     XDMF::readObjectData(filename, comm, this);
 
-    auto loc_ids = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
+    auto loc_ids = local()->dataPerObject.getData<int64_t>(ChannelNames::globalIds);
     
     std::vector<int> ids(loc_ids->size());
     std::copy(loc_ids->begin(), loc_ids->end(), ids.begin());
@@ -275,11 +286,10 @@ void ObjectVector::_restartObjectData(MPI_Comm comm, std::string path, const std
     info("Successfully read %d object infos", loc_ids->size());
 }
 
-void ObjectVector::checkpoint(MPI_Comm comm, std::string path)
+void ObjectVector::checkpoint(MPI_Comm comm, std::string path, int checkpointId)
 {
-    _checkpointParticleData(comm, path);
-    _checkpointObjectData(comm, path);
-    advanceCheckpointId(state->checkpointMode);
+    _checkpointParticleData(comm, path, checkpointId);
+    _checkpointObjectData  (comm, path, checkpointId);
 }
 
 void ObjectVector::restart(MPI_Comm comm, std::string path)

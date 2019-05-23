@@ -71,10 +71,10 @@ void RigidIC::exec(const MPI_Comm& comm, ParticleVector* pv, cudaStream_t stream
         die("Object size and XYZ initial conditions don't match in size for '%s': %d vs %d",
             ov->name.c_str(), ov->objSize, ov->initialPositions.size());
 
-    int nObjs=0;
+    int nObjs = 0;
     HostBuffer<RigidMotion> motions;
 
-    for (int i=0; i<com_q.size(); i++)
+    for (int i = 0; i < com_q.size(); i++)
     {
         auto& entry = com_q[i];
         
@@ -98,36 +98,20 @@ void RigidIC::exec(const MPI_Comm& comm, ParticleVector* pv, cudaStream_t stream
 
     ov->local()->resize_anew(nObjs * ov->objSize);
 
-    auto ovMotions = ov->local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
+    auto ovMotions = ov->local()->dataPerObject.getData<RigidMotion>(ChannelNames::motions);
     ovMotions->copy(motions);
     ovMotions->uploadToDevice(stream);
 
-    // Set ids
-    // Need to do that, as not all the objects in com_q may be valid
-    int totalCount=0; // TODO: int64!
-    MPI_Check( MPI_Exscan(&nObjs, &totalCount, 1, MPI_INT, MPI_SUM, comm) );
-
-    auto ids = ov->local()->extraPerObject.getData<int>(ChannelNames::globalIds);
-    for (int i=0; i<nObjs; i++)
-        (*ids)[i] = totalCount + i;
-
-
-    for (int i=0; i < ov->local()->size(); i++)
-    {
-        Particle p(make_float4(0), make_float4(0));
-        p.i1 = totalCount*ov->objSize + i;
-        ov->local()->coosvels[i] = p;
-    }
-
-    ids->uploadToDevice(stream);
-    ov->local()->coosvels.uploadToDevice(stream);
-    ov->local()->extraPerParticle.getData<Particle>(ChannelNames::oldParts)->copy(ov->local()->coosvels, stream);
+    ov->local()->positions().uploadToDevice(stream);
+    ov->local()->velocities().uploadToDevice(stream);
+    ov->local()->computeGlobalIds(comm, stream);
+    ov->local()->dataPerParticle.getData<float4>(ChannelNames::oldPositions)->copy(ov->local()->positions(), stream);
 
     info("Read %d %s objects", nObjs, ov->name.c_str());
 
-    // Do the initial rotation    
-    ov->local()->forces.clear(stream);
-    YmrState dummyState(ov->state->domain, /* dt */ 0.f, CheckpointIdAdvanceMode::PingPong);
+    // Do the initial rotation
+    ov->local()->forces().clear(stream);
+    YmrState dummyState(ov->state->domain, /* dt */ 0.f);
     IntegratorVVRigid integrator(&dummyState, "__dummy__");
     integrator.stage2(pv, stream);
 }

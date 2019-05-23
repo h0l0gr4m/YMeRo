@@ -18,7 +18,7 @@ pv = ymr.ParticleVectors.ParticleVector('pv', mass = 1)
 ic = ymr.InitialConditions.Uniform(density=4)
 u.registerParticleVector(pv=pv, ic=ic)
 
-dpd = ymr.Interactions.DPDWithStress('dpd', 1.0, a=10.0, gamma=10.0, kbt=0.01, power=0.5, stressPeriod=sample_every*dt)
+dpd = ymr.Interactions.DPD('dpd', 1.0, a=10.0, gamma=10.0, kbt=0.01, power=0.5, stress=True, stress_period=sample_every*dt)
 u.registerInteraction(dpd)
 u.setInteraction(dpd, pv, pv)
 
@@ -26,11 +26,10 @@ vv = ymr.Integrators.VelocityVerlet_withPeriodicForce('vv', force=a, direction='
 u.registerIntegrator(vv)
 u.setIntegrator(vv, pv)
 
-field = ymr.Plugins.createDumpAverage('field', [pv], sample_every, dump_every, bin_size,
-                                      [("velocity", "vector_from_float8"),
-                                       ("stresses", "tensor6")],
-                                      'h5/solvent-')
-u.registerPlugins(field)
+u.registerPlugins(ymr.Plugins.createDumpAverage('field', [pv], sample_every, dump_every, bin_size,
+                                                [("velocity", "vector_from_float4"),
+                                                 ("stresses", "tensor6")],
+                                                'h5/solvent-'))
 
 u.run(5002)
 

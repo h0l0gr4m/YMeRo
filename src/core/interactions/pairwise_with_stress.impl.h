@@ -27,8 +27,8 @@ public:
         info("Interaction '%s' requires channel '%s' from PVs '%s' and '%s'",
               name.c_str(), ChannelNames::stresses.c_str(), pv1->name.c_str(), pv2->name.c_str());
 
-        pv1->requireDataPerParticle <Stress> (ChannelNames::stresses, ExtraDataManager::PersistenceMode::None);
-        pv2->requireDataPerParticle <Stress> (ChannelNames::stresses, ExtraDataManager::PersistenceMode::None);
+        pv1->requireDataPerParticle <Stress> (ChannelNames::stresses, DataManager::PersistenceMode::None);
+        pv2->requireDataPerParticle <Stress> (ChannelNames::stresses, DataManager::PersistenceMode::None);
 
         cl1->requireExtraDataPerParticle <Stress> (ChannelNames::stresses);
         cl2->requireExtraDataPerParticle <Stress> (ChannelNames::stresses);
@@ -85,10 +85,10 @@ public:
                 {ChannelNames::stresses, activePredicateStress}};
     }
 
-    void checkpoint(MPI_Comm comm, std::string path) override
+    void checkpoint(MPI_Comm comm, std::string path, int checkpointId) override
     {
-        interaction          .checkpoint(comm, path);
-        interactionWithStress.checkpoint(comm, path);
+        interaction          .checkpoint(comm, path, checkpointId);
+        interactionWithStress.checkpoint(comm, path, checkpointId);
     }
 
     void restart(MPI_Comm comm, std::string path) override

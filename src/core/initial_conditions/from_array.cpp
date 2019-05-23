@@ -13,10 +13,9 @@ FromArrayIC::FromArrayIC(const PyTypes::VectorOfFloat3 &pos, const PyTypes::Vect
 
 void FromArrayIC::exec(const MPI_Comm& comm, ParticleVector *pv, cudaStream_t stream)
 {
-    std::vector<Particle> localParticles;
+    std::vector<float4> positions, velocities;
     auto domain = pv->state->domain;
 
-    int localCount = 0;
     for (int i = 0; i < pos.size(); ++i) {
         auto r_ = pos[i];
         auto u_ = vel[i];
@@ -28,27 +27,19 @@ void FromArrayIC::exec(const MPI_Comm& comm, ParticleVector *pv, cudaStream_t st
 
             r = domain.global2local(r);
 
-            int id = localCount++;
-            
-            Particle p(Float3_int(r, id).toFloat4(),
-                       Float3_int(u,  0).toFloat4());
+            Particle p(Float3_int(r, 0).toFloat4(),
+                       Float3_int(u, 0).toFloat4());
 
-            localParticles.push_back(p);
+            positions .push_back(p.r2Float4());
+            velocities.push_back(p.u2Float4());
         }
     }
 
-    int localStart = 0;
-    MPI_Check( MPI_Exscan(&localCount, &localStart, 1, MPI_INT, MPI_SUM, comm) );
-    
-    pv->local()->resize_anew(localParticles.size());
-    auto coovelPtr = pv->local()->coosvels.hostPtr();
-    
-    for (int i = 0; i < localParticles.size(); ++i) {
-        Particle p = localParticles[i];
-        p.i1 += localStart;
-        coovelPtr[i] = p;
-    }
-
-    pv->local()->coosvels.uploadToDevice(stream);
+    pv->local()->resize_anew(positions.size());
+    std::copy(positions .begin(), positions .end(), pv->local()->positions() .begin());
+    std::copy(velocities.begin(), velocities.end(), pv->local()->velocities().begin());
+    pv->local()->positions() .uploadToDevice(stream);
+    pv->local()->velocities().uploadToDevice(stream);
+    pv->local()->computeGlobalIds(comm, stream);
 }
 

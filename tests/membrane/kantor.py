@@ -2,7 +2,7 @@
 
 import numpy as np
 import ymero as ymr
-import sys, argparse
+import argparse
 
 dt = 0.001
 
@@ -32,7 +32,7 @@ prm_rbc = {
     "theta"  : 0.0
 }
     
-int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Kantor", **prm_rbc, stressFree=False)
+int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Kantor", **prm_rbc, stress_free=False)
 u.registerInteraction(int_rbc)
 u.setInteraction(int_rbc, pv_rbc, pv_rbc)
 
@@ -53,4 +53,4 @@ u.run(2)
 # cd membrane
 # cp ../../data/rbc_mesh.off .
 # ymr.run --runargs "-n 2" ./kantor.py > /dev/null
-# ymr.post ./utils/post.forces.py --file h5/rbc-00000.h5 --out forces.out.txt
+# ymr.post ./utils/post.forces.py --file h5/rbc-00001.h5 --out forces.out.txt

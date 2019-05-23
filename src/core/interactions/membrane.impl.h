@@ -3,6 +3,7 @@
 #include "interface.h"
 #include "membrane/forces_kernels.h"
 #include "membrane/parameters.h"
+#include "membrane/prerequisites.h"
 #include "utils/step_random_gen.h"
 
 #include <core/pvs/membrane_vector.h>
@@ -81,6 +82,8 @@ public:
     
     void local (ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream) override
     {
+        this->precomputeQuantities(pv1, stream);
+        
         auto ov = dynamic_cast<MembraneVector *>(pv1);
 
         if (ov->objSize != ov->mesh->getNvertices())
@@ -115,22 +118,32 @@ public:
 
     }
 
-    void halo(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream) {}
+    void halo(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream) override {}
 
-    void checkpoint(MPI_Comm comm, std::string path) override
+    void setPrerequisites(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2) override
     {
-        auto fname = createCheckpointNameWithId(path, "MembraneInt", "txt");
+        setPrerequisitesPerEnergy(dihedralParams, pv1, pv2, cl1, cl2);
+        setPrerequisitesPerEnergy(triangleParams, pv1, pv2, cl1, cl2);
+    }
+
+    void precomputeQuantities(ParticleVector *pv1, cudaStream_t stream)
+    {
+        precomputeQuantitiesPerEnergy(dihedralParams, pv1, stream);
+        precomputeQuantitiesPerEnergy(triangleParams, pv1, stream);
+    }
+    
+    void checkpoint(MPI_Comm comm, std::string path, int checkpointId) override
+    {
+        auto fname = createCheckpointNameWithId(path, "MembraneInt", "txt", checkpointId);
         TextIO::write(fname, stepGen);
-        createCheckpointSymlink(comm, path, "MembraneInt", "txt");
-        advanceCheckpointId(state->checkpointMode);
+        createCheckpointSymlink(comm, path, "MembraneInt", "txt", checkpointId);
     }
     
     void restart(MPI_Comm comm, std::string path) override
     {
         auto fname = createCheckpointName(path, "MembraneInt", "txt");
-        auto status = TextIO::read(fname, stepGen);
-        if (!status)
-            die("Could not read '%s'", fname.c_str());
+        auto good = TextIO::read(fname, stepGen);
+        if (!good) die("failed to read '%s'\n", fname.c_str());
     }
 
     

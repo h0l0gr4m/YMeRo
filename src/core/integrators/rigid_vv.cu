@@ -26,7 +26,7 @@ void IntegratorVVRigid::setPrerequisites(ParticleVector* pv)
     if (ov == nullptr)
         die("Rigid integration only works with rigid objects, can't work with %s", pv->name.c_str());
 
-    ov->requireDataPerObject<RigidMotion>(ChannelNames::oldMotions, ExtraDataManager::PersistenceMode::None);
+    ov->requireDataPerObject<RigidMotion>(ChannelNames::oldMotions, DataManager::PersistenceMode::None);
     warn("Only objects with diagonal inertia tensors are supported now for rigid integration");
 }
 
@@ -59,31 +59,26 @@ void IntegratorVVRigid::stage2(ParticleVector *pv, cudaStream_t stream)
     ROVviewWithOldMotion ovView(ov, ov->local());
 
     SAFE_KERNEL_LAUNCH(
-            RigidIntegrationKernels::collectRigidForces,
-            getNblocks(2*ovView.size, 128), 128, 0, stream,
-            ovView );
+        RigidIntegrationKernels::collectRigidForces,
+        getNblocks(2*ovView.size, 128), 128, 0, stream,
+        ovView );
 
     SAFE_KERNEL_LAUNCH(
-            RigidIntegrationKernels::integrateRigidMotion,
-            getNblocks(ovView.nObjects, 64), 64, 0, stream,
-            ovView, dt );
+        RigidIntegrationKernels::integrateRigidMotion,
+        getNblocks(ovView.nObjects, 64), 64, 0, stream,
+        ovView, dt );
 
     SAFE_KERNEL_LAUNCH(
-            RigidIntegrationKernels::applyRigidMotion,
-            getNblocks(ovView.size, 128), 128, 0, stream,
-            ovView, ov->initialPositions.devPtr() );
+        RigidIntegrationKernels::applyRigidMotion
+            <RigidIntegrationKernels::ApplyRigidMotion::PositionsAndVelocities>,
+        getNblocks(ovView.size, 128), 128, 0, stream,
+        ovView, ov->initialPositions.devPtr() );
 
     SAFE_KERNEL_LAUNCH(
-            RigidIntegrationKernels::clearRigidForces,
-            getNblocks(ovView.nObjects, 64), 64, 0, stream,
-            ovView );
+        RigidIntegrationKernels::clearRigidForces,
+        getNblocks(ovView.nObjects, 64), 64, 0, stream,
+        ovView );
 
-    // PV may have changed, invalidate all
-    pv->haloValid = false;
-    pv->redistValid = false;
-    pv->cellListStamp++;
-
-    // Extents are changed too
-    ov->local()->comExtentValid = false;
+    invalidatePV(pv);
 }
 

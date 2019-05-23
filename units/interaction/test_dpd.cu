@@ -12,34 +12,38 @@
 #include <gtest/gtest.h>
 
 #include <unistd.h>
+#include <memory>
 
 Logger logger;
 
 bool verbose = false;
 
-void makeCells(const Particle* __restrict__ input, Particle* __restrict__ output, int* __restrict__ cellsStartSize, int* __restrict__ cellsSize,
-               int* __restrict__ order, int np, CellListInfo cinfo)
+void makeCells(const float4 *inputPos, const float4 *inputVel,
+               float4 *outputPos, float4 *outputVel,
+               int *cellsStartSize, int *cellsSize,
+               int *order, int np, CellListInfo cinfo)
 {
-    for (int i=0; i<cinfo.totcells+1; i++)
+    for (int i = 0; i < cinfo.totcells+1; i++)
         cellsSize[i] = 0;
 
-    for (int i=0; i<np; i++)
-        cellsSize[cinfo.getCellId(input[i].r)]++;
+    for (int i = 0; i < np; i++)
+        cellsSize[cinfo.getCellId(make_float3(inputPos[i]))]++;
 
     cellsStartSize[0] = 0;
-    for (int i=1; i<=cinfo.totcells; i++)
+    for (int i = 1; i <= cinfo.totcells; i++)
         cellsStartSize[i] = cellsSize[i-1] + cellsStartSize[i-1];
 
-    for (int i=0; i<np; i++)
+    for (int i = 0; i < np; i++)
     {
-        const int cid = cinfo.getCellId(input[i].r);
-        output[cellsStartSize[cid]] = input[i];
+        const int cid = cinfo.getCellId(make_float3(inputPos[i]));
+        outputPos[cellsStartSize[cid]] = inputPos[i];
+        outputVel[cellsStartSize[cid]] = inputVel[i];
         order[cellsStartSize[cid]] = i;
 
         cellsStartSize[cid]++;
     }
 
-    for (int i=0; i<cinfo.totcells; i++)
+    for (int i = 0; i < cinfo.totcells; i++)
         cellsStartSize[i] -= cellsSize[i];
 }
 
@@ -56,8 +60,8 @@ void execute(MPI_Comm comm, float3 length)
 
     UniformIC ic1(4.5);
     UniformIC ic2(3.5);
-    ic1.exec(comm, &dpds1, 0);
-    ic2.exec(comm, &dpds2, 0);
+    ic1.exec(comm, &dpds1, defaultStream);
+    ic2.exec(comm, &dpds2, defaultStream);
 
     cudaDeviceSynchronize();
 
@@ -65,35 +69,47 @@ void execute(MPI_Comm comm, float3 length)
 
     fprintf(stderr, " First part %d, second %d, total %d\n", dpds1.local()->size(), dpds2.local()->size(), np);
 
-    CellList* cells1 = new PrimaryCellList(&dpds1, rc, length);
-    CellList* cells2 = new PrimaryCellList(&dpds2, rc, length);
-    cells1->build(0);
-    cells2->build(0);
+    std::unique_ptr<CellList> cells1 = std::make_unique<PrimaryCellList>(&dpds1, rc, length);
+    std::unique_ptr<CellList> cells2 = std::make_unique<PrimaryCellList>(&dpds2, rc, length);
+    cells1->build(defaultStream);
+    cells2->build(defaultStream);
 
     cudaDeviceSynchronize();
 
-    dpds1.local()->coosvels.downloadFromDevice(0);
-    dpds2.local()->coosvels.downloadFromDevice(0);
-
+    auto& pos1 = dpds1.local()->positions();
+    auto& pos2 = dpds2.local()->positions();
+    auto& vel1 = dpds1.local()->velocities();
+    auto& vel2 = dpds2.local()->velocities();
+    
+    pos1.downloadFromDevice(defaultStream);
+    pos2.downloadFromDevice(defaultStream);
+    vel1.downloadFromDevice(defaultStream);
+    vel2.downloadFromDevice(defaultStream);
 
     // Set non-zero velocities
-    for (int i=0; i<dpds1.local()->size(); i++)
-        dpds1.local()->coosvels[i].u = length*make_float3(drand48() - 0.5, drand48() - 0.5, drand48() - 0.5);
-
-    for (int i=0; i<dpds2.local()->size(); i++)
-        dpds2.local()->coosvels[i].u = length*make_float3(drand48() - 0.5, drand48() - 0.5, drand48() - 0.5);
-
-
-    dpds1.local()->coosvels.uploadToDevice(0);
-    dpds2.local()->coosvels.uploadToDevice(0);
-
-
-    std::vector<Particle> initial(np), rearranged(np);
-    for (int i=0; i<np; i++)
+    for (auto& v : vel1)
     {
-        initial[i] = ( i < dpds1.local()->size() ) ?
-            dpds1.local()->coosvels[i] :
-            dpds2.local()->coosvels[i - dpds1.local()->size()];
+        v.x = length.x * (drand48() - 0.5);
+        v.y = length.y * (drand48() - 0.5);
+        v.z = length.z * (drand48() - 0.5);
+    }
+    for (auto& v : vel2)
+    {
+        v.x = length.x * (drand48() - 0.5);
+        v.y = length.y * (drand48() - 0.5);
+        v.z = length.z * (drand48() - 0.5);
+    }
+
+    vel1.uploadToDevice(defaultStream);
+    vel2.uploadToDevice(defaultStream);
+
+    std::vector<float4> initialPos(np), initialVel(np), rearrangedPos(np), rearrangedVel(np);
+    for (int i = 0; i < np; i++)
+    {
+        bool from1 = i < pos1.size();
+        
+        initialPos[i] = from1 ? pos1[i] : pos2[i-pos1.size()];
+        initialVel[i] = from1 ? vel1[i] : vel2[i-vel1.size()];
     }
 
     const float k = 1;    
@@ -104,30 +120,30 @@ void execute(MPI_Comm comm, float3 length)
     const float adpd = 50;
 
     PairwiseNorandomDPD dpdInt(rc, adpd, gammadpd, kbT, dt, k);
-    Interaction *inter = new InteractionPair<PairwiseNorandomDPD>(&state, "dpd", rc, dpdInt);
+    std::unique_ptr<Interaction> inter = std::make_unique<InteractionPair<PairwiseNorandomDPD>>(&state, "dpd", rc, dpdInt);
 
     PinnedBuffer<int> counter(1);
 
-    for (int i=0; i<1; i++)
+    for (int i = 0; i < 1; i++)
     {
-        dpds1.local()->forces.clear(0);
-        dpds2.local()->forces.clear(0);
+        dpds1.local()->forces().clear(defaultStream);
+        dpds2.local()->forces().clear(defaultStream);
 
-        inter->local(&dpds1, &dpds1, cells1, cells1, 0);
-        inter->local(&dpds2, &dpds2, cells2, cells2, 0);
-        inter->local(&dpds2, &dpds1, cells2, cells1, 0);
+        inter->local(&dpds1, &dpds1, cells1.get(), cells1.get(), defaultStream);
+        inter->local(&dpds2, &dpds2, cells2.get(), cells2.get(), defaultStream);
+        inter->local(&dpds2, &dpds1, cells2.get(), cells1.get(), defaultStream);
 
         cudaDeviceSynchronize();
     }
 
     HostBuffer<Force> frcs1, frcs2;
-    frcs1.copy(dpds1.local()->forces, 0);
-    frcs2.copy(dpds2.local()->forces, 0);
+    frcs1.copy(dpds1.local()->forces(), defaultStream);
+    frcs2.copy(dpds2.local()->forces(), defaultStream);
 
     cudaDeviceSynchronize();
 
     std::vector<Force> hacc(np);
-    for (int i=0; i<np; i++)
+    for (int i = 0; i < np; i++)
         hacc[i] = ( i < dpds1.local()->size() ) ?
             frcs1[i] :
             frcs2[i - dpds1.local()->size()];
@@ -140,7 +156,7 @@ void execute(MPI_Comm comm, float3 length)
 
     fprintf(stderr, "finished, reducing acc\n");
     double3 a = {};
-    for (int i=0; i<np; i++)
+    for (int i = 0; i < np; i++)
     {
         a.x += hacc[i].f.x;
         a.y += hacc[i].f.y;
@@ -150,15 +166,20 @@ void execute(MPI_Comm comm, float3 length)
 
     fprintf(stderr, "Checking (this is not necessarily a cubic domain)......\n");
 
-    makeCells(initial.data(), rearranged.data(), hcellsstart.data(), hcellssize.data(), order.data(), np, cells1->cellInfo());
+    makeCells(initialPos.data(), initialVel.data(),
+              rearrangedPos.data(), rearrangedVel.data(),
+              hcellsstart.data(), hcellssize.data(),
+              order.data(), np, cells1->cellInfo());
 
     std::vector<Force> refAcc(hacc.size());
 
     auto addForce = [&](int dstId, int srcId, Force& a)
     {
-        const float _xr = rearranged[dstId].r.x - rearranged[srcId].r.x;
-        const float _yr = rearranged[dstId].r.y - rearranged[srcId].r.y;
-        const float _zr = rearranged[dstId].r.z - rearranged[srcId].r.z;
+        Particle pdst(rearrangedPos[dstId], rearrangedVel[dstId]);
+        Particle psrc(rearrangedPos[srcId], rearrangedVel[srcId]);
+        const float _xr = pdst.r.x - psrc.r.x;
+        const float _yr = pdst.r.y - psrc.r.y;
+        const float _zr = pdst.r.z - psrc.r.z;
 
         const float rij2 = _xr * _xr + _yr * _yr + _zr * _zr;
 
@@ -175,12 +196,12 @@ void execute(MPI_Comm comm, float3 length)
         const float zr = _zr * invrij;
 
         const float rdotv =
-        xr * (rearranged[dstId].u.x - rearranged[srcId].u.x) +
-        yr * (rearranged[dstId].u.y - rearranged[srcId].u.y) +
-        zr * (rearranged[dstId].u.z - rearranged[srcId].u.z);
+        xr * (pdst.u.x - psrc.u.x) +
+        yr * (pdst.u.y - psrc.u.y) +
+        zr * (pdst.u.z - psrc.u.z);
 
-        int sid = rearranged[srcId].i1;
-        int did = rearranged[dstId].i1;
+        int sid = psrc.i1;
+        int did = pdst.i1;
         const float myrandnr = ((min(sid, did) ^ max(sid, did)) % 13) - 6;
 
         const float strength = adpd * argwr - (gammadpd * wr * rdotv + sigma_dt * myrandnr) * wr;
@@ -228,12 +249,12 @@ void execute(MPI_Comm comm, float3 length)
     double l2 = 0, linf = -1;
 
     std::vector<Force> finalFrcs(np);
-    for (int i=0; i<np; i++)
+    for (int i = 0; i < np; i++)
     {
         finalFrcs[order[i]] = refAcc[i];
     }
 
-    for (int i=0; i<np; i++)
+    for (int i = 0; i < np; i++)
     {
         double perr = -1;
 
@@ -253,7 +274,8 @@ void execute(MPI_Comm comm, float3 length)
 
         if (verbose && (perr > 0.1 || std::isnan(toterr)))
         {
-            fprintf(stderr, "id %d (%d),  %12f %12f %12f     ref %12f %12f %12f    diff   %12f %12f %12f\n", i, (initial[i].i1),
+            Particle pinitial(initialPos[i], initialVel[i]);
+            fprintf(stderr, "id %d (%d),  %12f %12f %12f     ref %12f %12f %12f    diff   %12f %12f %12f\n", i, pinitial.i1,
                     hacc[i].f.x, hacc[i].f.y, hacc[i].f.z,
                     finalFrcs[i].f.x, finalFrcs[i].f.y, finalFrcs[i].f.z,
                     hacc[i].f.x-finalFrcs[i].f.x, hacc[i].f.y-finalFrcs[i].f.y, hacc[i].f.z-finalFrcs[i].f.z);
@@ -269,7 +291,6 @@ void execute(MPI_Comm comm, float3 length)
 
     ASSERT_LE(linf, 0.002);
     ASSERT_LE(l2,   0.002);
-
 }
 
 TEST(Interactions, smallDomain)

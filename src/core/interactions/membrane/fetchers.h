@@ -11,8 +11,7 @@ public:
 
     __D__ inline VertexType fetchVertex(const ViewType& view, int i) const
     {
-        // 2 because of float4
-        return make_real3(Float3_int(view.particles[2 * i]).v);
+        return make_real3(Float3_int(view.readPosition(i)).v);
     }
 };
 
@@ -31,7 +30,7 @@ public:
 
     __D__ inline VertexType fetchVertex(const ViewType& view, int i) const
     {
-        return {make_real3(Float3_int(view.particles[2 * i]).v),
+        return {VertexFetcher::fetchVertex(view, i),
                 real(view.vertexMeanCurvatures[i])};
     }
 };

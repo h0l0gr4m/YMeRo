@@ -1,16 +1,17 @@
 #pragma once
 
 #include <core/datatypes.h>
+#include <core/utils/vec_traits.h>
 
-// #define RBC_FORCES_DOUBLE
-
-#ifdef RBC_FORCES_DOUBLE
+#ifdef MEMBRANE_FORCES_DOUBLE
 using real  = double;
-using real3 = double3;
 #else
 using real  = float;
-using real3 = float3;
-#endif // RBC_FORCES_DOUBLE
+#endif // MEMBRANE_FORCES_DOUBLE
+
+using real2 = VecTraits::Vec<real, 2>::Type;
+using real3 = VecTraits::Vec<real, 3>::Type;
+
 
 template<typename T3>
 __D__ inline real3 make_real3(T3 v)
@@ -41,14 +42,13 @@ struct ParticleReal
 template <typename View>
 __D__ inline real3 fetchPosition(View view, int i)
 {
-    Particle p;
-    p.readCoordinate(view.particles, i);
-    return make_real3(p.r);
+    Float3_int ri(view.readPosition(i));
+    return make_real3(ri.v);
 }
 
 template <typename View>
 __D__ inline ParticleReal fetchParticle(View view, int i)
 {
-    Particle p(view.particles, i);
+    Particle p(view.readParticle(i));
     return {make_real3(p.r), make_real3(p.u)};
 }

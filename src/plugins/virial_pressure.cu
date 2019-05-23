@@ -1,5 +1,6 @@
 #include "virial_pressure.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/datatypes.h>
 #include <core/pvs/particle_vector.h>
@@ -21,9 +22,9 @@ __global__ void totalPressure(PVview view, const Stress *stress, FieldDeviceHand
 
     if (tid < view.size) {
         const Stress s = stress[tid];
-        p.readCoordinate(view.particles, tid);
+        auto r = Float3_int(view.readPosition(tid)).v;
 
-        if (region(p.r) > 0)
+        if (region(r) > 0)
             P = (s.xx + s.yy + s.zz) / 3.0;
     }
     
@@ -63,10 +64,10 @@ void VirialPressurePlugin::handshake()
 
 void VirialPressurePlugin::afterIntegration(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
     PVview view(pv, pv->local());
-    const Stress *stress = pv->local()->extraPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
+    const Stress *stress = pv->local()->dataPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
 
     localVirialPressure.clear(stream);
     
@@ -140,7 +141,7 @@ void VirialPressureDumper::handshake()
 
 void VirialPressureDumper::deserialize(MPI_Status& stat)
 {
-    TimeType curTime;
+    YmrState::TimeType curTime;
     VirialPressure::ReductionType localPressure, totalPressure;
 
     SimpleSerializer::deserialize(data, curTime, localPressure);

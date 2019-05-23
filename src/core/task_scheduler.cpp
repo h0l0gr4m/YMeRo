@@ -8,6 +8,7 @@
 #include <core/task_scheduler.h>
 #include <core/logger.h>
 #include <core/utils/make_unique.h>
+#include <core/utils/nvtx.h>
 
 TaskScheduler::TaskScheduler()
 {
@@ -28,7 +29,6 @@ TaskScheduler::~TaskScheduler()
     destroyStreams(streamsLo);
     destroyStreams(streamsHi);
 }
-
 
 TaskScheduler::TaskID TaskScheduler::createTask(const std::string& label)
 {
@@ -342,10 +342,10 @@ void TaskScheduler::run()
 
         cudaStream_t stream;
         if (node->streams->empty())
-	{
+        {
             CUDA_Check( cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, node->priority) );
         }
-	else
+        else
         {
             stream = node->streams->front();
             node->streams->pop();
@@ -354,9 +354,14 @@ void TaskScheduler::run()
         debug("Executing group %s on stream %lld with priority %d", tasks[node->id].label.c_str(), (int64_t)stream, node->priority);
         workMap.push_back({stream, node});
 
-        for (auto& func_every : tasks[node->id].funcs)
-            if (nExecutions % func_every.second == 0)
-                func_every.first(stream);
+        {
+            auto& task = tasks[node->id];
+            NvtxCreateRange(range, task.label.c_str());
+            
+            for (auto& func_every : task.funcs)
+                if (nExecutions % func_every.second == 0)
+                    func_every.first(stream);
+        }
     }
 
     nExecutions++;

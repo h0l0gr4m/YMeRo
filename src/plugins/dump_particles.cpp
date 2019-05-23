@@ -1,5 +1,6 @@
 #include "dump_particles.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/pvs/particle_vector.h>
 #include <core/simulation.h>
@@ -53,29 +54,35 @@ void ParticleSenderPlugin::handshake()
 
 void ParticleSenderPlugin::beforeForces(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
-    particles.genericCopy(&pv->local()->coosvels, stream);
+    positions .genericCopy(&pv->local()->positions() , stream);
+    velocities.genericCopy(&pv->local()->velocities(), stream);
 
     for (int i = 0; i < channelNames.size(); ++i) {
         auto name = channelNames[i];
-        auto srcContainer = pv->local()->extraPerParticle.getGenericData(name);
-        channelData[i].genericCopy(srcContainer, stream);
+        auto srcContainer = pv->local()->dataPerParticle.getGenericData(name);
+        channelData[i].genericCopy(srcContainer, stream); 
     }
 }
 
 void ParticleSenderPlugin::serializeAndSend(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
     debug2("Plugin %s is sending now data", name.c_str());
+    
+    for (auto& p : positions)
+    {
+        auto r = state->domain.local2global(make_float3(p));
+        p.x = r.x; p.y = r.y; p.z = r.z;
+    }
 
-    for (auto& p : particles)
-        p.r = state->domain.local2global(p.r);
-
-    debug2("Plugin %s is packing now data consisting of %d particles", name.c_str(), particles.size());
+    YmrState::StepType timeStamp = getTimeStamp(state, dumpEvery);
+    
+    debug2("Plugin %s is packing now data consisting of %d particles", name.c_str(), positions.size());
     waitPrevSend();
-    SimpleSerializer::serialize(sendBuffer, state->currentTime, particles, channelData);
+    SimpleSerializer::serialize(sendBuffer, timeStamp, state->currentTime, positions, velocities, channelData);
     send(sendBuffer);
 }
 
@@ -97,14 +104,14 @@ void ParticleDumperPlugin::handshake()
     SimpleSerializer::deserialize(data, sizes, names);
 
     auto init_channel = [] (XDMF::Channel::DataForm dataForm, int sz, const std::string& str,
-                            XDMF::Channel::NumberType numberType = XDMF::Channel::NumberType::Float, DataType datatype = typeTokenize<float>()) {
+                            XDMF::Channel::NumberType numberType = XDMF::Channel::NumberType::Float, TypeDescriptor datatype = DataTypeWrapper<float>()) {
         return XDMF::Channel(str, nullptr, dataForm, numberType, datatype);
     };
 
     // Velocity and id are special channels which are always present
     std::string allNames = "velocity, id";
-    channels.push_back(init_channel(XDMF::Channel::DataForm::Vector, 3, "velocity", XDMF::Channel::NumberType::Float, typeTokenize<float>()));
-    channels.push_back(init_channel(XDMF::Channel::DataForm::Scalar, 1, "id", XDMF::Channel::NumberType::Int, typeTokenize<int>()));
+    channels.push_back(init_channel(XDMF::Channel::DataForm::Vector, 3, "velocity", XDMF::Channel::NumberType::Float, DataTypeWrapper<float>()));
+    channels.push_back(init_channel(XDMF::Channel::DataForm::Scalar, 1, "id", XDMF::Channel::NumberType::Int64, DataTypeWrapper<int64_t>()));
 
     for (int i = 0; i<sizes.size(); i++)
     {
@@ -128,16 +135,16 @@ void ParticleDumperPlugin::handshake()
     debug2("Plugin '%s' was set up to dump channels %s. Path is %s", name.c_str(), allNames.c_str(), path.c_str());
 }
 
-static void unpack_particles(const std::vector<Particle> &particles, std::vector<float> &pos,
-                             std::vector<float> &vel, std::vector<int> &ids)
+static void unpack_particles(const std::vector<float4> &pos4, const std::vector<float4> &vel4,
+                             std::vector<float> &pos, std::vector<float> &vel, std::vector<int64_t> &ids)
 {
-    int n = particles.size();
+    int n = pos4.size();
     pos.resize(3 * n);
     vel.resize(3 * n);
     ids.resize(n);
 
     for (int i = 0; i < n; ++i) {
-        auto p = particles[i];
+        auto p = Particle(pos4[i], vel4[i]);
         pos[3*i + 0] = p.r.x;
         pos[3*i + 1] = p.r.y;
         pos[3*i + 2] = p.r.z;
@@ -146,17 +153,16 @@ static void unpack_particles(const std::vector<Particle> &particles, std::vector
         vel[3*i + 1] = p.u.y;
         vel[3*i + 2] = p.u.z;
 
-        ids[i] = p.i1;
+        ids[i] = p.getId();
     }
 }
 
-float ParticleDumperPlugin::_recvAndUnpack()
+void ParticleDumperPlugin::_recvAndUnpack(YmrState::TimeType &time, YmrState::StepType& timeStamp)
 {
-    TimeType t;
     int c = 0;
-    SimpleSerializer::deserialize(data, t, particles, channelData);
-
-    unpack_particles(particles, *positions, velocities, ids);
+    SimpleSerializer::deserialize(data, timeStamp, time, pos4, vel4, channelData);
+        
+    unpack_particles(pos4, vel4, *positions, velocities, ids);
 
     channels[c++].data = velocities.data();
     channels[c++].data = ids.data();
@@ -169,10 +175,12 @@ void ParticleDumperPlugin::deserialize(MPI_Status& stat)
 {
     debug2("Plugin '%s' will dump right now", name.c_str());
 
-    float t = _recvAndUnpack();
-
-    std::string fname = path + getStrZeroPadded(timeStamp++, zeroPadding);
-
+    YmrState::TimeType time;
+    YmrState::StepType timeStamp;
+    _recvAndUnpack(time, timeStamp);
+    
+    std::string fname = path + getStrZeroPadded(timeStamp, zeroPadding);
+    
     XDMF::VertexGrid grid(positions, comm);
-    XDMF::write(fname, &grid, channels, t, comm);
+    XDMF::write(fname, &grid, channels, time, comm);
 }

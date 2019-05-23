@@ -14,12 +14,78 @@ For more information, please refer to the online documentation: http://ymero.rea
 
 ### unreleased
 
+* **fix** cleanup streams
+* extend rod IC
+
+### v0.16.1
+
+* add interaction rod-rigid
+* **fix** free communicator in plugins
+
+### v0.16.0
+
+* add `particleChecker` plugin
+* **interface changes**: average flow plugin does not support float8 entries anymore due to internal changes; use float4 instead
+* **internal changes**
+  * particles are now separated into 2 arrays: positions and velocities; this will simplify packing/unpacking kernels
+  * positions and velocities are stored as other quantities in dataManagers
+  * old particles are only positions
+  * vertices are only positions
+
+### v0.15.0
+
+* **output change** 
+  * restart time-stamps are now continuing from the previous simulation
+  * output dump files start at t=0
+* **fix** in TextIO::reader
+* internal changes:
+  * currentStep is long long -> allow longer simulations
+  * forces are stored as generic arrays -> simplifies a bit cell lists
+
+### v0.14.4
+
+* **interface change** pass rod width to rod ic
+* add bound viscous forces to rod
+
+### v0.14.3
+
+* **fix** issues #38 and #54
+* safe check: cannot register or set objects to coordinator after setup
+
+### v0.14.2
+
+* **interface changes** Integrator: SubStepMembrane -> SubStep
+* SubStep integrator supports rods
+* add anchor_particle plugin
+* internal changes:
+  * ids are stored in 64 bits integers
+
+### v0.14.1
+
+* Add "rod aware" LJ repulsion interactions
+* **interface change** DPD, MDPD and LJ interactions have only one constructor each
+* Safer parameters in interaction factory: treat unread parameters
+
+### v0.14.0
+
+* Add elastic rod interactions: bounds, bending and torsion
+* Add corresponding unit test
+* Add corresponding regression tests
+* Add particle drap plugin
+* **fix** (minor) dependencies for tools installation
+
+### v0.13.0
+
+* **compilation changes** require `c++ 14` and `cuda 9.2`
+* **additional extern code** include `src/extern/mpark`
 * **interface change** linear EOS in SDPD needs an extra parameter `rho_0`
 * **fix** SDPD: correct use of mass density
 * checkpoint and restart interaction random state
 * internal changes:
   * cleanup some implementations from interfaces
   * adding rod vectors
+  * remove xmacros for channel types
+  * use mpark::variant for membrane interaction
 
 ### v0.12.3
 

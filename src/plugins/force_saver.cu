@@ -27,7 +27,7 @@ ForceSaverPlugin::ForceSaverPlugin(const YmrState *state, std::string name, std:
 
 void ForceSaverPlugin::beforeIntegration(cudaStream_t stream)
 {
-    auto savedForces  = pv->local()->extraPerParticle.getData<float3>(fieldName);
+    auto savedForces  = pv->local()->dataPerParticle.getData<float3>(fieldName);
     PVview view(pv, pv->local());
     const int nthreads = 128;
 
@@ -48,7 +48,7 @@ void ForceSaverPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const
 
     pv = simulation->getPVbyNameOrDie(pvName);
 
-    pv->requireDataPerParticle<float3>(fieldName, ExtraDataManager::PersistenceMode::None);
+    pv->requireDataPerParticle<float3>(fieldName, DataManager::PersistenceMode::None);
 }
 
     

@@ -1,14 +1,11 @@
 cmake_minimum_required(VERSION 3.8)
 
-if(POLICY CMP0060)
+if (POLICY CMP0060)
     cmake_policy(SET CMP0060 NEW)
 endif()
 
 project(YMR_UnitTests LANGUAGES C CXX CUDA)
 enable_testing()
-
-set(BUILD_GMOCK OFF)
-set(INSTALL_GTEST OFF)
 
 # googletest
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/extern/googletest")
@@ -35,9 +32,9 @@ set(CMAKE_C_COMPILER   ${MPI_C_COMPILER})
 set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
 set(CMAKE_CUDA_HOST_LINK_LAUNCHER ${MPI_CXX_COMPILER})
 
-# Require c++11
-set(CMAKE_CXX_STANDARD  11)
-set(CMAKE_CUDA_STANDARD 11)
+# Require c++14
+set(CMAKE_CXX_STANDARD  14)
+set(CMAKE_CUDA_STANDARD 14)
 
 include_directories( ${CMAKE_CURRENT_SOURCE_DIR}/../src/ )
 
@@ -59,13 +56,16 @@ function (add_test_executable dirName)
 endfunction()
 
 add_test_executable(celllists)
-add_test_executable(flagella)
+add_test_executable(id64)
 add_test_executable(integration)
 add_test_executable(interaction)
 add_test_executable(marching_cubes)
 add_test_executable(onerank)
 add_test_executable(pid)
 add_test_executable(rng)
+add_test_executable(rod/discretization)
+add_test_executable(rod/energy)
+add_test_executable(rod/forces)
 add_test_executable(scheduler)
 add_test_executable(serializer)
 add_test_executable(triangle_invariants)

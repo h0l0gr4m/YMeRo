@@ -1,7 +1,5 @@
 #include "step_random_gen.h"
 
-#include <core/ymero_state.h>
-
 StepRandomGen::StepRandomGen(long seed) :
     gen(seed),
     udistr(0.001f, 1.f)
@@ -16,7 +14,7 @@ float StepRandomGen::generate(const YmrState *state)
     if (state->currentStep != lastIteration)
     {
         lastIteration = state->currentStep;
-        lastSample = udistr(gen);
+        lastSample    = udistr(gen);
     }
     
     return lastSample;

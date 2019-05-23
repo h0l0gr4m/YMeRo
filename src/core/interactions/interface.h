@@ -69,6 +69,13 @@ public:
 
 
     virtual void haloNeuralNetwork(ParticleVector *pv,CellList *cl,cudaStream_t stream);
+    /**
+     * true if the interaction is a self interaction for objects
+     * this is useful to know if we need exchange / cell-lists for 
+     * that interaction
+     */
+    virtual bool isSelfObjectInteraction() const;
+    
     /// monitor activity of a channel
     using ActivePredicate = std::function<bool()>;
 
@@ -99,7 +106,7 @@ public:
      */
     virtual std::vector<InteractionChannel> getFinalOutputChannels() const;
 
-    void checkpoint(MPI_Comm comm, std::string path) override;
+    void checkpoint(MPI_Comm comm, std::string path, int checkpointId) override;
     void restart   (MPI_Comm comm, std::string path) override;
     
     static const ActivePredicate alwaysActive;

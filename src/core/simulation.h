@@ -4,8 +4,8 @@
 #include <core/datatypes.h>
 #include <core/domain.h>
 #include <core/logger.h>
-#include <core/mpi/exchanger_interfaces.h>
 #include <core/checker.h>
+#include <core/exchangers/exchanger_interfaces.h>
 #include <core/ymero_object.h>
 
 #include <functional>
@@ -45,6 +45,7 @@ public:
 
     Simulation(const MPI_Comm &cartComm, const MPI_Comm &interComm, YmrState *state,
                int globalCheckpointEvery = 0, std::string checkpointFolder = "restart/",
+               CheckpointIdAdvanceMode checkpointMode = CheckpointIdAdvanceMode::PingPong,
                bool gpuAwareMPI = false);
 
     ~Simulation();
@@ -75,6 +76,8 @@ public:
 
     void init();
     void run(int nsteps);
+
+    void notifyPostProcess(int tag, int msg) const;
 
     std::vector<ParticleVector*> getParticleVectors() const;
 
@@ -111,7 +114,9 @@ private:
     };
     RestartStatus restartStatus{RestartStatus::Anew};
     std::string restartFolder, checkpointFolder;
+    CheckpointIdAdvanceMode checkpointMode;
     int globalCheckpointEvery;
+    int checkpointId;
 
     int rank;
 

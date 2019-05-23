@@ -1,48 +1,67 @@
 #include <core/pvs/particle_vector.h>
 
-#include <core/interactions/interface.h>
+#include <core/interactions/density.h>
 #include <core/interactions/dpd.h>
 #include <core/interactions/dpd_smart.h>
 #include <core/interactions/dpd_smart_with_stress.h>
 #include <core/interactions/dpd_with_stress.h>
+#include <core/interactions/factory.h>
+#include <core/interactions/interface.h>
+#include <core/interactions/lj.h>
 #include <core/interactions/mdpd.h>
 #include <core/interactions/mdpd_with_stress.h>
-#include <core/interactions/lj.h>
-#include <core/interactions/lj_with_stress.h>
-#include <core/interactions/membrane_WLC_Kantor.h>
-#include <core/interactions/membrane_WLC_Juelicher.h>
-#include <core/interactions/factory.h>
+#include <core/interactions/membrane.h>
+#include <core/interactions/obj_rod_binding.h>
+#include <core/interactions/rod.h>
+#include <core/interactions/sdpd.h>
 
 #include<pybind11/stl.h>
 #include "bindings.h"
 #include "class_wrapper.h"
+#include "variant_cast.h"
 
 using namespace pybind11::literals;
+
+static std::map<std::string, InteractionFactory::VarParam>
+castToMap(const py::kwargs& kwargs, const std::string intName)
+{
+    std::map<std::string, InteractionFactory::VarParam> parameters;
+    
+    for (const auto& item : kwargs) {
+        std::string key;
+        try {
+            key = py::cast<std::string>(item.first);
+        }
+        catch (const py::cast_error& e) {
+            die("Could not cast one of the arguments in interaction '%s' to string", intName.c_str());
+        }
+        try {
+            parameters[key] = py::cast<InteractionFactory::VarParam>(item.second);
+        }
+        catch (const py::cast_error& e) {
+            die("Could not cast argument '%s' in interaction '%s': wrong type", key.c_str(), intName.c_str());
+        }
+    }
+    return parameters;
+}
 
 static std::shared_ptr<InteractionMembrane>
 createInteractionMembrane(const YmrState *state, std::string name,
                           std::string shearDesc, std::string bendingDesc,
                           bool stressFree, float growUntil, py::kwargs kwargs)
 {
-    std::map<std::string, float> parameters;
-
-    for (const auto& item : kwargs) {
-
-        try {
-            auto key   = py::cast<std::string>(item.first);
-            auto value = py::cast<float>(item.second);
-            parameters[key] = value;
-        }
-        catch (const py::cast_error& e)
-        {
-            die("Could not cast one of the arguments in membrane interactions '%s'", name.c_str());
-        }
-    }
-
+    auto parameters = castToMap(kwargs, name);
     return InteractionFactory::createInteractionMembrane
         (state, name, shearDesc, bendingDesc, parameters, stressFree, growUntil);
 }
 
+static std::shared_ptr<InteractionRod>
+createInteractionRod(const YmrState *state, std::string name, py::kwargs kwargs)
+{
+    auto parameters = castToMap(kwargs, name);
+    
+    return InteractionFactory::createInteractionRod(state, name, parameters);
+}
 
 static std::shared_ptr<BasicInteractionSDPD>
 createInteractionPairwiseSDPD(const YmrState *state, std::string name,
@@ -50,22 +69,39 @@ createInteractionPairwiseSDPD(const YmrState *state, std::string name,
                               std::string EOS, std::string density,
                               bool stress, py::kwargs kwargs)
 {
-    std::map<std::string, float> parameters;
-
-    for (const auto& item : kwargs) {
-        try {
-            auto key   = py::cast<std::string>(item.first);
-            auto value = py::cast<float>(item.second);
-            parameters[key] = value;
-        }
-        catch (const py::cast_error& e)
-        {
-            die("Could not cast one of the arguments in pairwise DPD interactions '%s'", name.c_str());
-        }
-    }
-
+    auto parameters = castToMap(kwargs, name);
     return InteractionFactory::createPairwiseSDPD
         (state, name, rc, viscosity, kBT, EOS, density, stress, parameters);
+}
+
+static std::shared_ptr<InteractionLJ>
+createInteractionLJ(const YmrState *state, std::string name, float rc, float epsilon, float sigma, float maxForce,
+                    std::string awareMode, bool stress, py::kwargs kwargs)
+{
+    auto parameters = castToMap(kwargs, name);
+
+    return InteractionFactory::createPairwiseLJ
+        (state, name, rc, epsilon, sigma, maxForce, awareMode, stress, parameters);
+}
+
+static std::shared_ptr<InteractionDPD>
+createInteractionDPD(const YmrState *state, std::string name, float rc, float a, float gamma, float kBT, float power,
+                     bool stress, py::kwargs kwargs)
+{
+    auto parameters = castToMap(kwargs, name);
+
+    return InteractionFactory::createPairwiseDPD
+        (state, name, rc, a, gamma, kBT, power, stress, parameters);
+}
+
+static std::shared_ptr<InteractionMDPD>
+createInteractionMDPD(const YmrState *state, std::string name, float rc, float rd, float a, float b, float gamma, float kBT, float power,
+                      bool stress, py::kwargs kwargs)
+{
+    auto parameters = castToMap(kwargs, name);
+
+    return InteractionFactory::createPairwiseMDPD
+        (state, name, rc, rd, a, b, gamma, kBT, power, stress, parameters);
 }
 
 
@@ -99,15 +135,16 @@ void exportInteractions(py::module& m)
             J. Chem. Phys., 107(11), 4423-4435. `doi <https://doi.org/10.1063/1.474784>`_
     )");
 
-    pyIntDPD.def(py::init<const YmrState*, std::string, float, float, float, float, float>(),
-                 "state"_a, "name"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
+    pyIntDPD.def(py::init(&createInteractionDPD),
+                 "state"_a, "name"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, "stress"_a=false, R"(  
             Args:
                 name: name of the interaction
-                    rc: interaction cut-off (no forces between particles further than **rc** apart)
-                    a: :math:`a`
-                    gamma: :math:`\gamma`
-                    kbt: :math:`k_B T`
-                    power: :math:`p` in the weight function
+                rc: interaction cut-off (no forces between particles further than **rc** apart)
+                a: :math:`a`
+                gamma: :math:`\gamma`
+                kbt: :math:`k_B T`
+                power: :math:`p` in the weight function
+                stress: if **True**, activates virial stress computation every **stress_period** time units (given in kwars) 
     )");
 
     pyIntDPD.def("setSpecificPair", &InteractionDPD::setSpecificPair,
@@ -134,6 +171,7 @@ void exportInteractions(py::module& m)
                 stressPeriod: compute the stresses every this period (in simulation time units)
     )");
 
+    
     py::handlers_class<BasicInteractionDensity> pyIntDensity(m, "Density", pyInt, R"(
         Compute density of particles with a given kernel.
 
@@ -186,37 +224,19 @@ void exportInteractions(py::module& m)
            Physical Review E 68.6 (2003): 066702.`_
     )");
 
-    pyIntMDPD.def(py::init<const YmrState*, std::string, float, float, float, float, float, float, float>(),
-                  "state"_a, "name"_a, "rc"_a, "rd"_a, "a"_a, "b"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
-            Args:
-                name: name of the interaction
-                    rc: interaction cut-off (no forces between particles further than **rc** apart)
-                    rd: density cutoff, assumed rd <= rc
-                    a: :math:`a`
-                    b: :math:`b`
-                    gamma: :math:`\gamma`
-                    kbt: :math:`k_B T`
-                    power: :math:`p` in the weight function
-    )");
-
-
-
-    py::handlers_class<InteractionMDPDWithStress> pyIntMDPDWithStress(m, "MDPDWithStress", pyIntMDPD, R"(
-        wrapper of :any:`MDPD` with, in addition, stress computation
-    )");
-
-    pyIntMDPDWithStress.def(py::init<const YmrState*, std::string, float, float, float, float, float, float, float, float>(),
-                            "state"_a, "name"_a, "rc"_a, "rd"_a, "a"_a, "b"_a, "gamma"_a, "kbt"_a, "power"_a, "stressPeriod"_a, R"(
+    
+    pyIntMDPD.def(py::init(&createInteractionMDPD),
+                  "state"_a, "name"_a, "rc"_a, "rd"_a, "a"_a, "b"_a, "gamma"_a, "kbt"_a, "power"_a, "stress"_a=false, R"(  
             Args:
                 name: name of the interaction
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
-                rd: density cut-off, assumed rd < rc
+                rd: density cutoff, assumed rd <= rc
                 a: :math:`a`
                 b: :math:`b`
                 gamma: :math:`\gamma`
                 kbt: :math:`k_B T`
                 power: :math:`p` in the weight function
-                stressPeriod: compute the stresses every this period (in simulation time units)
+                stress: if **True**, activates virial stress computation every **stress_period** time units (given in kwars) 
     )");
 
 
@@ -277,44 +297,30 @@ void exportInteractions(py::module& m)
 
     )");
 
-
-    pyIntLJ.def(py::init<const YmrState*, std::string, float, float, float, float, bool>(),
-                "state"_a, "name"_a, "rc"_a, "epsilon"_a, "sigma"_a, "max_force"_a=1000.0, "object_aware"_a, R"(
+    
+    pyIntLJ.def(py::init(&createInteractionLJ),
+                "state"_a, "name"_a, "rc"_a, "epsilon"_a, "sigma"_a, "max_force"_a=1000.0, "aware_mode"_a="None", "stress"_a=false, R"(
             Args:
                 name: name of the interaction
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 epsilon: :math:`\varepsilon`
                 sigma: :math:`\sigma`
                 max_force: force magnitude will be capped to not exceed **max_force**
-                object_aware:
-                    if True, the particles belonging to the same object in an object vector do not interact with each other.
-                    That restriction only applies if both Particle Vectors in the interactions are the same and is actually an Object Vector.
+                aware_mode:
+                    * if "None", all particles interact with each other.
+                    * if "Object", the particles belonging to the same object in an object vector do not interact with each other.
+                      That restriction only applies if both Particle Vectors in the interactions are the same and is actually an Object Vector. 
+                    * if "Rod", the particles interact with all other particles except with the ones which are below a given a distance
+                      (in number of segment) of the same rod vector. The distance is specified by the kwargs parameter **min_segments_distance**.
+                stress: 
+                    if **True**, will enable stress computations every **stress_period** time units (specified as kwargs parameter).
+                   
     )");
 
     pyIntLJ.def("setSpecificPair", &InteractionLJ::setSpecificPair,
         "pv1"_a, "pv2"_a, "epsilon"_a, "sigma"_a, "max_force"_a, R"(
             Override some of the interaction parameters for a specific pair of Particle Vectors
         )");
-
-    py::handlers_class<InteractionLJWithStress> pyIntLJWithStress (m, "LJWithStress", pyIntLJ, R"(
-        wrapper of :any:`LJ` with, in addition, stress computation
-    )");
-
-    pyIntLJWithStress.def(py::init<const YmrState*, std::string, float, float, float, float, bool, float>(),
-                          "state"_a, "name"_a, "rc"_a, "epsilon"_a, "sigma"_a, "max_force"_a=1000.0,
-                          "object_aware"_a, "stressPeriod"_a, R"(
-            Args:
-                name: name of the interaction
-                rc: interaction cut-off (no forces between particles further than **rc** apart)
-                epsilon: :math:`\varepsilon`
-                sigma: :math:`\sigma`
-                max_force: force magnitude will be capped not exceed **max_force**
-                object_aware:
-                    if True, the particles belonging to the same object in an object vector do not interact with each other.
-                    That restriction only applies if both Particle Vectors in the interactions are the same and is actually an Object Vector.
-                stressPeriod: compute the stresses every this period (in simulation time units)
-    )");
-
     py::handlers_class<InteractionMembrane> pyMembraneForces(m, "MembraneForces", pyInt, R"(
         Abstract class for membrane interactions.
         Mesh-based forces acting on a membrane according to the model in [Fedosov2010]_
@@ -409,6 +415,80 @@ void exportInteractions(py::module& m)
                  * **kad**: area difference energy magnitude
                  * **DA0**: area difference at relaxed state divided by the offset of the leaflet midplanes
     )");
+
+
+    py::handlers_class<ObjectRodBindingInteraction> pyObjRodBinding(m, "ObjRodBinding", pyInt, R"(
+        Forces attaching a :any:`RodVector` to a :any:`RigidObjectVector`.
+    )");
+
+    pyObjRodBinding.def(py::init(&InteractionFactory::createInteractionObjRodBinding),
+                        "state"_a, "name"_a, "torque"_a, "rel_anchor"_a, "k_bound"_a, R"(
+            Args:
+                name: name of the interaction
+                torque: torque magnitude to apply to the rod
+                rel_anchor: position of the anchor relative to the rigid object
+                k_bound: anchor harmonic potential magnitude
+
+    )");
+
+
+    py::handlers_class<InteractionRod> pyRodForces(m, "RodForces", pyInt, R"(
+        Forces acting on an elastic rod.
+
+        The rod interactions are composed of forces comming from:
+            - bending energy, :math:`E_{\text{bend}}`
+            - twist energy, :math:`E_{\text{twist}}`
+            - bounds energy,  :math:`E_{\text{bound}}`
+
+        The form of the bending energy is given by (for a bi-segment):
+
+        .. math::
+
+            E_{\mathrm{bend}}=\frac{1}{2 l} \sum_{j=0}^{1}\left(\omega^{j}-\overline{\omega}\right)^{T} B\left(\omega^{j}-\overline{\omega}\right),
+
+        where
+
+        .. math::
+
+        \omega^{j}=\left((\kappa \mathbf{b}) \cdot \mathbf{m}_{2}^{j},-(\kappa \mathbf{b}) \cdot \mathbf{m}_{1}^{j}\right).
+
+        See, e.g. [bergou2008]_ for more details.
+        The form of the twist energy is given by (for a bi-segment):
+
+        .. math::
+
+            E_{\mathrm{twist}}=k_{t} l\left(\frac{\theta^{1}-\theta^{0}}{l}-\overline{\tau}\right)^{2}.
+
+        The additional bound energy is a simple harmonic potential with a given equilibrium length.
+
+        .. [bergou2008] Bergou, M.; Wardetzky, M.; Robinson, S.; Audoly, B. & Grinspun, E. 
+                        Discrete elastic rods 
+                        ACM transactions on graphics (TOG), 2008, 27, 63
+
+    )");
+
+    pyRodForces.def(py::init(&createInteractionRod),
+                         "state"_a, "name"_a, R"( 
+             Args:
+                 name: name of the interaction
+
+             kwargs:
+
+                 * **a0** (float):           equilibrium length between 2 opposite cross vertices
+                 * **l0** (float):           equilibrium length between 2 consecutive vertices on the centerline 
+                 * **k_bounds** (float):     elastic bound force magnitude
+                 * **k_visc** (float):       viscous bound force magnitude
+                 * **k_bending** (float3):   Bending symmetric tensor :math:`B` in the order :math:`\left(B_{xx}, B_{xy}, B_{zz} \right)`
+                 * **omega0** (float2):      Spontaneous curvatures along the two material frames :math:`\overline{\omega}`
+                 * **k_twist** (float):      Twist energy magnitude :math:`k_\mathrm{twist}`
+                 * **tau0** (float):         Spontaneous twist :math:`\overline{\tau}`
+                 * **E0** (float):           (optional) energy ground state
+
+             The interaction can support multiple polymorphic states if **omega0**, **tau0** and **E0** are lists of equal size.
+             In this case, the **E0** parameter is required.
+             Only lists of 1, 2 and 11 states are supported.
+    )");
+}
 
 
 

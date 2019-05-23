@@ -30,15 +30,14 @@ u.registerParticleVector(pv_rbc, ic_rbc)
 prm_rbc = lina_parameters(1.0)
 int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Kantor", **prm_rbc, stress_free=args.stressFree)
 
-integrator = ymr.Integrators.SubStepMembrane('substep_membrane', substeps, int_rbc)
+integrator = ymr.Integrators.SubStep('substep_membrane', substeps, int_rbc)
 u.registerIntegrator(integrator)
 u.setIntegrator(integrator, pv_rbc)
 
 # Note that the interaction is NOT registered inside `u`
 
 
-dump_mesh = ymr.Plugins.createDumpMesh("mesh_dump", pv_rbc, 150, "ply/")
-u.registerPlugins(dump_mesh)
+u.registerPlugins(ymr.Plugins.createDumpMesh("mesh_dump", pv_rbc, 150, "ply/"))
 
 u.run(5000)
 

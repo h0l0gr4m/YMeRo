@@ -81,9 +81,9 @@ void YMeRo::init(int3 nranks3D, float3 globalDomainSize, float dt, std::string l
         selectIntraNodeGPU(comm);
 
         createCartComm(comm, nranks3D, &cartComm);
-        state = std::make_shared<YmrState> (createDomainInfo(cartComm, globalDomainSize), dt, checkpointMode);
+        state = std::make_shared<YmrState> (createDomainInfo(cartComm, globalDomainSize), dt);
         sim = std::make_unique<Simulation> (cartComm, MPI_COMM_NULL, getState(),
-                                            checkpointEvery, checkpointFolder, gpuAwareMPI);
+                                            checkpointEvery, checkpointFolder, checkpointMode, gpuAwareMPI);
         computeTask = 0;
         return;
     }
@@ -95,19 +95,22 @@ void YMeRo::init(int3 nranks3D, float3 globalDomainSize, float dt, std::string l
     computeTask = rank % 2;
     MPI_Check( MPI_Comm_split(comm, computeTask, rank, &splitComm) );
     INCREASE;
+    const int localLeader  = 0;
+    const int remoteLeader = isComputeTask() ? 1 : 0;
+    const int tag = 42;
+
     if (isComputeTask())
     {
         MPI_Check( MPI_Comm_dup(splitComm, &compComm) );
-        INCREASE;
-        MPI_Check( MPI_Intercomm_create(compComm, 0, comm, 1, 0, &interComm) );
-	INCREASE;
+        MPI_Check( MPI_Intercomm_create(compComm, localLeader, comm, remoteLeader, tag, &interComm) );
+
         MPI_Check( MPI_Comm_rank(compComm, &rank) );
         selectIntraNodeGPU(compComm);
 
         createCartComm(compComm, nranks3D, &cartComm);
-        state = std::make_shared<YmrState> (createDomainInfo(cartComm, globalDomainSize), dt, checkpointMode);
+        state = std::make_shared<YmrState> (createDomainInfo(cartComm, globalDomainSize), dt);
         sim = std::make_unique<Simulation> (cartComm, interComm, getState(),
-                                            checkpointEvery, checkpointFolder, gpuAwareMPI);
+                                            checkpointEvery, checkpointFolder, checkpointMode, gpuAwareMPI);
     }
     else
     {
@@ -117,7 +120,7 @@ void YMeRo::init(int3 nranks3D, float3 globalDomainSize, float dt, std::string l
 	INCREASE;
         MPI_Check( MPI_Comm_rank(ioComm, &rank) );
 
-        post = std::make_unique<Postprocess> (ioComm, interComm);
+        post = std::make_unique<Postprocess> (ioComm, interComm, checkpointFolder);
     }
 
     MPI_Check( MPI_Comm_free(&splitComm) );
@@ -195,43 +198,61 @@ YMeRo::~YMeRo()
     printf("Destructor is called");
 }
 
-
-
 void YMeRo::registerParticleVector(const std::shared_ptr<ParticleVector>& pv, const std::shared_ptr<InitialConditions>& ic, int checkpointEvery)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->registerParticleVector(pv, ic, checkpointEvery);
 }
+
 void YMeRo::registerIntegrator(const std::shared_ptr<Integrator>& integrator)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->registerIntegrator(integrator);
 }
+
 void YMeRo::registerInteraction(const std::shared_ptr<Interaction>& interaction)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->registerInteraction(interaction);
 }
+
 void YMeRo::registerWall(const std::shared_ptr<Wall>& wall, int checkEvery)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->registerWall(wall, checkEvery);
 }
+
 void YMeRo::registerBouncer(const std::shared_ptr<Bouncer>& bouncer)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->registerBouncer(bouncer);
 }
+
 void YMeRo::registerObjectBelongingChecker (const std::shared_ptr<ObjectBelongingChecker>& checker, ObjectVector* ov)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
     {
         sim->registerObjectBelongingChecker(checker);
         sim->setObjectBelongingChecker(checker->name, ov->name);
     }
 }
+
 void YMeRo::registerPlugins(const std::shared_ptr<SimulationPlugin>& simPlugin, const std::shared_ptr<PostprocessPlugin>& postPlugin)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
     {
         if ( simPlugin != nullptr && !(simPlugin->needPostproc() && noPostprocess) )
@@ -246,21 +267,32 @@ void YMeRo::registerPlugins(const std::shared_ptr<SimulationPlugin>& simPlugin, 
 
 void YMeRo::setIntegrator(Integrator* integrator, ParticleVector* pv)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->setIntegrator(integrator->name, pv->name);
 }
+
 void YMeRo::setInteraction(Interaction* interaction, ParticleVector* pv1, ParticleVector* pv2)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->setInteraction(interaction->name, pv1->name, pv2->name);
 }
+
 void YMeRo::setBouncer(Bouncer* bouncer, ObjectVector* ov, ParticleVector* pv)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->setBouncer(bouncer->name, ov->name, pv->name);
 }
+
 void YMeRo::setWallBounce(Wall* wall, ParticleVector* pv)
 {
+    checkNotInitialized();
+    
     if (isComputeTask())
         sim->setWallBounce(wall->name, pv->name);
 }
@@ -299,10 +331,7 @@ void YMeRo::dumpWalls2XDMF(std::vector<std::shared_ptr<Wall>> walls, PyTypes::fl
         sim->getWallByNameOrDie(wall->name);
     }
     
-    auto path = parentPath(filename);
-    if (path != filename)
-        createFoldersCollective(sim->cartComm, path);
-    ::dumpWalls2XDMF(sdfWalls, make_float3(h), state->domain, filename, sim->cartComm);
+    WallHelpers::dumpWalls2XDMF(sdfWalls, make_float3(h), state->domain, filename, sim->cartComm);
 }
 
 double YMeRo::computeVolumeInsideWalls(std::vector<std::shared_ptr<Wall>> walls, long nSamplesPerRank)
@@ -324,7 +353,7 @@ double YMeRo::computeVolumeInsideWalls(std::vector<std::shared_ptr<Wall>> walls,
         sim->getWallByNameOrDie(wall->name);
     }
 
-    return volumeInsideWalls(sdfWalls, state->domain, sim->cartComm, nSamplesPerRank);
+    return WallHelpers::volumeInsideWalls(sdfWalls, state->domain, sim->cartComm, nSamplesPerRank);
 }
 
 std::shared_ptr<ParticleVector> YMeRo::makeFrozenWallParticles(std::string pvName,
@@ -333,6 +362,8 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenWallParticles(std::string pvNam
                                                                std::shared_ptr<Integrator> integrator,
                                                                float density, int nsteps)
 {
+    checkNotInitialized();
+    
     if (!isComputeTask()) return nullptr;
 
     // Walls are not directly reusable in other simulations,
@@ -388,7 +419,7 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenWallParticles(std::string pvNam
 
     info("wall thickness is set to %g", wallThickness);
     
-    freezeParticlesInWalls(sdfWalls, pv.get(), wallLevelSet, wallLevelSet + wallThickness);
+    WallHelpers::freezeParticlesInWalls(sdfWalls, pv.get(), wallLevelSet, wallLevelSet + wallThickness);
     info("\n");
 
     sim->registerParticleVector(pv, nullptr);
@@ -409,6 +440,8 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenRigidParticles(std::shared_ptr<
                                                                 std::shared_ptr<Integrator>   integrator,
                                                                 float density, int nsteps)
 {
+    checkNotInitialized();
+    
     if (!isComputeTask()) return nullptr;
 
     auto insideName = "inside_" + shape->name;
@@ -459,7 +492,6 @@ std::shared_ptr<ParticleVector> YMeRo::makeFrozenRigidParticles(std::shared_ptr<
     return freezesim.getSharedPVbyName(insideName);
 }
 
-
 std::shared_ptr<ParticleVector> YMeRo::applyObjectBelongingChecker(ObjectBelongingChecker* checker,
                                                                       ParticleVector* pv,
                                                                       int checkEvery,
@@ -467,6 +499,8 @@ std::shared_ptr<ParticleVector> YMeRo::applyObjectBelongingChecker(ObjectBelongi
                                                                       std::string outside,
                                                                       int checkpointEvery)
 {
+    checkNotInitialized();
+    
     if (!isComputeTask()) return nullptr;
     
     if ( (inside != "" && outside != "") || (inside == "" && outside == "") )
@@ -513,12 +547,30 @@ void YMeRo::sayHello()
     printf("\n");
 }
 
-void YMeRo::restart(std::string folder)
+void YMeRo::setup()
 {
-    if (isComputeTask())
-        sim->restart(folder);
+    if (initialized) return;
+    
+    if (isComputeTask())  sim->init();
+    else                 post->init();
+    
+    initialized = true;
 }
 
+void YMeRo::checkNotInitialized() const
+{
+    if (initialized)
+        die("Coordinator is already initialized.\n"
+            "Do not call any register or set functions after 'restart' or 'run'");
+}
+
+void YMeRo::restart(std::string folder)
+{
+    setup();
+
+    if (isComputeTask())  sim->restart(folder);
+    else                 post->restart(folder);
+}
 
 bool YMeRo::isComputeTask() const
 {
@@ -550,25 +602,11 @@ void YMeRo::stopProfiler()
 
 void YMeRo::run(int nsteps)
 {
-    if (isComputeTask())
-    {
-        if (!initialized)
-        {
-            sim->init();
-            initialized = true;
-        }
-        sim->run(nsteps);
-    }
-    else
-    {
-        if (!initialized)
-        {
-            post->init();
-            initialized = true;
-        }
-        post->run();
-    }
+    setup();
     
+    if (isComputeTask()) sim->run(nsteps);
+    else                post->run();
+
     MPI_Check( MPI_Barrier(comm) );
 }
 

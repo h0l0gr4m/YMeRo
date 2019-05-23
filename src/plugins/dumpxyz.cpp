@@ -1,5 +1,6 @@
 #include "dumpxyz.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 #include "utils/xyz.h"
 
 #include <core/pvs/particle_vector.h>
@@ -22,30 +23,35 @@ void XYZPlugin::setup(Simulation* simulation, const MPI_Comm& comm, const MPI_Co
 
 void XYZPlugin::beforeForces(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
-    downloaded.copy(pv->local()->coosvels, stream);
+    positions.copy(pv->local()->positions(), stream);
 }
 
 void XYZPlugin::serializeAndSend(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
     debug2("Plugin %s is sending now data", name.c_str());
 
-    for (auto& p : downloaded)
-        p.r = state->domain.local2global(p.r);
+    for (auto& r : positions)
+    {
+        auto r3 = make_float3(r);
+        r3 = state->domain.local2global(r3);
+        r.x = r3.x; r.y = r3.y; r.z = r3.z;
+    }
 
     waitPrevSend();
-    SimpleSerializer::serialize(sendBuffer, pv->name, downloaded);
+    SimpleSerializer::serialize(sendBuffer, pv->name, positions);
     send(sendBuffer);
 }
 
 //=================================================================================
 
 XYZDumper::XYZDumper(std::string name, std::string path) :
-        PostprocessPlugin(name), path(path)
-{    }
+        PostprocessPlugin(name),
+        path(path)
+{}
 
 void XYZDumper::setup(const MPI_Comm& comm, const MPI_Comm& interComm)
 {
@@ -57,13 +63,13 @@ void XYZDumper::deserialize(MPI_Status& stat)
 {
     std::string pvName;
 
-    SimpleSerializer::deserialize(data, pvName, ps);
+    SimpleSerializer::deserialize(data, pvName, pos);
 
     std::string tstr = std::to_string(timeStamp++);
     std::string currentFname = path + "/" + pvName + "_" + std::string(5 - tstr.length(), '0') + tstr + ".xyz";
 
     if (activated)
-        writeXYZ(comm, currentFname, ps.data(), ps.size());
+        writeXYZ(comm, currentFname, pos.data(), pos.size());
 }
 
 

@@ -59,6 +59,9 @@ void MembraneIC::exec(const MPI_Comm& comm, ParticleVector* pv, cudaStream_t str
             int oldSize = ov->local()->size();
             ov->local()->resize(oldSize + ov->mesh->getNvertices(), stream);
 
+            auto& pos = ov->local()->positions();
+            auto& vel = ov->local()->velocities();
+            
             for (int i=0; i<ov->mesh->getNvertices(); i++)
             {
                 float3 r = rotate(f4tof3( ov->mesh->vertexCoordinates[i] * globalScale ), q) + com;
@@ -66,29 +69,18 @@ void MembraneIC::exec(const MPI_Comm& comm, ParticleVector* pv, cudaStream_t str
                 p.r = r;
                 p.u = make_float3(0);
 
-                ov->local()->coosvels[oldSize + i] = p;
+                pos[oldSize + i] = p.r2Float4();
+                vel[oldSize + i] = p.u2Float4();
             }
 
             nObjs++;
         }
     }
 
-    // Set ids
-    // Need to do that, as not all the objects in com_q may be valid
-    int totalCount=0; // TODO: int64!
-    MPI_Check( MPI_Exscan(&nObjs, &totalCount, 1, MPI_INT, MPI_SUM, comm) );
-
-    auto ids = ov->local()->extraPerObject.getData<int>(ChannelNames::globalIds);
-    for (int i=0; i<nObjs; i++)
-        (*ids)[i] = totalCount + i;
-
-    for (int i=0; i < ov->local()->size(); i++)
-        ov->local()->coosvels[i].i1 = totalCount*ov->objSize + i;
-
-
-    ids->uploadToDevice(stream);
-    ov->local()->coosvels.uploadToDevice(stream);
-    ov->local()->extraPerParticle.getData<Particle>(ChannelNames::oldParts)->copy(ov->local()->coosvels, stream);
+    ov->local()->positions().uploadToDevice(stream);
+    ov->local()->velocities().uploadToDevice(stream);
+    ov->local()->computeGlobalIds(comm, stream);
+    ov->local()->dataPerParticle.getData<float4>(ChannelNames::oldPositions)->copy(ov->local()->positions(), stream);
 
     info("Initialized %d '%s' membranes", nObjs, ov->name.c_str());
 }

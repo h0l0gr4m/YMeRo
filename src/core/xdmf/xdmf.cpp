@@ -4,12 +4,13 @@
 #include "xmf_helpers.h"
 #include "hdf5_helpers.h"
 
-#include <hdf5.h>
-
 #include <core/logger.h>
-#include <core/utils/timer.h>
-#include <core/utils/folders.h>
 #include <core/rigid_kernels/rigid_motion.h>
+#include <core/utils/cuda_common.h>
+#include <core/utils/folders.h>
+#include <core/utils/timer.h>
+
+#include <hdf5.h>
 
 namespace XDMF
 {
@@ -39,59 +40,49 @@ static long getLocalNumElements(const GridDims *gridDims)
     return n;
 }
 
-static void combineIntoParticles(int n, const float3 *pos, const float3 *vel, const int *ids, Particle *particles)
+static void combineIntoPosVel(int n, const float3 *pos, const float3 *vel, const int64_t *ids,
+                              float4 *outPos, float4 *outVel)
 {
     for (int i = 0; i < n; ++i) {
         Particle p;
         p.r = pos[i];
         p.u = vel[i];
-        p.i1 = ids[i];
-        p.i2 = 0;
-
-        particles[i] = p;
+        p.setId(ids[i]);
+        outPos[i] = p.r2Float4();
+        outVel[i] = p.u2Float4();
     }    
 }
 
 static void addPersistentExtraDataPerParticle(int n, const Channel& channel, ParticleVector *pv)
 {
-    switch (channel.dataType) {
+    mpark::visit([&](auto typeWrapper) {
+                     using Type = typename decltype(typeWrapper)::type;
 
-#define SWITCH_ENTRY(ctype)                                             \
-        case DataType::TOKENIZE(ctype):                                 \
-            {                                                           \
-                pv->requireDataPerParticle<ctype>                       \
-                    (channel.name,                                      \
-                     ExtraDataManager::PersistenceMode::Persistent);    \
-                auto buffer = pv->local()->extraPerParticle.getData<ctype>(channel.name); \
-                buffer->resize_anew(n);                                 \
-                memcpy(buffer->data(), channel.data, n * sizeof(ctype)); \
-                buffer->uploadToDevice(0);                              \
-            }                                                           \
-            break;
-
-        TYPE_TABLE(SWITCH_ENTRY);
-
-    default:
-        die("Could not create particle extra data for channel `%s` in pv `%s`",
-            channel.name.c_str(), pv->name.c_str());
-
-#undef SWITCH_ENTRY
-    };
+                     pv->requireDataPerParticle<Type>
+                         (channel.name,
+                          DataManager::PersistenceMode::Persistent);
+                     
+                     auto buffer = pv->local()->dataPerParticle.getData<Type>(channel.name);
+                     buffer->resize_anew(n);
+                     memcpy(buffer->data(), channel.data, n * sizeof(Type));
+                     buffer->uploadToDevice(defaultStream);
+                 }, channel.type);
 }
     
 static void gatherFromChannels(std::vector<Channel> &channels, std::vector<float> &positions, ParticleVector *pv)
 {
     int n = positions.size() / 3;
     const float3 *pos, *vel = nullptr;
-    const int *ids = nullptr;
+    const int64_t *ids = nullptr;
 
     pv->local()->resize_anew(n);
-    auto& coosvels = pv->local()->coosvels;
+    auto& pos4 = pv->local()->positions();
+    auto& vel4 = pv->local()->velocities();
 
     for (auto& ch : channels)
     {
-        if      (ch.name == "velocity"              ) vel = (const float3*) ch.data;            
-        else if (ch.name == ChannelNames::globalIds ) ids = (const int*) ch.data;
+        if      (ch.name == "velocity"              ) vel = (const float3*)  ch.data;            
+        else if (ch.name == ChannelNames::globalIds ) ids = (const int64_t*) ch.data;
         else addPersistentExtraDataPerParticle(n, ch, pv);
     }
 
@@ -102,50 +93,40 @@ static void gatherFromChannels(std::vector<Channel> &channels, std::vector<float
 
     pos = (const float3*) positions.data();
 
-    combineIntoParticles(n, pos, vel, ids, coosvels.data());
+    combineIntoPosVel(n, pos, vel, ids, pos4.data(), vel4.data());
 
-    coosvels.uploadToDevice(0);
+    pos4.uploadToDevice(defaultStream);
+    vel4.uploadToDevice(defaultStream);
 }
 
 static void addPersistentExtraDataPerObject(int n, const Channel& channel, ObjectVector *ov)
 {
-    switch (channel.dataType) {
+    mpark::visit([&](auto typeWrapper) {
 
-#define SWITCH_ENTRY(ctype)                                             \
-        case DataType::TOKENIZE(ctype):                                 \
-            {                                                           \
-                ov->requireDataPerObject<ctype>                         \
-                    (channel.name,                                      \
-                     ExtraDataManager::PersistenceMode::Persistent);    \
-                auto buffer = ov->local()->extraPerObject.getData<ctype>(channel.name); \
-                buffer->resize_anew(n);                                 \
-                memcpy(buffer->data(), channel.data, n * sizeof(ctype)); \
-                buffer->uploadToDevice(0);                              \
-            }                                                           \
-            break;
-
-        TYPE_TABLE(SWITCH_ENTRY);
-
-    default:
-        die("Could not create object extra data for channel `%s` in ov `%s`",
-            channel.name.c_str(), ov->name.c_str());
-
-#undef SWITCH_ENTRY
-    };
+                     using Type = typename decltype(typeWrapper)::type;
+                     
+                     ov->requireDataPerObject<Type>
+                         (channel.name, DataManager::PersistenceMode::Persistent);
+                     
+                     auto buffer = ov->local()->dataPerObject.getData<Type>(channel.name);
+                     buffer->resize_anew(n);
+                     memcpy(buffer->data(), channel.data, n * sizeof(Type));
+                     buffer->uploadToDevice(defaultStream);
+                 }, channel.type);
 }
     
 static void gatherFromChannels(std::vector<Channel> &channels, std::vector<float> &positions, ObjectVector *ov)
 {
     int n = positions.size() / 3;
-    const int *ids_data = nullptr;
+    const int64_t *ids_data = nullptr;
 
-    auto ids = ov->local()->extraPerObject.getData<int>(ChannelNames::globalIds);
+    auto ids = ov->local()->dataPerObject.getData<int64_t>(ChannelNames::globalIds);
 
     ids->resize_anew(n);
 
     for (auto& ch : channels)
     {
-        if (ch.name == ChannelNames::globalIds) ids_data = (const int*) ch.data;
+        if (ch.name == ChannelNames::globalIds) ids_data = (const int64_t*) ch.data;
         else addPersistentExtraDataPerObject(n, ch, ov);
     }
 
@@ -157,7 +138,7 @@ static void gatherFromChannels(std::vector<Channel> &channels, std::vector<float
         (*ids)[i] = ids_data[i];
     }
 
-    ids->uploadToDevice(0);
+    ids->uploadToDevice(defaultStream);
 }
 
 static void combineIntoRigidMotions(int n, const float3 *pos, const RigidReal4 *quaternion,
@@ -181,25 +162,25 @@ static void combineIntoRigidMotions(int n, const float3 *pos, const RigidReal4 *
 static void gatherFromChannels(std::vector<Channel> &channels, std::vector<float> &positions, RigidObjectVector *rov)
 {
     int n = positions.size() / 3;
-    const int *ids_data = nullptr;
+    const int64_t *ids_data = nullptr;
     const float3 *pos = (const float3*) positions.data();
     const RigidReal4 *quaternion;
     const RigidReal3 *vel, *omega, *force, *torque;
 
-    auto ids     = rov->local()->extraPerObject.getData<int>(ChannelNames::globalIds);
-    auto motions = rov->local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
+    auto ids     = rov->local()->dataPerObject.getData<int64_t>(ChannelNames::globalIds);
+    auto motions = rov->local()->dataPerObject.getData<RigidMotion>(ChannelNames::motions);
 
     ids    ->resize_anew(n);
     motions->resize_anew(n);
 
     for (auto& ch : channels)
     {
-        if      (ch.name == ChannelNames::globalIds)  ids_data = (const int*)        ch.data;
-        else if (ch.name == "quaternion") quaternion = (const RigidReal4*) ch.data; 
-        else if (ch.name == "velocity")          vel = (const RigidReal3*) ch.data;
-        else if (ch.name == "omega")           omega = (const RigidReal3*) ch.data;
-        else if (ch.name == "force")           force = (const RigidReal3*) ch.data;
-        else if (ch.name == "torque")         torque = (const RigidReal3*) ch.data;
+        if      (ch.name == ChannelNames::globalIds)  ids_data = (const int64_t*)    ch.data;
+        else if (ch.name == "quaternion")           quaternion = (const RigidReal4*) ch.data; 
+        else if (ch.name == "velocity")                    vel = (const RigidReal3*) ch.data;
+        else if (ch.name == "omega")                     omega = (const RigidReal3*) ch.data;
+        else if (ch.name == "force")                     force = (const RigidReal3*) ch.data;
+        else if (ch.name == "torque")                   torque = (const RigidReal3*) ch.data;
         else addPersistentExtraDataPerObject(n, ch, rov);
     }
 
@@ -208,19 +189,19 @@ static void gatherFromChannels(std::vector<Channel> &channels, std::vector<float
                          if (ptr == nullptr)
                              die("Channel '%s' is required to read XDMF into an object vector", name.c_str());
                      };
-        check(ChannelNames::globalIds,        ids_data);
-        check("quaternion", quaternion);
-        check("velocity",   vel);
-        check("omega",      omega);
-        check("force",      force);
-        check("torque",     torque);
+        check(ChannelNames::globalIds, ids_data);
+        check("quaternion",            quaternion);
+        check("velocity",              vel);
+        check("omega",                 omega);
+        check("force",                 force);
+        check("torque",                torque);
     }
 
     combineIntoRigidMotions(n, pos, quaternion, vel, omega, force, torque, motions->data());        
     for (int i = 0; i < n; ++i) (*ids)[i] = ids_data[i];
 
-    ids->uploadToDevice(0);
-    motions->uploadToDevice(0);
+    ids->uploadToDevice(defaultStream);
+    motions->uploadToDevice(defaultStream);
 }
     
 template <typename PV>

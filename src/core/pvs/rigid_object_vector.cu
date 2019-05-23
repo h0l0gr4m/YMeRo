@@ -13,6 +13,63 @@ LocalRigidObjectVector::LocalRigidObjectVector(ParticleVector* pv, int objSize, 
     LocalObjectVector(pv, objSize, nObjects)
 {}
 
+PinnedBuffer<float4>* LocalRigidObjectVector::getMeshVertices(cudaStream_t stream)
+{
+    auto ov = dynamic_cast<RigidObjectVector*>(pv);
+    auto& mesh = ov->mesh;
+    meshVertices.resize_anew(nObjects * mesh->getNvertices());
+
+    ROVview fakeView(ov, this);
+    fakeView.objSize   = mesh->getNvertices();
+    fakeView.size      = mesh->getNvertices() * nObjects;
+    fakeView.positions = meshVertices.devPtr();
+
+    const int nthreads = 128;
+    
+    SAFE_KERNEL_LAUNCH(
+            RigidIntegrationKernels::applyRigidMotion
+                <RigidIntegrationKernels::ApplyRigidMotion::PositionsOnly>,
+            getNblocks(fakeView.size, nthreads), nthreads, 0, stream,
+            fakeView, ov->mesh->vertexCoordinates.devPtr() );
+
+    return &meshVertices;
+}
+
+PinnedBuffer<float4>* LocalRigidObjectVector::getOldMeshVertices(cudaStream_t stream)
+{
+    auto ov = dynamic_cast<RigidObjectVector*>(pv);
+    auto& mesh = ov->mesh;
+    meshOldVertices.resize_anew(nObjects * mesh->getNvertices());
+
+    // Overwrite particles with vertices
+    // Overwrite motions with the old_motions
+    ROVview fakeView(ov, this);
+    fakeView.objSize   = mesh->getNvertices();
+    fakeView.size      = mesh->getNvertices() * nObjects;
+    fakeView.positions = meshOldVertices.devPtr();
+    fakeView.motions   = dataPerObject.getData<RigidMotion>(ChannelNames::oldMotions)->devPtr();
+
+    const int nthreads = 128;
+    
+    SAFE_KERNEL_LAUNCH(
+            RigidIntegrationKernels::applyRigidMotion
+                <RigidIntegrationKernels::ApplyRigidMotion::PositionsOnly>,
+            getNblocks(fakeView.size, nthreads), nthreads, 0, stream,
+            fakeView, ov->mesh->vertexCoordinates.devPtr() );
+
+    return &meshOldVertices;
+}
+
+PinnedBuffer<Force>* LocalRigidObjectVector::getMeshForces(cudaStream_t stream)
+{
+    auto ov = dynamic_cast<ObjectVector*>(pv);
+    meshForces.resize_anew(nObjects * ov->mesh->getNvertices());
+    return &meshForces;
+}
+
+
+
+
 RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, float partMass,
                                      float3 J, const int objSize,
                                      std::shared_ptr<Mesh> mesh, const int nObjects) :
@@ -32,11 +89,11 @@ RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, fl
 
     // rigid motion must be exchanged and shifted
     requireDataPerObject<RigidMotion>(ChannelNames::motions,
-                                      ExtraDataManager::PersistenceMode::Persistent,
+                                      DataManager::PersistenceMode::Persistent,
                                       sizeof(RigidReal));
 
     requireDataPerObject<RigidMotion>(ChannelNames::oldMotions,
-                                      ExtraDataManager::PersistenceMode::None);
+                                      DataManager::PersistenceMode::None);
 }
 
 RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, float partMass,
@@ -46,55 +103,6 @@ RigidObjectVector::RigidObjectVector(const YmrState *state, std::string name, fl
 {}
 
 RigidObjectVector::~RigidObjectVector() = default;
-
-PinnedBuffer<Particle>* LocalRigidObjectVector::getMeshVertices(cudaStream_t stream)
-{
-    auto ov = dynamic_cast<RigidObjectVector*>(pv);
-    auto& mesh = ov->mesh;
-    meshVertices.resize_anew(nObjects * mesh->getNvertices());
-
-    ROVview fakeView(ov, this);
-    fakeView.objSize = mesh->getNvertices();
-    fakeView.size = mesh->getNvertices() * nObjects;
-    fakeView.particles = reinterpret_cast<float4*>(meshVertices.devPtr());
-
-    SAFE_KERNEL_LAUNCH(
-            RigidIntegrationKernels::applyRigidMotion,
-            getNblocks(fakeView.size, 128), 128, 0, stream,
-            fakeView, ov->mesh->vertexCoordinates.devPtr() );
-
-    return &meshVertices;
-}
-
-PinnedBuffer<Particle>* LocalRigidObjectVector::getOldMeshVertices(cudaStream_t stream)
-{
-    auto ov = dynamic_cast<RigidObjectVector*>(pv);
-    auto& mesh = ov->mesh;
-    meshOldVertices.resize_anew(nObjects * mesh->getNvertices());
-
-    // Overwrite particles with vertices
-    // Overwrite motions with the old_motions
-    ROVview fakeView(ov, this);
-    fakeView.objSize = mesh->getNvertices();
-    fakeView.size = mesh->getNvertices() * nObjects;
-    fakeView.particles = reinterpret_cast<float4*>(meshOldVertices.devPtr());
-    fakeView.motions = extraPerObject.getData<RigidMotion>(ChannelNames::oldMotions)->devPtr();
-
-    SAFE_KERNEL_LAUNCH(
-            RigidIntegrationKernels::applyRigidMotion,
-            getNblocks(fakeView.size, 128), 128, 0, stream,
-            fakeView, ov->mesh->vertexCoordinates.devPtr() );
-
-    return &meshOldVertices;
-}
-
-DeviceBuffer<Force>* LocalRigidObjectVector::getMeshForces(cudaStream_t stream)
-{
-    auto ov = dynamic_cast<ObjectVector*>(pv);
-    meshForces.resize_anew(nObjects * ov->mesh->getNvertices());
-
-    return &meshForces;
-}
 
 // TODO refactor this
 
@@ -121,16 +129,16 @@ static void splitMotions(DomainInfo domain, const PinnedBuffer<RigidMotion>& mot
     }
 }
 
-void RigidObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
+void RigidObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path, int checkpointId)
 {
     CUDA_Check( cudaDeviceSynchronize() );
 
-    auto filename = createCheckpointNameWithId(path, "ROV", "");
+    auto filename = createCheckpointNameWithId(path, "ROV", "", checkpointId);
     info("Checkpoint for rigid object vector '%s', writing to file %s", name.c_str(), filename.c_str());
 
-    auto motions = local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
+    auto motions = local()->dataPerObject.getData<RigidMotion>(ChannelNames::motions);
 
-    motions->downloadFromDevice(0, ContainersSynch::Synch);
+    motions->downloadFromDevice(defaultStream, ContainersSynch::Synch);
     
     auto positions = std::make_shared<std::vector<float>>();
     std::vector<RigidReal4> quaternion;
@@ -143,18 +151,18 @@ void RigidObjectVector::_checkpointObjectData(MPI_Comm comm, std::string path)
     auto rigidType = XDMF::getNumberType<RigidReal>();
 
     std::vector<XDMF::Channel> channels = {
-        XDMF::Channel( "quaternion", quaternion .data(), XDMF::Channel::DataForm::Quaternion, rigidType, typeTokenize<RigidReal4>() ),
-        XDMF::Channel( "velocity",   vel        .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() ),
-        XDMF::Channel( "omega",      omega      .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() ),
-        XDMF::Channel( "force",      force      .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() ),
-        XDMF::Channel( "torque",     torque     .data(), XDMF::Channel::DataForm::Vector,     rigidType, typeTokenize<RigidReal3>() )
+        XDMF::Channel( "quaternion", quaternion .data(), XDMF::Channel::DataForm::Quaternion, rigidType, DataTypeWrapper<RigidReal4>() ),
+        XDMF::Channel( "velocity",   vel        .data(), XDMF::Channel::DataForm::Vector,     rigidType, DataTypeWrapper<RigidReal3>() ),
+        XDMF::Channel( "omega",      omega      .data(), XDMF::Channel::DataForm::Vector,     rigidType, DataTypeWrapper<RigidReal3>() ),
+        XDMF::Channel( "force",      force      .data(), XDMF::Channel::DataForm::Vector,     rigidType, DataTypeWrapper<RigidReal3>() ),
+        XDMF::Channel( "torque",     torque     .data(), XDMF::Channel::DataForm::Vector,     rigidType, DataTypeWrapper<RigidReal3>() )
     };         
 
     _extractPersistentExtraObjectData(channels, /* blacklist */ {ChannelNames::motions} );
     
     XDMF::write(filename, &grid, channels, comm);
 
-    createCheckpointSymlink(comm, path, "ROV", "xmf");
+    createCheckpointSymlink(comm, path, "ROV", "xmf", checkpointId);
 
     debug("Checkpoint for object vector '%s' successfully written", name.c_str());
 }
@@ -174,10 +182,10 @@ void RigidObjectVector::_restartObjectData(MPI_Comm comm, std::string path, cons
 
     XDMF::readRigidObjectData(filename, comm, this);
 
-    auto loc_ids     = local()->extraPerObject.getData<int>(ChannelNames::globalIds);
-    auto loc_motions = local()->extraPerObject.getData<RigidMotion>(ChannelNames::motions);
+    auto loc_ids     = local()->dataPerObject.getData<int64_t>(ChannelNames::globalIds);
+    auto loc_motions = local()->dataPerObject.getData<RigidMotion>(ChannelNames::motions);
     
-    std::vector<int>             ids(loc_ids->size());
+    std::vector<int64_t>         ids(loc_ids->size());
     std::vector<RigidMotion> motions(loc_motions->size());
     
     std::copy(loc_ids    ->begin(), loc_ids    ->end(), ids.begin());
@@ -194,8 +202,8 @@ void RigidObjectVector::_restartObjectData(MPI_Comm comm, std::string path, cons
     std::copy(ids.begin(), ids.end(), loc_ids->begin());
     std::copy(motions.begin(), motions.end(), loc_motions->begin());
 
-    loc_ids->uploadToDevice(0);
-    loc_motions->uploadToDevice(0);
+    loc_ids->uploadToDevice(defaultStream);
+    loc_motions->uploadToDevice(defaultStream);
     CUDA_Check( cudaDeviceSynchronize() );
 
     info("Successfully read %d object infos", loc_motions->size());

@@ -38,7 +38,7 @@ protected:
 
     int dumpEvery;
 
-    HostBuffer<Particle> particles;
+    HostBuffer<float4> positions, velocities;
     std::vector<std::string> channelNames;
     std::vector<ChannelType> channelTypes;
     std::vector<HostBuffer<float>> channelData;
@@ -57,15 +57,14 @@ public:
 
 protected:
 
-    float _recvAndUnpack();
-
-    int timeStamp = 0;
-    const int zeroPadding = 5;
+    void _recvAndUnpack(YmrState::TimeType &time, YmrState::StepType& timeStamp);
+    
+    static constexpr int zeroPadding = 5;
     std::string path;
 
-    std::vector<Particle> particles;
+    std::vector<float4> pos4, vel4;
     std::vector<float> velocities;
-    std::vector<int> ids;
+    std::vector<int64_t> ids;
     std::shared_ptr<std::vector<float>> positions;
 
     std::vector<XDMF::Channel> channels;

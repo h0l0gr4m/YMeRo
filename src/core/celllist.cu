@@ -7,6 +7,7 @@
 #include <core/utils/cuda_common.h>
 #include <core/utils/kernel_launch.h>
 #include <core/utils/type_map.h>
+#include <core/utils/type_traits.h>
 
 #include <extern/cub/cub/device/device_scan.cuh>
 
@@ -25,7 +26,7 @@ __global__ void computeCellSizes(PVview view, CellListInfo cinfo)
     const int pid = blockIdx.x * blockDim.x + threadIdx.x;
     if (pid >= view.size) return;
 
-    float4 coo = readNoCache(view.particles + pid*2);
+    float4 coo = view.readPositionNoCache(pid);
     int cid = cinfo.getCellId(coo);
 
     // XXX: relying here only on redistribution
@@ -33,42 +34,27 @@ __global__ void computeCellSizes(PVview view, CellListInfo cinfo)
         atomicAdd(cinfo.cellSizes + cid, 1);
 }
 
-__global__ void reorderParticles(PVview view, CellListInfo cinfo, float4 *outParticles)
+__global__ void reorderPositionsAndCreateMap(PVview view, CellListInfo cinfo, float4 *outPositions)
 {
-    const int gid = blockIdx.x * blockDim.x + threadIdx.x;
-    const int pid = gid / 2;
-    const int sh  = gid % 2;  // sh = 0 copies coordinates, sh = 1 -- velocity
+    const int pid = blockIdx.x * blockDim.x + threadIdx.x;
     if (pid >= view.size) return;
 
-    int dstId;
+    int dstId = INVALID;
 
     // this is to allow more cache for atomics
     // loads / stores here need no cache
-    float4 val = readNoCache(view.particles+gid);
+    float4 pos = view.readPositionNoCache(pid);
 
-    int cid;
-    if (sh == 0)
-    {
-        cid = cinfo.getCellId(val);
+    int cid = cinfo.getCellId(pos);
 
-        //  XXX: relying here only on redistribution
-        if ( !outgoingParticle(val) )
-            dstId = cinfo.cellStarts[cid] + atomicAdd(cinfo.cellSizes + cid, 1);
-        else
-            dstId = -1;
-    }
+    //  XXX: relying here only on redistribution
+    if ( !outgoingParticle(pos) )
+        dstId = cinfo.cellStarts[cid] + atomicAdd(cinfo.cellSizes + cid, 1);
 
-    int otherDst = warpShflUp(dstId, 1);
-    if (sh == 1)
-        dstId = otherDst;
+    if (dstId != INVALID)
+        writeNoCache(outPositions + dstId, pos);
 
-    if (dstId >= 0)
-    {
-        writeNoCache(outParticles + 2*dstId+sh, val);
-        if (sh == 0) cinfo.order[pid] = dstId;
-    }
-    else if (sh == 0)
-        cinfo.order[pid] = INVALID;
+    cinfo.order[pid] = dstId;
 }
 
 template <typename T>
@@ -80,17 +66,6 @@ __global__ void reorderExtraDataPerParticle(int n, const T *inExtraData, CellLis
     int dstId = cinfo.order[srcId];
     if (dstId != INVALID)
         outExtraData[dstId] = inExtraData[srcId];
-}
-
-__global__ void addForcesKernel(PVview dstView, CellListInfo cinfo, PVview srcView)
-{
-    int pid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (pid >= dstView.size) return;
-
-    int srcId = cinfo.order[pid];
-
-    assert(srcId != INVALID);
-    dstView.forces[pid] += srcView.forces[srcId];
 }
 
 template <typename T>
@@ -143,9 +118,9 @@ CellList::CellList(ParticleVector *pv, float rc, float3 localDomainSize) :
     cellSizes. resize_anew(totcells + 1);
     cellStarts.resize_anew(totcells + 1);
 
-    cellSizes. clear(0);
-    cellStarts.clear(0);
-    CUDA_Check( cudaStreamSynchronize(0) );
+    cellSizes. clear(defaultStream);
+    cellStarts.clear(defaultStream);
+    CUDA_Check( cudaStreamSynchronize(defaultStream) );
 
     debug("Initialized %s cell-list with %dx%dx%d cells and cut-off %f", pv->name.c_str(), ncells.x, ncells.y, ncells.z, this->rc);
 }
@@ -159,9 +134,9 @@ CellList::CellList(ParticleVector *pv, int3 resolution, float3 localDomainSize) 
     cellSizes. resize_anew(totcells + 1);
     cellStarts.resize_anew(totcells + 1);
 
-    cellSizes. clear(0);
-    cellStarts.clear(0);
-    CUDA_Check( cudaStreamSynchronize(0) );
+    cellSizes. clear(defaultStream);
+    cellStarts.clear(defaultStream);
+    CUDA_Check( cudaStreamSynchronize(defaultStream) );
 
     debug("Initialized %s cell-list with %dx%dx%d cells and cut-off %f", pv->name.c_str(), ncells.x, ncells.y, ncells.z, this->rc);
 }
@@ -185,37 +160,24 @@ bool CellList::_checkNeedBuild() const
     return true;
 }
 
-template <typename T>
-static void requireData(const std::string& channelName, int np, ExtraDataManager& containerManager)
-{
-    if (!containerManager.checkChannelExists(channelName))
-        containerManager.createData<T>(channelName, np);
-}
-
-
 void CellList::_updateExtraDataChannels(cudaStream_t stream)
 {
-    auto& pvManager        = pv->local()->extraPerParticle;
-    auto& containerManager = particlesDataContainer->extraPerParticle;
+    auto& pvManager        = pv->local()->dataPerParticle;
+    auto& containerManager = particlesDataContainer->dataPerParticle;
     int np = pv->local()->size();
 
     for (const auto& namedChannel : pvManager.getSortedChannels()) {
         const auto& name = namedChannel.first;
         const auto& desc = namedChannel.second;
-        if (desc->persistence != ExtraDataManager::PersistenceMode::Persistent) continue;
+        if (desc->persistence != DataManager::PersistenceMode::Persistent) continue;
 
-#define SWITCH_ENTRY(ctype)                                             \
-        case DataType::TOKENIZE(ctype):                                 \
-            requireData<ctype>(name, np, containerManager);             \
-            break;
+        mpark::visit([&](auto pinnedBuffPtr) {
+                         using T = typename std::remove_pointer<decltype(pinnedBuffPtr)>::type::value_type;
 
-        switch(desc->dataType) {
-            TYPE_TABLE(SWITCH_ENTRY);
-        default:
-            die("%s: cannot require extra data: %s has None type.", makeName().c_str(), name.c_str());
-        }
-
-#undef SWITCH_ENTRY
+                         if (!containerManager.checkChannelExists(name))
+                             containerManager.createData<T>(name, np);
+                         
+                     }, desc->varDataPtr);
     }
 }
 
@@ -248,7 +210,7 @@ void CellList::_computeCellStarts(cudaStream_t stream)
                                   cellSizes.devPtr(), cellStarts.devPtr(), totcells+1, stream);
 }
 
-void CellList::_reorderData(cudaStream_t stream)
+void CellList::_reorderPositionsAndCreateMap(cudaStream_t stream)
 {
     debug2("Reordering %d %s particles", pv->local()->size(), pv->name.c_str());
 
@@ -260,63 +222,41 @@ void CellList::_reorderData(cudaStream_t stream)
 
     const int nthreads = 128;
     SAFE_KERNEL_LAUNCH(
-        CellListKernels::reorderParticles,
-        getNblocks(2*view.size, nthreads), nthreads, 0, stream,
-        view, cellInfo(), (float4*)particlesDataContainer->coosvels.devPtr() );
-}
-
-template <typename T>
-static void reorderExtraDataEntry(int np, CellListInfo cinfo, ExtraDataManager *dstExtraData,
-                                  const ExtraDataManager::ChannelDescription *channel, const std::string& channelName,
-                                  cudaStream_t stream)
-{
-    T      *outExtraData = dstExtraData->getData<T>(channelName)->devPtr();
-    const T *inExtraData = (const T*) channel->container->genericDevPtr();
-
-    const int nthreads = 128;
-
-    SAFE_KERNEL_LAUNCH(
-        CellListKernels::reorderExtraDataPerParticle<T>,
-        getNblocks(np, nthreads), nthreads, 0, stream,
-        np, inExtraData, cinfo, outExtraData );
+        CellListKernels::reorderPositionsAndCreateMap,
+        getNblocks(view.size, nthreads), nthreads, 0, stream,
+        view, cellInfo(), particlesDataContainer->positions().devPtr() );
 }
 
 void CellList::_reorderExtraDataEntry(const std::string& channelName,
-                                      const ExtraDataManager::ChannelDescription *channelDesc,
+                                      const DataManager::ChannelDescription *channelDesc,
                                       cudaStream_t stream)
 {
-    auto dstExtraData = &particlesDataContainer->extraPerParticle;
+    const auto& dstDesc = particlesDataContainer->dataPerParticle.getChannelDescOrDie(channelName);
     int np = pv->local()->size();
 
-    switch (channelDesc->dataType)
-    {
+    debug2("%s: reordering extra data '%s'", makeName().c_str(), channelName.c_str());
+    
+    mpark::visit([&](auto srcPinnedBuff) {
+                     auto dstPinnedBuff = mpark::get<decltype(srcPinnedBuff)>(dstDesc.varDataPtr);
 
-#define SWITCH_ENTRY(ctype)                             \
-        case DataType::TOKENIZE(ctype):                 \
-            reorderExtraDataEntry<ctype>                \
-                (np, cellInfo(), dstExtraData,          \
-                 channelDesc, channelName, stream);     \
-            break;
+                     const int nthreads = 128;
 
-        TYPE_TABLE(SWITCH_ENTRY);
+                     SAFE_KERNEL_LAUNCH(
+                         CellListKernels::reorderExtraDataPerParticle,
+                         getNblocks(np, nthreads), nthreads, 0, stream,
+                         np, srcPinnedBuff->devPtr(), this->cellInfo(), dstPinnedBuff->devPtr() );
 
-#undef SWITCH_ENTRY
-
-    default:
-        die("%s : cannot reorder data: channel '%s' has None type",
-            makeName().c_str(), channelName.c_str());
-    };
-
+                 }, channelDesc->varDataPtr);
 }
 
 void CellList::_reorderPersistentData(cudaStream_t stream)
 {
-    auto srcExtraData = &pv->local()->extraPerParticle;
-
+    auto srcExtraData = &pv->local()->dataPerParticle;
+    
     for (const auto& namedChannel : srcExtraData->getSortedChannels()) {
         const auto& name = namedChannel.first;
         const auto& desc = namedChannel.second;
-        if (desc->persistence != ExtraDataManager::PersistenceMode::Persistent) continue;
+        if (desc->persistence != DataManager::PersistenceMode::Persistent) continue;
         _reorderExtraDataEntry(name, desc, stream);
     }
 }
@@ -325,7 +265,7 @@ void CellList::_build(cudaStream_t stream)
 {
     _computeCellSizes(stream);
     _computeCellStarts(stream);
-    _reorderData(stream);
+    _reorderPositionsAndCreateMap(stream);
     _reorderPersistentData(stream);
 
     changedStamp = pv->cellListStamp;
@@ -351,43 +291,46 @@ void CellList::build(cudaStream_t stream)
     _build(stream);
 }
 
-void CellList::_accumulateForces(cudaStream_t stream)
+static void accumulateIfHasAddOperator(GPUcontainer *src,
+                                       GPUcontainer *dst,
+                                       int n, CellListInfo cinfo,
+                                       cudaStream_t stream)
 {
-    PVview dstView(pv, pv->local());
-    int nthreads = 128;
+    die("Cannot accumulate entries: operator+ not supported for this type");
+}
 
+// use SFINAE to choose between additionable types 
+template <typename T, typename = std::void_t<decltype(std::declval<T>() +
+                                                      std::declval<T>())>>
+static void accumulateIfHasAddOperator(PinnedBuffer<T> *src,
+                                       PinnedBuffer<T> *dst,
+                                       int n, CellListInfo cinfo,
+                                       cudaStream_t stream)
+{
+    const int nthreads = 128;
+    
     SAFE_KERNEL_LAUNCH(
-            CellListKernels::addForcesKernel,
-            getNblocks(dstView.size, nthreads), nthreads, 0, stream,
-            dstView, cellInfo(), getView<PVview>() );
+        CellListKernels::accumulateKernel,
+        getNblocks(n, nthreads), nthreads, 0, stream,
+        n, dst->devPtr(), cinfo, src->devPtr() );
 }
 
 void CellList::_accumulateExtraData(const std::string& channelName, cudaStream_t stream)
 {
-    const int nthreads = 128;
-    switch(localPV->extraPerParticle.getChannelDescOrDie(channelName).dataType) {
+    int n = pv->local()->size();    
 
-#define SWITCH_ENTRY(ctype)                                             \
-        case DataType::TOKENIZE(ctype):                                 \
-        {                                                               \
-            auto src = localPV    ->extraPerParticle.getData<ctype>(channelName); \
-            auto dst = pv->local()->extraPerParticle.getData<ctype>(channelName); \
-            int n = pv->local()->size();                                \
-            SAFE_KERNEL_LAUNCH(                                         \
-                CellListKernels::accumulateKernel<ctype>,               \
-                getNblocks(n, nthreads), nthreads, 0, stream,           \
-                n, dst->devPtr(), cellInfo(), src->devPtr() );          \
-            }                                                           \
-            break;
+    const auto& pvManager   = pv->local()->dataPerParticle;
+    const auto& contManager = localPV->dataPerParticle;
 
-        TYPE_TABLE_ADDITIONABLE(SWITCH_ENTRY);
+    const auto& pvDesc   = pvManager  .getChannelDescOrDie(channelName);
+    const auto& contDesc = contManager.getChannelDescOrDie(channelName);
 
-    default:
-        die("%s : cannot accumulate entry '%s': type not supported",
-            makeName().c_str(), channelName.c_str());
+    mpark::visit([&](auto srcPinnedBuff) {
+                     auto dstPinnedBuff = mpark::get<decltype(srcPinnedBuff)>(pvDesc.varDataPtr);
 
-#undef SWITCH_ENTRY
-    };
+                     accumulateIfHasAddOperator(srcPinnedBuff, dstPinnedBuff, n, this->cellInfo(), stream);
+
+                 }, contDesc.varDataPtr);
 }
 
 void CellList::accumulateChannels(const std::vector<std::string>& channelNames, cudaStream_t stream)
@@ -395,10 +338,7 @@ void CellList::accumulateChannels(const std::vector<std::string>& channelNames, 
     for (const auto& channelName : channelNames) {
         debug2("%s : accumulating channel '%s'", makeName().c_str(), channelName.c_str());
 
-        if (channelName == ChannelNames::forces)
-            _accumulateForces(stream);
-        else
-            _accumulateExtraData(channelName, stream);
+        _accumulateExtraData(channelName, stream);
     }
 }
 
@@ -408,7 +348,8 @@ void CellList::gatherChannels(const std::vector<std::string>& channelNames, cuda
 
         debug("%s : gathering channel '%s'", makeName().c_str(), channelName.c_str());
 
-        auto& desc = localPV->extraPerParticle.getChannelDescOrDie(channelName);
+        
+        auto& desc = localPV->dataPerParticle.getChannelDescOrDie(channelName);
         _reorderExtraDataEntry(channelName, &desc, stream);
 
         // invalidate particle vector halo if any entry is active
@@ -420,11 +361,7 @@ void CellList::clearChannels(const std::vector<std::string>& channelNames, cudaS
 {
     for (const auto& channelName : channelNames) {
         debug2("%s : clearing channel '%s'", makeName().c_str(), channelName.c_str());
-
-        if (channelName == ChannelNames::forces)
-            localPV->forces.clear(stream);
-        else
-            localPV->extraPerParticle.getGenericData(channelName)->clearDevice(stream);
+        localPV->dataPerParticle.getGenericData(channelName)->clearDevice(stream);
     }
 }
 
@@ -483,7 +420,7 @@ void PrimaryCellList::build(cudaStream_t stream)
 
     particlesDataContainer->resize(newSize, stream);
 
-    std::swap(pv->local()->coosvels, particlesDataContainer->coosvels);
+    std::swap(pv->local()->positions(), particlesDataContainer->positions());
     _swapPersistentExtraData();
 
     pv->local()->resize(newSize, stream);
@@ -501,7 +438,7 @@ void PrimaryCellList::gatherChannels(const std::vector<std::string>& channelName
 
 
 template <typename T>
-static void swap(const std::string& channelName, ExtraDataManager& pvManager, ExtraDataManager& containerManager)
+static void swap(const std::string& channelName, DataManager& pvManager, DataManager& containerManager)
 {
     std::swap(*pvManager       .getData<T>(channelName),
               *containerManager.getData<T>(channelName));
@@ -509,27 +446,20 @@ static void swap(const std::string& channelName, ExtraDataManager& pvManager, Ex
 
 void PrimaryCellList::_swapPersistentExtraData()
 {
-    auto& pvManager        = pv->local()->extraPerParticle;
-    auto& containerManager = particlesDataContainer->extraPerParticle;
-
+    auto& pvManager        = pv->local()->dataPerParticle;
+    auto& containerManager = particlesDataContainer->dataPerParticle;
+    
     for (const auto& namedChannel : pvManager.getSortedChannels()) {
         const auto& name = namedChannel.first;
         const auto& desc = namedChannel.second;
-        if (desc->persistence != ExtraDataManager::PersistenceMode::Persistent) continue;
+        if (desc->persistence != DataManager::PersistenceMode::Persistent) continue;
 
-#define SWITCH_ENTRY(ctype)                                             \
-        case DataType::TOKENIZE(ctype):                                 \
-            swap<ctype>(name, pvManager, containerManager);             \
-            break;
+        const auto& descCont = containerManager.getChannelDescOrDie(name);
 
-        switch(desc->dataType) {
-            TYPE_TABLE(SWITCH_ENTRY);
-        default:
-            die("%s: cannot swap data: %s has None type.",
-                makeName().c_str(), name.c_str());
-        }
-
-#undef SWITCH_ENTRY
+        mpark::visit([&](auto pinnedBufferPv) {
+                         auto pinnedBufferCont = mpark::get<decltype(pinnedBufferPv)>(descCont.varDataPtr);
+                         std::swap(*pinnedBufferPv, *pinnedBufferCont);
+                     }, desc->varDataPtr);
     }
 }
 

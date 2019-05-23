@@ -5,12 +5,11 @@
 
 static const std::string fname = "state.ymero";
 
-YmrState::YmrState(DomainInfo domain, float dt, CheckpointIdAdvanceMode checkpointMode) :
+YmrState::YmrState(DomainInfo domain, float dt) :
     domain(domain),
     dt(dt),
     currentTime(0),
-    currentStep(0),
-    checkpointMode(checkpointMode)
+    currentStep(0)
 {}
 
 YmrState::YmrState(const YmrState&) = default;
@@ -67,12 +66,15 @@ void YmrState::restart(MPI_Comm comm, std::string folder)
         return;    
     
     float3 gsz, gst, lsz;
-    TextIO::read(folder + fname,
-                 gsz.x, gsz.y, gsz.z,
-                 gst.x, gst.y, gst.z,
-                 lsz.x, lsz.y, lsz.z,
-                 dt, currentTime, currentStep);
+    auto filename = folder + fname;
+    auto good = TextIO::read(filename,
+                             gsz.x, gsz.y, gsz.z,
+                             gst.x, gst.y, gst.z,
+                             lsz.x, lsz.y, lsz.z,
+                             dt, currentTime, currentStep);
 
+    if (!good) die("failed to read '%s'\n", filename.c_str());
+    
     domain.globalSize  = gsz;
     domain.globalStart = gst;
     domain.localSize   = lsz;

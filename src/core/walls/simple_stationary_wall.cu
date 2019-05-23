@@ -29,21 +29,21 @@
 //===============================================================================================
 
 template<typename InsideWallChecker>
-__global__ void collectRemaining(PVview view, float4 *remaining, int *nRemaining, InsideWallChecker checker)
+__global__ void collectRemaining(PVview view, float4 *remainingPos, float4 *remainingVel, int *nRemaining, InsideWallChecker checker)
 {
     const float tolerance = 1e-6f;
 
     const int pid = blockIdx.x * blockDim.x + threadIdx.x;
     if (pid >= view.size) return;
 
-    Particle p(view.particles, pid);
+    Particle p(view.readParticle(pid));
 
     const float val = checker(p.r);
 
     if (val <= -tolerance)
     {
         const int ind = atomicAggInc(nRemaining);
-        p.write2Float4(remaining, ind);
+        p.write2Float4(remainingPos, remainingVel, ind);
     }
 }
 
@@ -60,9 +60,10 @@ __global__ void packRemainingObjects(OVview view, ObjectPacker packer, char *out
     if (objId >= view.nObjects) return;
 
     bool isRemaining = true;
-    for (int i=tid; i < view.objSize; i+=warpSize)
+    for (int i = tid; i < view.objSize; i += warpSize)
     {
-        Particle p(view.particles, objId * view.objSize + i);
+        Particle p(view.readParticle(objId * view.objSize + i));
+        
         if (checker(p.r) > -tolerance)
         {
             isRemaining = false;
@@ -166,7 +167,7 @@ __global__ void checkInside(PVview view, int *nInside, const InsideWallChecker c
     const int pid = blockIdx.x * blockDim.x + threadIdx.x;
     if (pid >= view.size) return;
 
-    Float3_int coo(view.particles[2*pid]);
+    Float3_int coo(view.readPosition(pid));
 
     float v = checker(coo.v);
 
@@ -187,7 +188,7 @@ __global__ void computeSdfPerParticle(PVview view, float gradientThreshold, floa
     if (pid >= view.size) return;
 
     Particle p;
-    p.readCoordinate(view.particles, pid);
+    view.readPosition(p, pid);
 
     float sdf = checker(p.r);
     sdfs[pid] = sdf;
@@ -332,21 +333,23 @@ void SimpleStationaryWall<InsideWallChecker>::removeInner(ParticleVector *pv)
     if (ov == nullptr)
     {
         PVview view(pv, pv->local());
-        PinnedBuffer<Particle> tmp(view.size);
+        PinnedBuffer<float4> tmpPos(view.size), tmpVel(view.size);
 
         SAFE_KERNEL_LAUNCH(
                 collectRemaining,
                 getNblocks(view.size, nthreads), nthreads, 0, defaultStream,
-                view, (float4*)tmp.devPtr(), nRemaining.devPtr(), insideWallChecker.handler() );
+                view, tmpPos.devPtr(), tmpVel.devPtr(), nRemaining.devPtr(),
+                insideWallChecker.handler() );
 
         nRemaining.downloadFromDevice(defaultStream);
-        std::swap(pv->local()->coosvels, tmp);
+        std::swap(pv->local()->positions(),  tmpPos);
+        std::swap(pv->local()->velocities(), tmpVel);
         pv->local()->resize(nRemaining[0], defaultStream);
     }
     else
     {
-        PackPredicate packPredicate = [](const ExtraDataManager::NamedChannelDesc& namedDesc) {
-            return namedDesc.second->persistence == ExtraDataManager::PersistenceMode::Persistent;
+        PackPredicate packPredicate = [](const DataManager::NamedChannelDesc& namedDesc) {
+            return namedDesc.second->persistence == DataManager::PersistenceMode::Persistent;
         };
         
         // Prepare temp storage for extra object data

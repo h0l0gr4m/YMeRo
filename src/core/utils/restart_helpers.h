@@ -3,6 +3,19 @@
 #include <string>
 #include <fstream>
 
+static std::ostream& operator<<(std::ostream& s, const float3& v)
+{
+    s << v.x << " " << v.y << " " << v.z;
+    return s;
+}
+
+static std::ifstream& operator>>(std::ifstream& s, float3& v)
+{
+    s >> v.x >> v.y >> v.z;
+    return s;
+}
+
+
 namespace TextIO
 {
 template<typename Arg>
@@ -30,13 +43,13 @@ void write(std::string fname, const Args&... args)
 template<typename Arg>
 bool readFromStream(std::ifstream& fin, Arg& arg)
 {
-    return (fin >> arg).fail();
+    return (fin >> arg).good();
 }
 
 template<typename Arg, typename... Args>
 bool readFromStream(std::ifstream& fin, Arg& arg, Args&... args)
 {
-    return (fin >> arg).fail() && readFromStream(fin, args...);
+    return (fin >> arg).good() && readFromStream(fin, args...);
 }
 
 template<typename... Args>
@@ -45,4 +58,5 @@ bool read(std::string fname, Args&... args)
     std::ifstream fin(fname);
     return fin.good() && readFromStream(fin, args...);
 }
+
 } // namespace TextIO

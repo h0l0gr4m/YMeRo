@@ -20,13 +20,13 @@ density = args.density
 ranks  = (1, 1, 1)
 domain = (16, 8, 8)
 
-u = ymr.ymero(ranks, domain, dt, debug_level=3, log_filename='log')
+u = ymr.ymero(ranks, domain, dt, debug_level=3, log_filename='log', no_splash=True)
 
 pvSolvent = ymr.ParticleVectors.ParticleVector('solvent', mass = 1)
 icSolvent = ymr.InitialConditions.Uniform(density)
 
 dpd = ymr.Interactions.DPD('dpd', 1.0, a=10.0, gamma=10.0, kbt=0.01, power=0.5)
-cnt = ymr.Interactions.LJ('cnt', 1.0, epsilon=0.35, sigma=0.8, max_force=400.0, object_aware=False)
+cnt = ymr.Interactions.LJ('cnt', 1.0, epsilon=0.35, sigma=0.8, max_force=400.0)
 vv = ymr.Integrators.VelocityVerlet_withPeriodicForce('vv', force=a, direction="x")
 
 com_q = [[2.0, 5.0, 5.0,   1.0, np.pi/2, np.pi/3, 0.0],
@@ -62,14 +62,11 @@ if args.bounceBack:
     u.registerBouncer(bb)
     u.setBouncer(bb, pvEllipsoid, pvSolvent)
 
-xyz = ymr.Plugins.createDumpXYZ('xyz', pvEllipsoid, 500, "xyz/")
-u.registerPlugins(xyz)
+u.registerPlugins(ymr.Plugins.createDumpXYZ('xyz', pvEllipsoid, 500, "xyz/"))
 
-ovStats = ymr.Plugins.createDumpObjectStats("objStats", ov=pvEllipsoid, dump_every=500, path="stats")
-u.registerPlugins(ovStats)
+u.registerPlugins(ymr.Plugins.createDumpObjectStats("objStats", ov=pvEllipsoid, dump_every=500, path="stats"))
 
 u.run(10000)
-
 
 # nTEST: contact.rigid.ellipsoids
 # set -eu
@@ -78,7 +75,7 @@ u.run(10000)
 # f="pos.txt"
 # rho=8.0; ax=2.0; ay=1.0; az=1.0
 # cp ../../data/ellipsoid_coords_${rho}_${ax}_${ay}_${az}.txt $f
-# ymr.run --runargs "-n 2" ./ellipsoids.dp.py --density $rho --axes $ax $ay $az --coords $f > /dev/null
+# ymr.run --runargs "-n 2" ./ellipsoids.dp.py --density $rho --axes $ax $ay $az --coords $f
 # cat stats/ellipsoid.txt | awk '{print $2, $6, $7, $8, $9}' > rigid.out.txt
 
 # nTEST: contact.rigid.ellipsoid.bounce
@@ -88,5 +85,5 @@ u.run(10000)
 # f="pos.txt"
 # rho=8.0; ax=2.0; ay=1.0; az=1.0
 # cp ../../data/ellipsoid_coords_${rho}_${ax}_${ay}_${az}.txt $f
-# ymr.run --runargs "-n 2" ./ellipsoids.dp.py --density $rho --axes $ax $ay $az --coords $f --bounceBack > /dev/null
+# ymr.run --runargs "-n 2" ./ellipsoids.dp.py --density $rho --axes $ax $ay $az --coords $f --bounceBack
 # cat stats/ellipsoid.txt | awk '{print $2, $6, $7, $8, $9}' > rigid.out.txt

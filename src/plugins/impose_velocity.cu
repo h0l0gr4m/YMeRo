@@ -1,4 +1,5 @@
 #include "impose_velocity.h"
+#include "utils/time_stamp.h"
 
 #include <core/pvs/particle_vector.h>
 #include <core/pvs/views/pv.h>
@@ -14,7 +15,7 @@ __global__ void addVelocity(PVview view, DomainInfo domain, float3 low, float3 h
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     if (gid >= view.size) return;
 
-    Particle p(view.particles, gid);
+    Particle p(view.readParticle(gid));
     float3 gr = domain.local2global(p.r);
 
     if (low.x <= gr.x && gr.x <= high.x &&
@@ -22,11 +23,11 @@ __global__ void addVelocity(PVview view, DomainInfo domain, float3 low, float3 h
         low.z <= gr.z && gr.z <= high.z)
     {
         p.u += extraVel;
-        view.particles[2*gid+1] = p.u2Float4();
+        view.writeVelocity(gid, p.u2Float4());
     }
 }
 
-__global__ void averageVelocity(PVview view, DomainInfo domain, float3 low, float3 high, double3* totVel, int* nSamples)
+__global__ void averageVelocity(PVview view, DomainInfo domain, float3 low, float3 high, double3 *totVel, int *nSamples)
 {
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     Particle p;
@@ -35,7 +36,7 @@ __global__ void averageVelocity(PVview view, DomainInfo domain, float3 low, floa
 
     if (gid < view.size) {
 
-        p.read(view.particles, gid);
+        p = view.readParticle(gid);
         float3 gr = domain.local2global(p.r);
 
         if (low.x <= gr.x && gr.x <= high.x &&
@@ -53,9 +54,9 @@ __global__ void averageVelocity(PVview view, DomainInfo domain, float3 low, floa
     float3 u = warpReduce(p.u, [](float a, float b) { return a+b; });
     if (__laneid() == 0 && dot(u, u) > 1e-8f)
     {
-        atomicAdd(&totVel[0].x, (double)u.x);
-        atomicAdd(&totVel[0].y, (double)u.y);
-        atomicAdd(&totVel[0].z, (double)u.z);
+        atomicAdd(&totVel->x, (double)u.x);
+        atomicAdd(&totVel->y, (double)u.y);
+        atomicAdd(&totVel->z, (double)u.z);
     }
 }
 } // namespace ImposeVelocityKernels
@@ -80,7 +81,7 @@ void ImposeVelocityPlugin::setup(Simulation* simulation, const MPI_Comm& comm, c
 
 void ImposeVelocityPlugin::afterIntegration(cudaStream_t stream)
 {
-    if (state->currentStep % every == 0)
+    if (isTimeEvery(state, every))
     {
         const int nthreads = 128;
 

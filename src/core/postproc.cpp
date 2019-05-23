@@ -1,14 +1,21 @@
 #include "postproc.h"
 
 #include <core/logger.h>
+#include <core/utils/common.h>
 
-#include <vector>
 #include <mpi.h>
+#include <vector>
 
-Postprocess::Postprocess(MPI_Comm& comm, MPI_Comm& interComm) : comm(comm), interComm(interComm)
+Postprocess::Postprocess(MPI_Comm& comm, MPI_Comm& interComm, std::string checkpointFolder) :
+    YmrObject("postprocess"),
+    comm(comm),
+    interComm(interComm),
+    checkpointFolder(checkpointFolder)
 {
     info("Postprocessing initialized");
 }
+
+Postprocess::~Postprocess() = default;
 
 void Postprocess::registerPlugin(std::shared_ptr<PostprocessPlugin> plugin)
 {
@@ -26,7 +33,7 @@ void Postprocess::init()
     }
 }
 
-std::vector<int> findGloballyReady(std::vector<MPI_Request>& requests, std::vector<MPI_Status>& statuses, MPI_Comm comm)
+static std::vector<int> findGloballyReady(std::vector<MPI_Request>& requests, std::vector<MPI_Status>& statuses, MPI_Comm comm)
 {
     int index;
     MPI_Status stat;
@@ -38,7 +45,7 @@ std::vector<int> findGloballyReady(std::vector<MPI_Request>& requests, std::vect
     MPI_Check( MPI_Allreduce(MPI_IN_PLACE, mask.data(), mask.size(), MPI_INT, MPI_MAX, comm) );
 
     std::vector<int> ids;
-    for (int i=0; i<mask.size(); ++i)
+    for (int i = 0; i < mask.size(); ++i)
         if (mask[i] > 0)
         {
             ids.push_back(i);
@@ -51,21 +58,18 @@ std::vector<int> findGloballyReady(std::vector<MPI_Request>& requests, std::vect
 
 void Postprocess::run()
 {
-    // Stopping condition
-    const int tag = 424242;
-
-    int dummy = 0;
-    int rank;
-
-    MPI_Check( MPI_Comm_rank(comm, &rank) );
-
-    MPI_Request endReq;
-    MPI_Check( MPI_Irecv(&dummy, 1, MPI_INT, rank, tag, interComm, &endReq) );
+    int endMsg {0}, checkpointId {0};
 
     std::vector<MPI_Request> requests;
     for (auto& pl : plugins)
         requests.push_back(pl->waitData());
-    requests.push_back(endReq);
+
+    const int endReqIndex = requests.size();
+    requests.push_back( listenSimulation(stoppingTag, &endMsg) );
+
+    const int cpReqIndex = requests.size();
+    requests.push_back( listenSimulation(checkpointTag, &checkpointId) );
+
     std::vector<MPI_Status> statuses(requests.size());
 
     info("Postprocess is listening to messages now");
@@ -74,23 +78,60 @@ void Postprocess::run()
         auto readyIds = findGloballyReady(requests, statuses, comm);
         for (auto index : readyIds)
         {
-            if (index == plugins.size())
+            if (index == endReqIndex)
             {
-                if (dummy != -1)
-                    die("Something went terribly wrong");
-
-                info("Postprocess got a stopping message and will stop now");
-
-                for (int i=0; i<plugins.size(); i++)
-                    MPI_Check( MPI_Cancel(requests.data() + i) );
-
+                if (endMsg != stoppingMsg) die("Received wrong stopping message");
+    
+                info("Postprocess got a stopping message and will stop now");    
+                
+                for (auto& req : requests)
+                    if (req != MPI_REQUEST_NULL)
+                        MPI_Check( MPI_Cancel(&req) );
+                
                 return;
             }
-
-            debug2("Postprocess got a request from plugin '%s', executing now", plugins[index]->name.c_str());
-            plugins[index]->recv();
-            plugins[index]->deserialize(statuses[index]);
-            requests[index] = plugins[index]->waitData();
+            else if (index == cpReqIndex)
+            {
+                debug2("Postprocess got a request for checkpoint, executing now");
+                checkpoint(checkpointId);
+                requests[index] = listenSimulation(checkpointTag, &checkpointId);
+            }
+            else
+            {
+                debug2("Postprocess got a request from plugin '%s', executing now", plugins[index]->name.c_str());
+                plugins[index]->recv();
+                plugins[index]->deserialize(statuses[index]);
+                requests[index] = plugins[index]->waitData();
+            }
         }
     }
+}
+
+MPI_Request Postprocess::listenSimulation(int tag, int *msg) const
+{
+    int rank;
+    MPI_Request req;
+    
+    MPI_Check( MPI_Comm_rank(comm, &rank) );    
+    MPI_Check( MPI_Irecv(msg, 1, MPI_INT, rank, tag, interComm, &req) );
+
+    return req;
+}
+
+void Postprocess::restart(std::string folder)
+{
+    restartFolder = folder;
+
+    info("Reading postprocess state, from folder %s", restartFolder.c_str());
+    
+    for (auto& pl : plugins)
+        pl->restart(comm, folder);    
+}
+
+void Postprocess::checkpoint(int checkpointId)
+{
+    info("Writing postprocess state, into folder %s", checkpointFolder.c_str());
+    
+    for (auto& pl : plugins)
+        pl->checkpoint(comm, checkpointFolder, checkpointId);
 }

@@ -28,7 +28,7 @@ __global__ void restrictVelocities(OVview view, float3 targetVelocity, float4* t
     for (int pid = threadIdx.x; pid < view.objSize; pid += blockDim.x)
     {
         myf += Float3_int(view.forces[pid + objId*view.objSize]).v;
-        myv += Float3_int(view.particles[2*(pid + objId*view.objSize) + 1]).v;
+        myv += Float3_int(view.readVelocity(pid + objId*view.objSize)).v;
     }
 
     myf = warpReduce(myf, [] (float a, float b) { return a+b; });
@@ -66,8 +66,8 @@ __global__ void restrictVelocities(OVview view, float3 targetVelocity, float4* t
     
     for (int pid = threadIdx.x; pid < view.objSize; pid += blockDim.x)
     {
-        view.forces[pid + objId*view.objSize] -= Float3_int(objTotForce, 0).toFloat4();
-        view.particles[2*(pid + objId*view.objSize) + 1] += Float3_int(objVelocity, 0).toFloat4();
+        view.forces    [pid + objId*view.objSize] -= Float3_int(objTotForce, 0).toFloat4();
+        view.velocities[pid + objId*view.objSize] += Float3_int(objVelocity, 0).toFloat4();
     }
 }
 
@@ -229,8 +229,14 @@ void PinObjectPlugin::serializeAndSend(cudaStream_t stream)
 
 
 ReportPinObjectPlugin::ReportPinObjectPlugin(std::string name, std::string path) :
-                PostprocessPlugin(name), path(path)
-{    }
+    PostprocessPlugin(name), path(path)
+{}
+
+ReportPinObjectPlugin::~ReportPinObjectPlugin()
+{
+    if (fout)
+        fclose(fout);
+}
 
 void ReportPinObjectPlugin::setup(const MPI_Comm& comm, const MPI_Comm& interComm)
 {
@@ -253,7 +259,7 @@ void ReportPinObjectPlugin::handshake()
 void ReportPinObjectPlugin::deserialize(MPI_Status& stat)
 {
     std::vector<float4> forces, torques;
-    TimeType currentTime;
+    YmrState::TimeType currentTime;
     int nsamples;
 
     SimpleSerializer::deserialize(data, currentTime, nsamples, forces, torques);

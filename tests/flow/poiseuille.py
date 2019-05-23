@@ -10,7 +10,7 @@ vtarget = (1.0, 0, 0)
 
 density = 10
 
-u = ymr.ymero(ranks, domain, dt, debug_level=3, log_filename='log')
+u = ymr.ymero(ranks, domain, dt, debug_level=3, log_filename='log', no_splash=True)
 
 pv = ymr.ParticleVectors.ParticleVector('pv', mass = 1)
 ic = ymr.InitialConditions.Uniform(density=density)
@@ -33,18 +33,14 @@ u.setWall(plate_hi, pv)
 for p in (pv, frozen):
     u.setInteraction(dpd, p, pv)
 
-
 u.registerIntegrator(vv)
 u.setIntegrator(vv, pv)
-
 
 gridSampleEvery = 2
 gridDumpEvery   = 1000
 gridBinSize     = (1., 1., 0.5)
 
-field = ymr.Plugins.createDumpAverage('field', [pv], gridSampleEvery, gridDumpEvery, gridBinSize, [("velocity", "vector_from_float8")], 'h5/solvent-')
-u.registerPlugins(field)
-
+u.registerPlugins(ymr.Plugins.createDumpAverage('field', [pv], gridSampleEvery, gridDumpEvery, gridBinSize, [("velocity", "vector_from_float4")], 'h5/solvent-'))
 
 factor = 0.08
 Kp = 2.0 * factor
@@ -55,13 +51,12 @@ vcSampleEvery = 5
 vcTuneEvery = 5
 vcDumpEvery = 500
 
-vc = ymr.Plugins.createVelocityControl("vc", "vcont.txt", [pv], (0, 0, 0), domain, vcSampleEvery, vcTuneEvery, vcDumpEvery, vtarget, Kp, Ki, Kd)
-u.registerPlugins(vc)
+u.registerPlugins(ymr.Plugins.createVelocityControl("vc", "vcont.txt", [pv], (0, 0, 0), domain, vcSampleEvery, vcTuneEvery, vcDumpEvery, vtarget, Kp, Ki, Kd))
 
 u.run(20002)
 
 # nTEST: flow.poiseuille
 # cd flow
 # rm -rf h5
-# ymr.run --runargs "-n 2" ./poiseuille.py > /dev/null
+# ymr.run --runargs "-n 2" ./poiseuille.py 
 # ymr.avgh5 xy velocity h5/solvent-0001[5-9].h5 | awk '{print $1}' > profile.out.txt

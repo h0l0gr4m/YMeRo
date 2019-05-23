@@ -2,7 +2,7 @@
 
 import numpy as np
 import ymero as ymr
-import sys, argparse
+import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--kb', type=float, default=0.0)
@@ -43,7 +43,7 @@ prm_rbc = {
     "DA0" : args.DA0
 }
     
-int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Juelicher", **prm_rbc, stressFree=False)
+int_rbc = ymr.Interactions.MembraneForces("int_rbc", "wlc", "Juelicher", **prm_rbc, stress_free=False)
 u.registerInteraction(int_rbc)
 u.setInteraction(int_rbc, pv_rbc, pv_rbc)
 
@@ -65,22 +65,22 @@ u.run(2)
 # cd membrane
 # cp ../../data/rbc_mesh.off .
 # ymr.run --runargs "-n 2" ./juelicher.py --kb 1000.0 > /dev/null
-# ymr.post ./utils/post.forces.py --file h5/rbc-00000.h5 --out forces.out.txt
+# ymr.post ./utils/post.forces.py --file h5/rbc-00001.h5 --out forces.out.txt
 
 # nTEST: membrane.bending.juelicher.C0
 # cd membrane
 # cp ../../data/rbc_mesh.off .
 # ymr.run --runargs "-n 2" ./juelicher.py --kb 1000.0 --C0 0.5 > /dev/null
-# ymr.post ./utils/post.forces.py --file h5/rbc-00000.h5 --out forces.out.txt
+# ymr.post ./utils/post.forces.py --file h5/rbc-00001.h5 --out forces.out.txt
 
 # nTEST: membrane.bending.juelicher.AD
 # cd membrane
 # cp ../../data/rbc_mesh.off .
 # ymr.run --runargs "-n 2" ./juelicher.py --kad 1000.0 --DA0 1.0 > /dev/null
-# ymr.post ./utils/post.forces.py --file h5/rbc-00000.h5 --out forces.out.txt
+# ymr.post ./utils/post.forces.py --file h5/rbc-00001.h5 --out forces.out.txt
 
 # nTEST: membrane.bending.juelicher.multiple
 # cd membrane
 # cp ../../data/rbc_mesh.off .
 # ymr.run --runargs "-n 2" ./juelicher.py --kb 1000.0 --C0 1.0 --kad 1000.0 --DA0 1.0 --ncells 4 > /dev/null
-# ymr.post ./utils/post.forces.py --file h5/rbc-00000.h5 --out forces.out.txt
+# ymr.post ./utils/post.forces.py --file h5/rbc-00001.h5 --out forces.out.txt

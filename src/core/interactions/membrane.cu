@@ -1,6 +1,11 @@
 #include "membrane.h"
 
 #include "membrane/common.h"
+#include "membrane/dihedral/kantor.h"
+#include "membrane/dihedral/juelicher.h"
+#include "membrane/triangle/lim.h"
+#include "membrane/triangle/wlc.h"
+#include "membrane.impl.h"
 
 #include <core/pvs/membrane_vector.h>
 #include <core/pvs/views/ov.h>
@@ -19,9 +24,9 @@ __global__ void computeAreaAndVolume(OVviewWithAreaVolume view, MeshView mesh)
     for (int i = threadIdx.x; i < mesh.ntriangles; i += blockDim.x) {
         int3 ids = mesh.triangles[i];
 
-        auto v0 = make_real3(f4tof3( view.particles[ 2 * (offset + ids.x) ] ));
-        auto v1 = make_real3(f4tof3( view.particles[ 2 * (offset + ids.y) ] ));
-        auto v2 = make_real3(f4tof3( view.particles[ 2 * (offset + ids.z) ] ));
+        auto v0 = make_real3(f4tof3( view.readPosition(offset + ids.x) ));
+        auto v1 = make_real3(f4tof3( view.readPosition(offset + ids.y) ));
+        auto v2 = make_real3(f4tof3( view.readPosition(offset + ids.z) ));
 
         a_v.x += triangleArea(v0, v1, v2);
         a_v.y += triangleSignedVolume(v0, v1, v2);
@@ -34,9 +39,31 @@ __global__ void computeAreaAndVolume(OVviewWithAreaVolume view, MeshView mesh)
 }
 } // namespace InteractionMembraneKernels
 
-InteractionMembrane::InteractionMembrane(const YmrState *state, std::string name) :
+InteractionMembrane::InteractionMembrane(const YmrState *state, std::string name, CommonMembraneParameters commonParams,
+                                         VarBendingParams bendingParams, VarShearParams shearParams,
+                                         bool stressFree, float growUntil) :
     Interaction(state, name, /* default cutoff rc */ 1.0)
-{}
+{
+    mpark::visit([&](auto bePrms, auto shPrms) {                     
+                     using DihedralForce = typename decltype(bePrms)::DihedralForce;
+
+                     if (stressFree)
+                     {
+                         using TriangleForce = typename decltype(shPrms)::TriangleForce <StressFreeState::Active>;
+                         
+                         impl = std::make_unique<InteractionMembraneImpl<TriangleForce, DihedralForce>>
+                             (state, name, commonParams, shPrms, bePrms, growUntil);
+                     }
+                     else                         
+                     {
+                         using TriangleForce = typename decltype(shPrms)::TriangleForce <StressFreeState::Inactive>;
+                         
+                         impl = std::make_unique<InteractionMembraneImpl<TriangleForce, DihedralForce>>
+                             (state, name, commonParams, shPrms, bePrms, growUntil);
+                     }
+                     
+                 }, bendingParams, shearParams);
+}
 
 InteractionMembrane::~InteractionMembrane() = default;
 
@@ -49,7 +76,9 @@ void InteractionMembrane::setPrerequisites(ParticleVector *pv1, ParticleVector *
     if (ov == nullptr)
         die("Internal membrane forces can only be computed with a MembraneVector");
 
-    ov->requireDataPerObject<float2>(ChannelNames::areaVolumes, ExtraDataManager::PersistenceMode::None);
+    ov->requireDataPerObject<float2>(ChannelNames::areaVolumes, DataManager::PersistenceMode::None);
+
+    impl->setPrerequisites(pv1, pv2, cl1, cl2);
 }
 
 void InteractionMembrane::local(ParticleVector *pv1, ParticleVector *pv2, CellList *cl1, CellList *cl2, cudaStream_t stream)
@@ -66,7 +95,12 @@ void InteractionMembrane::halo(ParticleVector *pv1, ParticleVector *pv2, CellLis
     debug("Not computing internal membrane forces between local and halo membranes of '%s'",
           pv1->name.c_str());
 }
-    
+
+bool InteractionMembrane::isSelfObjectInteraction() const
+{
+    return true;
+}
+
 void InteractionMembrane::precomputeQuantities(ParticleVector *pv1, cudaStream_t stream)
 {
     auto ov = dynamic_cast<MembraneVector *>(pv1);
@@ -83,7 +117,7 @@ void InteractionMembrane::precomputeQuantities(ParticleVector *pv1, cudaStream_t
     MembraneMeshView mesh(static_cast<MembraneMesh*>(ov->mesh.get()));
 
     ov->local()
-        ->extraPerObject.getData<float2>(ChannelNames::areaVolumes)
+        ->dataPerObject.getData<float2>(ChannelNames::areaVolumes)
         ->clearDevice(stream);
     
     const int nthreads = 128;

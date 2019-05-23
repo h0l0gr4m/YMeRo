@@ -1,5 +1,8 @@
+#include <core/utils/restart_helpers.h>
+
 #include "velocity_control.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/datatypes.h>
 #include <core/pvs/particle_vector.h>
@@ -24,9 +27,9 @@ __global__ void addForce(PVview view, DomainInfo domain, float3 low, float3 high
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     if (gid >= view.size) return;
 
-    Particle p;
-    p.readCoordinate(view.particles, gid);
-    float3 gr = domain.local2global(p.r);
+    auto r = Float3_int(view.readPosition(gid)).v;
+    
+    float3 gr = domain.local2global(r);
 
     if (is_inside(gr, low, high))
         view.forces[gid] += make_float4(force, 0.0f);
@@ -41,7 +44,7 @@ __global__ void sumVelocity(PVview view, DomainInfo domain, float3 low, float3 h
 
     if (gid < view.size) {
 
-        p.read(view.particles, gid);
+        p = view.readParticle(gid);
         float3 gr = domain.local2global(p.r);
 
         if (is_inside(gr, low, high))
@@ -111,7 +114,7 @@ void SimulationVelocityControl::sampleOnePv(ParticleVector *pv, cudaStream_t str
 
 void SimulationVelocityControl::afterIntegration(cudaStream_t stream)
 {
-    if (state->currentStep % sampleEvery == 0 && state->currentStep != 0)
+    if (isTimeEvery(state, sampleEvery))
     {
         debug2("Velocity control %s is sampling now", name.c_str());
 
@@ -123,7 +126,7 @@ void SimulationVelocityControl::afterIntegration(cudaStream_t stream)
         accumulatedTotVel.z += totVel[0].z;
     }
     
-    if (state->currentStep % tuneEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, tuneEvery)) return;
     
     nSamples.downloadFromDevice(stream);
     nSamples.clearDevice(stream);
@@ -143,11 +146,27 @@ void SimulationVelocityControl::afterIntegration(cudaStream_t stream)
 
 void SimulationVelocityControl::serializeAndSend(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
     waitPrevSend();
     SimpleSerializer::serialize(sendBuffer, state->currentTime, state->currentStep, currentVel, force);
     send(sendBuffer);
+}
+
+void SimulationVelocityControl::checkpoint(MPI_Comm comm, std::string path, int checkpointId)
+{
+    auto filename = createCheckpointNameWithId(path, "plugin." + name, "txt", checkpointId);
+
+    TextIO::write(filename, pid);
+    
+    createCheckpointSymlink(comm, path, "plugin." + name, "txt", checkpointId);
+}
+
+void SimulationVelocityControl::restart(MPI_Comm comm, std::string path)
+{
+    auto filename = createCheckpointName(path, "plugin." + name, "txt");
+    auto good = TextIO::read(filename, pid);
+    if (!good) die("failed to read '%s'\n", filename.c_str());
 }
 
 
@@ -168,8 +187,8 @@ PostprocessVelocityControl::~PostprocessVelocityControl()
 
 void PostprocessVelocityControl::deserialize(MPI_Status& stat)
 {
-    int currentTimeStep;
-    TimeType currentTime;
+    YmrState::StepType currentTimeStep;
+    YmrState::TimeType currentTime;
     float3 vel, force;
 
     SimpleSerializer::deserialize(data, currentTime, currentTimeStep, vel, force);

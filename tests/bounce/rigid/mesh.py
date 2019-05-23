@@ -14,7 +14,7 @@ domain = [8., 8., 8.]
 
 dt   = 0.001
 
-u = ymr.ymero(ranks, tuple(domain), dt, debug_level=3, log_filename='log')
+u = ymr.ymero(ranks, tuple(domain), dt, debug_level=3, log_filename='log', no_splash=True)
 
 nparts = 100
 pos = np.random.normal(loc   = [0.5, 0.5 * domain[1] + 1.0, 0.5 * domain[2]],
@@ -58,15 +58,10 @@ u.setBouncer(bb, pvRigid, pvSolvent)
 dumpEvery=500
 
 if args.vis:
-    solventDump = ymr.Plugins.createDumpParticles('partDump', pvSolvent, dumpEvery, [], 'h5/solvent-')
-    u.registerPlugins(solventDump)
+    u.registerPlugins(ymr.Plugins.createDumpParticles('partDump', pvSolvent, dumpEvery, [], 'h5/solvent-'))
+    u.registerPlugins(ymr.Plugins.createDumpMesh("mesh_dump", pvRigid, dumpEvery, path="ply/"))
 
-    mdump = ymr.Plugins.createDumpMesh("mesh_dump", pvRigid, dumpEvery, path="ply/")
-    u.registerPlugins(mdump)
-
-
-rigStats = ymr.Plugins.createDumpObjectStats("rigStats", ov=pvRigid, dump_every=dumpEvery, path="stats")
-u.registerPlugins(rigStats)
+u.registerPlugins(ymr.Plugins.createDumpObjectStats("rigStats", ov=pvRigid, dump_every=dumpEvery, path="stats"))
 
 u.run(5000)
     
@@ -77,5 +72,5 @@ u.run(5000)
 # rm -rf stats rigid.out.txt
 # f="../../../data/rbc_mesh.off"
 # rm -rf pos*.txt vel*.txt
-# ymr.run --runargs "-n 2" ./mesh.py --file $f > /dev/null
+# ymr.run --runargs "-n 2" ./mesh.py --file $f
 # cat stats/rigid.txt | awk '{print $2, $15, $9}' > rigid.out.txt

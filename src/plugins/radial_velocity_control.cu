@@ -1,5 +1,6 @@
 #include "radial_velocity_control.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/datatypes.h>
 #include <core/pvs/particle_vector.h>
@@ -7,6 +8,7 @@
 #include <core/simulation.h>
 #include <core/utils/cuda_common.h>
 #include <core/utils/kernel_launch.h>
+#include <core/utils/restart_helpers.h>
 
 namespace RadialVelocityControlKernels
 {
@@ -22,9 +24,8 @@ __global__ void addForce(PVview view, DomainInfo domain, float minRadiusSquare, 
     int gid = blockIdx.x * blockDim.x + threadIdx.x;
     if (gid >= view.size) return;
 
-    Particle p;
-    p.readCoordinate(view.particles, gid);
-    float3 r = domain.local2global(p.r);
+    float3 r = make_float3(view.readPosition(gid));
+    r = domain.local2global(r);
     r -= center;
     float r2 = r.x * r.x + r.y * r.y;
 
@@ -49,7 +50,7 @@ __global__ void sumVelocity(PVview view, DomainInfo domain, float minRadiusSquar
 
     if (gid < view.size) {
         
-        Particle p(view.particles, gid);
+        Particle p(view.readParticle(gid));
         float3 r = domain.local2global(p.r);
         r -= center;
 
@@ -124,7 +125,7 @@ void SimulationRadialVelocityControl::sampleOnePv(ParticleVector *pv, cudaStream
 
 void SimulationRadialVelocityControl::afterIntegration(cudaStream_t stream)
 {
-    if (state->currentStep % sampleEvery == 0 && state->currentStep != 0)
+    if (isTimeEvery(state, sampleEvery))
     {
         debug2("Velocity control %s is sampling now", name.c_str());
 
@@ -141,8 +142,7 @@ void SimulationRadialVelocityControl::afterIntegration(cudaStream_t stream)
         accumulatedSamples += nSamples[0];
     }
     
-    if (state->currentStep % tuneEvery != 0 || state->currentStep == 0)
-        return;
+    if (!isTimeEvery(state, tuneEvery)) return;
     
     
     unsigned long long nSamples_tot = 0;
@@ -160,12 +160,28 @@ void SimulationRadialVelocityControl::afterIntegration(cudaStream_t stream)
 
 void SimulationRadialVelocityControl::serializeAndSend(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0 || state->currentStep == 0)
+    if (!isTimeEvery(state, dumpEvery))
         return;
 
     waitPrevSend();
     SimpleSerializer::serialize(sendBuffer, state->currentTime, state->currentStep, currentVel, force);
     send(sendBuffer);
+}
+
+void SimulationRadialVelocityControl::checkpoint(MPI_Comm comm, std::string path, int checkpointId)
+{
+    auto filename = createCheckpointNameWithId(path, "plugin." + name, "txt", checkpointId);
+
+    TextIO::write(filename, pid);
+    
+    createCheckpointSymlink(comm, path, "plugin." + name, "txt", checkpointId);
+}
+
+void SimulationRadialVelocityControl::restart(MPI_Comm comm, std::string path)
+{
+    auto filename = createCheckpointName(path, "plugin." + name, "txt");
+    auto good = TextIO::read(filename, pid);
+    if (!good) die("failed to read '%s'\n", filename.c_str());
 }
 
 
@@ -186,8 +202,8 @@ PostprocessRadialVelocityControl::~PostprocessRadialVelocityControl()
 
 void PostprocessRadialVelocityControl::deserialize(MPI_Status& stat)
 {
-    int currentTimeStep;
-    TimeType currentTime;
+    YmrState::TimeType currentTimeStep;
+    YmrState::TimeType currentTime;
     float vel, force;
 
     SimpleSerializer::deserialize(data, currentTime, currentTimeStep, vel, force);

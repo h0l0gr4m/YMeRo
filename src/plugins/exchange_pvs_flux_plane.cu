@@ -27,13 +27,13 @@ __global__ void countParticles(DomainInfo domain, PVviewWithOldParticles view1, 
     int pid = blockIdx.x * blockDim.x + threadIdx.x;
     if (pid >= view1.size) return;
 
-    Particle p, pold;
-    p   .readCoordinate(view1.particles,     pid);
-    pold.readCoordinate(view1.old_particles, pid);
+    Particle p;
+    view1.readPosition   (p,    pid);
+    auto rOld = view1.readOldPosition(pid);
 
     if (p.isMarked()) return;
 
-    if (hasCrossedPlane(domain, p.r, pold.r, plane))
+    if (hasCrossedPlane(domain, p.r, rOld, plane))
         atomicAdd(numberCrossed, 1);
 }
 
@@ -44,21 +44,22 @@ __global__ void moveParticles(DomainInfo domain, PVviewWithOldParticles view1, P
     int pid = blockIdx.x * blockDim.x + threadIdx.x;
     if (pid >= view1.size) return;
 
-    Particle p, pold;
-    p   .readCoordinate(view1.particles,     pid);
-    pold.readCoordinate(view1.old_particles, pid);    
+    Particle p;
+    view1.readPosition(p, pid);
+    auto rOld = view1.readOldPosition(pid);
 
     if (p.isMarked()) return;
     
-    if (hasCrossedPlane(domain, p.r, pold.r, plane)) {
-        p.readVelocity(view1.particles, pid);
+    if (hasCrossedPlane(domain, p.r, rOld, plane))
+    {        
         int dst = atomicAdd(numberCrossed, 1);
         dst += oldsize2;
 
-        p.write2Float4(view2.particles, dst);
+        view1.readVelocity(p, pid);
+        view2.writeParticle(dst, p);
 
         p.mark();
-        p.write2Float4(view1.particles, pid);
+        view1.writeParticle(pid, p);
 
         extra1.pack(pid, extra2, dst);
     }
@@ -83,8 +84,8 @@ void ExchangePVSFluxPlanePlugin::setup(Simulation* simulation, const MPI_Comm& c
     pv1 = simulation->getPVbyNameOrDie(pv1Name);
     pv2 = simulation->getPVbyNameOrDie(pv2Name);
 
-    pv1->requireDataPerParticle<Particle> (ChannelNames::oldParts, ExtraDataManager::PersistenceMode::Persistent, sizeof(float));
-    pv2->requireDataPerParticle<Particle> (ChannelNames::oldParts, ExtraDataManager::PersistenceMode::Persistent, sizeof(float));
+    pv1->requireDataPerParticle<float4> (ChannelNames::oldPositions, DataManager::PersistenceMode::Persistent, sizeof(float));
+    pv2->requireDataPerParticle<float4> (ChannelNames::oldPositions, DataManager::PersistenceMode::Persistent, sizeof(float));
 }
 
 void ExchangePVSFluxPlanePlugin::beforeCellLists(cudaStream_t stream)
@@ -111,8 +112,8 @@ void ExchangePVSFluxPlanePlugin::beforeCellLists(cudaStream_t stream)
 
     view2 = PVview(pv2, pv2->local());
 
-    auto packPredicate = [](const ExtraDataManager::NamedChannelDesc& namedDesc) {
-        return namedDesc.second->persistence == ExtraDataManager::PersistenceMode::Persistent;
+    auto packPredicate = [](const DataManager::NamedChannelDesc& namedDesc) {
+        return namedDesc.second->persistence == DataManager::PersistenceMode::Persistent;
     };
     
     ParticleExtraPacker extra1(pv1, pv1->local(), packPredicate, stream);

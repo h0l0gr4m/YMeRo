@@ -17,22 +17,14 @@ ParticleChannelSaverPlugin::ParticleChannelSaverPlugin(const YmrState *state, st
 
 void ParticleChannelSaverPlugin::beforeIntegration(cudaStream_t stream)
 {
-    auto& extraManager = pv->local()->extraPerParticle;
-    const auto& desc = extraManager.getChannelDescOrDie(channelName);    
-    
-#define SWITCH_ENTRY(ctype) case DataType::TOKENIZE(ctype):             \
-    {                                                                   \
-        auto src = extraManager.getData<ctype>(channelName);            \
-        auto dst = extraManager.getData<ctype>(savedName);              \
-        dst->copyDeviceOnly(*src, stream);                              \
-        break;                                                          \
-    }
+    auto& dataManager = pv->local()->dataPerParticle;
+    const auto& srcDesc = dataManager.getChannelDescOrDie(channelName);
+    const auto& dstDesc = dataManager.getChannelDescOrDie(savedName);
 
-    switch(desc.dataType) {
-        TYPE_TABLE(SWITCH_ENTRY);
-    }
-
-#undef SWITCH_ENTRY
+    mpark::visit([&](auto srcBufferPtr) {
+                     auto dstBufferPtr = mpark::get<decltype(srcBufferPtr)>(dstDesc.varDataPtr);
+                     dstBufferPtr->copyDeviceOnly(*srcBufferPtr, stream);
+                 }, srcDesc.varDataPtr);
 }
     
 bool ParticleChannelSaverPlugin::needPostproc()
@@ -46,23 +38,10 @@ void ParticleChannelSaverPlugin::setup(Simulation *simulation, const MPI_Comm& c
 
     pv = simulation->getPVbyNameOrDie(pvName);
 
-    const auto& desc = pv->local()->extraPerParticle.getChannelDescOrDie(channelName);
+    const auto& desc = pv->local()->dataPerParticle.getChannelDescOrDie(channelName);
 
-#define SWITCH_ENTRY(ctype) case DataType::TOKENIZE(ctype):             \
-    pv->requireDataPerParticle<ctype>(savedName,                        \
-                                      ExtraDataManager::PersistenceMode::Persistent); \
-    break;
-    
-    switch(desc.dataType)
-    {
-        TYPE_TABLE(SWITCH_ENTRY);
-    default:
-        die("cannot save field '%s' from pv '%s': unknown type",
-            channelName.c_str(), pvName.c_str());
-        break;
-    }
-
-#undef SWITCH_ENTRY
+    mpark::visit([&](auto pinnedBufferPtr) {
+                     using T = typename std::remove_reference< decltype(*pinnedBufferPtr->hostPtr()) >::type;
+                     pv->requireDataPerParticle<T>(savedName,DataManager::PersistenceMode::Persistent);
+                 }, desc.varDataPtr);
 }
-
-    

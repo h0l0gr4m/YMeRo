@@ -1,5 +1,6 @@
 #include "density_control.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/field/from_function.h>
 #include <core/field/utils.h>
@@ -10,6 +11,8 @@
 #include <core/utils/cuda_rng.h>
 #include <core/utils/kernel_launch.h>
 #include <core/utils/make_unique.h>
+
+#include <fstream>
 
 namespace DensityControlPluginKernels
 {
@@ -58,10 +61,9 @@ __global__ void collectSamples(PVview view, FieldDeviceHandler field, DensityCon
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i >= view.size) return;
 
-    Particle p;
-    p.readCoordinate(view.particles, i);
+    auto r = Float3_int(view.readPosition(i)).v;
 
-    int levelId = getLevelId(field, p.r, lb);
+    int levelId = getLevelId(field, r, lb);
 
     if (levelId != INVALID_LEVEL)
         atomicAdd(&nInsides[levelId], 1);
@@ -75,16 +77,15 @@ __global__ void applyForces(PVview view, FieldDeviceHandler field, DensityContro
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i >= view.size) return;
 
-    Particle p;    
-    p.readCoordinate(view.particles, i);
+    auto r = Float3_int(view.readPosition(i)).v;
 
-    int levelId = getLevelId(field, p.r, lb);
+    int levelId = getLevelId(field, r, lb);
 
     if (levelId == INVALID_LEVEL) return;
 
     float forceMagn = forces[levelId];
 
-    float3 grad = computeGradient(field, p.r, h);
+    float3 grad = computeGradient(field, r, h);
 
     if (dot(grad, grad) < zeroTolerance) return;
 
@@ -148,10 +149,10 @@ void DensityControlPlugin::setup(Simulation *simulation, const MPI_Comm& comm, c
 
 void DensityControlPlugin::beforeForces(cudaStream_t stream)
 {
-    if (state->currentStep % tuneEvery == 0 && state->currentStep != 0)
+    if (isTimeEvery(state, tuneEvery))
         updatePids(stream);
 
-    if (state->currentStep % sampleEvery == 0)
+    if (isTimeEvery(state, sampleEvery))
         sample(stream);
 
     applyForces(stream);
@@ -159,7 +160,7 @@ void DensityControlPlugin::beforeForces(cudaStream_t stream)
 
 void DensityControlPlugin::serializeAndSend(cudaStream_t stream)
 {
-    if (state->currentStep % dumpEvery != 0) return;
+    if (!isTimeEvery(state, dumpEvery)) return;
 
     waitPrevSend();
     SimpleSerializer::serialize(sendBuffer, state->currentTime, state->currentStep, densities, forces);
@@ -265,6 +266,29 @@ void DensityControlPlugin::applyForces(cudaStream_t stream)
     }    
 }
 
+void DensityControlPlugin::checkpoint(MPI_Comm comm, std::string path, int checkpointId)
+{
+    auto filename = createCheckpointNameWithId(path, "plugin." + name, "txt", checkpointId);
+
+    {
+        std::ofstream fout(filename);
+        for (const auto& pid : controllers)
+            fout << pid << std::endl;
+    }
+    
+    createCheckpointSymlink(comm, path, "plugin." + name, "txt", checkpointId);
+}
+
+void DensityControlPlugin::restart(MPI_Comm comm, std::string path)
+{
+    auto filename = createCheckpointName(path, "plugin." + name, "txt");
+
+    std::ifstream fin(filename);
+
+    for (auto& pid : controllers)
+        fin >> pid;
+}
+
 
 
 
@@ -283,8 +307,8 @@ PostprocessDensityControl::~PostprocessDensityControl()
 
 void PostprocessDensityControl::deserialize(MPI_Status& stat)
 {
-    int currentTimeStep;
-    TimeType currentTime;
+    YmrState::TimeType currentTimeStep;
+    YmrState::TimeType currentTime;
     std::vector<float> densities, forces;
 
     SimpleSerializer::deserialize(data, currentTime, currentTimeStep, densities, forces);

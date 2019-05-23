@@ -1,0 +1,5 @@
+#/bin/bash -l
+#SBATCH --opt0=1
+#SBATCH --opt1=5
+
+ymr.run --runargs "- n 1" echo 5

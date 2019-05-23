@@ -2,47 +2,37 @@
 
 #include <string>
 #include <core/datatypes.h>
+#include <extern/variant/include/mpark/variant.hpp>
+
+#define TYPE_TABLE__(OP, SEP)                   \
+    OP(int)          SEP                        \
+    OP(int64_t)      SEP                        \
+    OP(float)        SEP                        \
+    OP(float2)       SEP                        \
+    OP(float3)       SEP                        \
+    OP(float4)       SEP                        \
+    OP(double)       SEP                        \
+    OP(double3)      SEP                        \
+    OP(double4)      SEP                        \
+    OP(Stress)       SEP                        \
+    OP(RigidMotion)  SEP                        \
+    OP(COMandExtent) SEP                        \
+    OP(Force)
 
 
-#define TYPE_TABLE_ADDITIONABLE(OP)              \
-    OP(float)                                    \
-    OP(double)                                   \
-    OP(int)                                      \
-    OP(float3)                                   \
-    OP(float4)                                   \
-    OP(double3)                                  \
-    OP(double4)                                  \
-    OP(Stress)
-
-#define TYPE_TABLE(OP)                           \
-    TYPE_TABLE_ADDITIONABLE(OP)                  \
-    OP(Particle)
-
-#define DATATYPE_NONE None
-
-#define TOKENIZE(ctype) _##ctype##_
+#define TYPE_TABLE(OP) TYPE_TABLE__(OP, )
+#define COMMA ,
+#define TYPE_TABLE_COMMA(OP) TYPE_TABLE__(OP, COMMA)
 
 
-enum class DataType
-{
-#define MAKE_ENUM(ctype) TOKENIZE(ctype),
-    TYPE_TABLE(MAKE_ENUM)
-#undef MAKE_ENUM
-    DATATYPE_NONE
-};
+template<class T>
+struct DataTypeWrapper {using type = T;};
 
+using TypeDescriptor = mpark::variant<
+#define MAKE_WRAPPER(a) DataTypeWrapper<a>
+    TYPE_TABLE_COMMA(MAKE_WRAPPER)
+#undef MAKE_WRAPPER
+    >;
 
-std::string dataTypeToString(DataType dataType);
-DataType stringToDataType(std::string str);
-
-size_t dataTypeToByteSize(DataType dataType);
-
-template<typename T> DataType inline typeTokenize() { return DataType::DATATYPE_NONE; }
-
-#define MAKE_TOKENIZE_FUNCTIONS(ctype) \
-    template<> inline DataType typeTokenize<ctype>() {return DataType::TOKENIZE(ctype);}
-
-TYPE_TABLE(MAKE_TOKENIZE_FUNCTIONS)
-
-#undef MAKE_TOKENIZE_FUNCTIONS
-
+std::string typeDescriptorToString(const TypeDescriptor& desc);
+TypeDescriptor stringToTypeDescriptor(const std::string& str);

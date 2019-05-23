@@ -7,15 +7,15 @@ Installation
 ############
 
 YMeRo
-********
+*****
 
 YMeRo requires at least Kepler-generation NVIDIA GPU and depends on a few external tools and libraries:
 
 - Unix-based OS
-- NVIDIA CUDA toolkit version >= 8.0
-- gcc compiler with c++11 support compatible with CUDA installation
+- NVIDIA CUDA toolkit version >= 9.2
+- gcc compiler with c++14 support compatible with CUDA installation
 - CMake version >= 3.8
-- Python interpreter version >= 2.7
+- Python interpreter version >= 3.4
 - MPI library
 - HDF5 parallel library
 - libbfd for pretty debug information in case of an error
@@ -92,6 +92,15 @@ With all the prerequisites installed, you can take the following steps to run YM
         
       import ymero
    
+
+Compile Options
+***************
+
+Additional compile options are provided through ``cmake``:
+
+* ``MEMBRANE_DOUBLE:BOOL=OFF``: Computes membrane forces (see :any:`MembraneForces`) in double prcision if set to ``ON``; default: single precision
+* ``ROD_DOUBLE:BOOL=OFF``:  Computes rod forces (see :any:`RodForces`) in double prcision if set to ``ON``; default: single precision
+* ``USE_NVTX:BOOL=OFF``: Add NVIDIA Tools Extension (NVTX) trace support for more profiling informations if set to ``ON``; default: no NVTX
 
 
 Tools

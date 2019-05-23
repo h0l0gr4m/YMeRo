@@ -1,5 +1,6 @@
 #include "stats.h"
 #include "utils/simple_serializer.h"
+#include "utils/time_stamp.h"
 
 #include <core/datatypes.h>
 #include <core/pvs/particle_vector.h>
@@ -22,7 +23,7 @@ __global__ void totalMomentumEnergy(PVview view, ReductionType *momentum, Reduct
 
     if (tid < view.size)
     {
-        vel        = make_float3(view.particles[2*tid+1]);
+        vel        = make_float3(view.readVelocity(tid));
         myMomentum = vel * view.mass;
         myEnergy   = dot(vel, vel) * view.mass * 0.5f;
     }
@@ -61,7 +62,7 @@ void SimulationStats::setup(Simulation *simulation, const MPI_Comm& comm, const 
 
 void SimulationStats::afterIntegration(cudaStream_t stream)
 {
-    if (state->currentStep % fetchEvery != 0) return;
+    if (!isTimeEvery(state, fetchEvery)) return;
 
     momentum.clear(stream);
     energy  .clear(stream);
@@ -118,7 +119,7 @@ PostprocessStats::PostprocessStats(std::string name, std::string filename) :
     {
         fdump = fopen(filename.c_str(), "w");
         if (!fdump) die("Could not open file '%s'", filename.c_str());
-        fprintf(fdump, "# time  kBT  vx vy vz  max(abs(v))  simulation_time_per_step(ms)\n");
+        fprintf(fdump, "# time  kBT  vx vy vz  max(abs(v)) num_particles simulation_time_per_step(ms)\n");
     }
 }
 
@@ -129,9 +130,9 @@ PostprocessStats::~PostprocessStats()
 
 void PostprocessStats::deserialize(MPI_Status& stat)
 {
-    TimeType currentTime;
+    YmrState::TimeType currentTime;
+    YmrState::StepType currentTimeStep;
     float realTime;
-    int currentTimeStep;
     Stats::CountType nparticles, maxNparticles, minNparticles;
 
     std::vector<Stats::ReductionType> momentum, energy;

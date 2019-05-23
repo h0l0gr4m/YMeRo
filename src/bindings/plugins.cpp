@@ -32,6 +32,13 @@ void exportPlugins(py::module& m)
         This plugin will add constant torque :math:`\mathbf{T}_{extra}` to each *object* of a specific OV every time-step.
     )");
 
+    py::handlers_class<AnchorParticlePlugin>(m, "AnchorParticle", pysim, R"(
+        This plugin will set a given particle at a given position and velocity.
+    )");
+
+    py::handlers_class<AnchorParticleStatsPlugin>(m, "AnchorParticleStats", pypost, R"(
+        Postprocessing side of :any:`AnchorParticle` responsible to dump the data.
+    )");
 
     py::handlers_class<Average3D>(m, "Average3D", pysim, R"(
         This plugin will project certain quantities of the particle vectors on the grid (by simple binning),
@@ -172,6 +179,15 @@ void exportPlugins(py::module& m)
         It copies the content of an extra channel of pv at each time step and make it accessible by other plugins.
     )");
 
+    py::handlers_class<ParticleCheckerPlugin>(m, "ParticleChecker", pysim, R"(
+        This plugin will check the positions and velocities of all particles in the simulation every given time steps.
+        To be used for debugging purpose.
+    )");
+
+    py::handlers_class<ParticleDragPlugin>(m, "ParticleDrag", pysim, R"(
+        This plugin will add drag force :math:`\mathbf{f} = - C_d \mathbf{u}` to each particle of a specific PV every time-step.
+    )");
+    
     py::handlers_class<ParticleSenderPlugin>(m, "ParticleSenderPlugin", pysim, R"(
         This plugin will dump positions, velocities and optional attached data of all the particles of the specified Particle Vector.
         The data is dumped into hdf5 format. An additional xdfm file is dumped to describe the data and make it readable by visualization tools.
@@ -366,7 +382,22 @@ void exportPlugins(py::module& m)
             torque: extra torque (per object)
     )");
 
-    m.def("__createDensityControl", &PluginFactory::createDensityControlPlugin,
+    m.def("__createAnchorParticle", &PluginFactory::createAnchorParticlePlugin, 
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "position"_a, "velocity"_a, "pid"_a,
+          "report_every"_a, "path"_a, R"(
+        Create :any:`AnchorParticle` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            position: position (at given time) of the particle
+            velocity: velocity (at given time) of the particle
+            pid: id of the particle in the given particle vector
+            report_every: report the time averaged force acting on the particle every this amount of timesteps
+            path: folder where to dump the stats
+    )");
+
+    m.def("__createDensityControl", &PluginFactory::createDensityControlPlugin, 
           "compute_task"_a, "state"_a, "name"_a, "file_name"_a, "pvs"_a, "target_density"_a,
           "region"_a, "resolution"_a, "level_lo"_a, "level_hi"_a, "level_space"_a,
           "Kp"_a, "Ki"_a, "Kd"_a, "tune_every"_a, "dump_every"_a, "sample_every"_a, R"(
@@ -431,22 +462,17 @@ void exportPlugins(py::module& m)
             path: Path and filename prefix for the dumps. For every dump two files will be created: <path>_NNNNN.xmf and <path>_NNNNN.h5
             channels: list of pairs name - type.
                 Name is the channel (per particle) name. Always available channels are:
-
-                * 'velocity' with type "float8"
-                * 'force' with type "float4"
-
-                Type is to provide the type of quantity to extract from the channel.
-                Type can also define a simple transformation from the channel internal structure
-                to the datatype supported in HDF5 (i.e. scalar, vector, tensor)
-                Available types are:
-
+                    
+                * 'velocity' with type "float4"
+                
+                Type is to provide the type of quantity to extract from the channel.                                            
+                Type can also define a simple transformation from the channel internal structure                 
+                to the datatype supported in HDF5 (i.e. scalar, vector, tensor)                                  
+                Available types are:                                                                             
+                                                                                                                
                 * 'scalar': 1 float per particle
                 * 'vector': 3 floats per particle
                 * 'vector_from_float4': 4 floats per particle. 3 first floats will form the resulting vector
-                * 'vector_from_float8' 8 floats per particle. 5th, 6th, 7th floats will form the resulting vector.
-                    This type is primarity made to be used with velocity since it is stored together with
-                    the coordinates as 8 consecutive float numbers: (x,y,z) coordinate, followed by 1 padding value
-                    and then (x,y,z) velocity, followed by 1 more padding value
                 * 'tensor6': 6 floats per particle, symmetric tensor in order xx, xy, xz, yy, yz, zz
 
     )");
@@ -622,7 +648,16 @@ void exportPlugins(py::module& m)
             savedName: name of the extra channel
     )");
 
-    m.def("__createParticleDisplacement", &PluginFactory::createParticleDisplacementPlugin,
+    m.def("__createParticleChecker", &PluginFactory::createParticleCheckerPlugin, 
+          "compute_task"_a, "state"_a, "name"_a, "check_every"_a, R"(
+        Create :any:`ParticleChecker` plugin
+        
+        Args:
+            name: name of the plugin
+            check_every: check every this amount of time steps
+    )");
+
+    m.def("__createParticleDisplacement", &PluginFactory::createParticleDisplacementPlugin, 
           "compute_task"_a, "state"_a, "name"_a, "pv"_a, "update_every"_a, R"(
 
         Create :any:`ParticleDisplacementPlugin`
@@ -634,7 +669,17 @@ void exportPlugins(py::module& m)
             update_every: displacements are computed between positions separated by this amount of timesteps
     )");
 
-    m.def("__createPinObject", &PluginFactory::createPinObjPlugin,
+    m.def("__createParticleDrag", &PluginFactory::createParticleDragPlugin, 
+          "compute_task"_a, "state"_a, "name"_a, "pv"_a, "drag"_a, R"(
+        Create :any:`ParticleDrag` plugin
+        
+        Args:
+            name: name of the plugin
+            pv: :any:`ParticleVector` that we'll work with
+            drag: drag coefficient
+    )");
+
+    m.def("__createPinObject", &PluginFactory::createPinObjPlugin, 
           "compute_task"_a, "state"_a, "name"_a, "ov"_a, "dump_every"_a, "path"_a, "velocity"_a, "angular_velocity"_a, R"(
         Create :any:`PinObject` plugin
 

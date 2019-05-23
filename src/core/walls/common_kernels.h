@@ -1,5 +1,6 @@
 #pragma once
 
+#include <core/bounce_solver.h>
 #include <core/celllist.h>
 #include <core/pvs/views/pv.h>
 #include <core/utils/cuda_common.h>
@@ -9,7 +10,7 @@ namespace BounceKernels
 {
 
 template <typename InsideWallChecker>
-__device__ inline float3 rescue(float3 candidate, float dt, float tol, int id, const InsideWallChecker& checker)
+__device__ inline float3 rescue(float3 candidate, float dt, float tol, int seed, const InsideWallChecker& checker)
 {
     const int maxIters = 100;
     const float factor = 5.0f * dt;
@@ -20,9 +21,9 @@ __device__ inline float3 rescue(float3 candidate, float dt, float tol, int id, c
         if (v < -tol) break;
 
         float3 rndShift;
-        rndShift.x = Saru::mean0var1(candidate.x - floorf(candidate.x), id+i, id*id);
-        rndShift.y = Saru::mean0var1(rndShift.x,                        id+i, id*id);
-        rndShift.z = Saru::mean0var1(rndShift.y,                        id+i, id*id);
+        rndShift.x = Saru::mean0var1(candidate.x - floorf(candidate.x), seed+i, seed*seed);
+        rndShift.y = Saru::mean0var1(rndShift.x,                        seed+i, seed*seed);
+        rndShift.z = Saru::mean0var1(rndShift.y,                        seed+i, seed*seed);
 
         if (checker(candidate + factor * rndShift) < v)
             candidate += factor * rndShift;
@@ -51,17 +52,17 @@ __global__ void sdfBounce(PVviewWithOldParticles view, CellListInfo cinfo,
 
         for (int pid = pstart; pid < pend; pid++)
         {
-            Particle p(view.particles, pid);
+            Particle p(view.readParticle(pid));
             if (checker(p.r) <= -insideTolerance) continue;
 
-            Particle pOld(view.old_particles, pid);
-            float3 dr = p.r - pOld.r;
+            auto rOld = view.readOldPosition(pid);
+            float3 dr = p.r - rOld;
 
             const float alpha = solveLinSearch([=] (float lambda) {
-                                                   return checker(pOld.r + dr*lambda) + insideTolerance;
+                                                   return checker(rOld + dr*lambda) + insideTolerance;
                                                });
 
-            float3 candidate = (alpha >= 0.0f) ? pOld.r + alpha * dr : pOld.r;
+            float3 candidate = (alpha >= 0.0f) ? rOld + alpha * dr : rOld;
             candidate = rescue(candidate, dt, insideTolerance, p.i1, checker);
 
             float3 uWall = velField(p.r);
@@ -72,7 +73,7 @@ __global__ void sdfBounce(PVviewWithOldParticles view, CellListInfo cinfo,
             p.r = candidate;
             p.u = unew;
                            
-            p.write2Float4(view.particles, pid);
+            view.writeParticle(pid, p);
         }        
     }
 

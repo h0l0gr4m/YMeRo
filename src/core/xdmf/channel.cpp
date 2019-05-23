@@ -4,8 +4,13 @@
 
 namespace XDMF
 {
-Channel::Channel(std::string name, void* data, DataForm dataForm, NumberType numberType, DataType dataType) :
-    name(name), data(data), dataForm(dataForm), numberType(numberType), dataType(dataType)
+
+Channel::Channel(std::string name, void *data, DataForm dataForm, NumberType numberType, TypeDescriptor type) :
+    name(name),
+    data(data),
+    dataForm(dataForm),
+    numberType(numberType),
+    type(type)
 {}
 
 int Channel::nComponents() const
@@ -72,16 +77,18 @@ Channel::DataForm descriptionToDataForm(std::string str)
     if (str == "NNInput")     return Channel::DataForm::NNInput;
     if (str == "Quaternion")  return Channel::DataForm::Quaternion;
     if (str == "Trianle")     return Channel::DataForm::Triangle;
+    warn("Unrecognised format '%s'", str.c_str());
     return Channel::DataForm::Other;
 }
-
-decltype (H5T_NATIVE_FLOAT) numberTypeToHDF5type(Channel::NumberType dt)
+    
+decltype (H5T_NATIVE_FLOAT) numberTypeToHDF5type(Channel::NumberType nt)
 {
-    switch (dt)
+    switch (nt)
     {
     case Channel::NumberType::Float  : return H5T_NATIVE_FLOAT;
     case Channel::NumberType::Double : return H5T_NATIVE_DOUBLE;
     case Channel::NumberType::Int    : return H5T_NATIVE_INT;
+    case Channel::NumberType::Int64  : return H5T_NATIVE_INT64;
     }
 }
 
@@ -92,6 +99,7 @@ std::string numberTypeToString(Channel::NumberType dt)
     case Channel::NumberType::Float  : return "Float";
     case Channel::NumberType::Double : return "Float";
     case Channel::NumberType::Int    : return "Int";
+    case Channel::NumberType::Int64  : return "Int";
     }
 }
 
@@ -102,14 +110,16 @@ int numberTypeToPrecision(Channel::NumberType dt)
     case Channel::NumberType::Float  : return sizeof(float);
     case Channel::NumberType::Double : return sizeof(double);
     case Channel::NumberType::Int    : return sizeof(int);
+    case Channel::NumberType::Int64  : return sizeof(int64_t);
     }
 }
 
 Channel::NumberType infoToNumberType(std::string str, int precision)
 {
-    if (precision == sizeof(float)  && str == "Float") return Channel::NumberType::Float;
-    if (precision == sizeof(double) && str == "Float") return Channel::NumberType::Double;
-    if (precision == sizeof(int)    && str == "Int")   return Channel::NumberType::Int;
+    if (precision == sizeof(float)   && str == "Float") return Channel::NumberType::Float;
+    if (precision == sizeof(double)  && str == "Float") return Channel::NumberType::Double;
+    if (precision == sizeof(int)     && str == "Int")   return Channel::NumberType::Int;
+    if (precision == sizeof(int64_t) && str == "Int")   return Channel::NumberType::Int64;
     die("NumberType '%s' with precision %d is not supported for reading", str.c_str(), precision);
 }
 

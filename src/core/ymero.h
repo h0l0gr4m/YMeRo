@@ -108,7 +108,7 @@ private:
     bool noPostprocess;
     bool noSplash;
     
-    bool initialized = false;
+    bool initialized    = false;
     bool initializedMpi = false;
 
     MPI_Comm comm      {MPI_COMM_NULL}; ///< base communicator (world)
@@ -121,4 +121,6 @@ private:
               int checkpointEvery, std::string checkpointFolder, CheckpointIdAdvanceMode checkpointMode, bool gpuAwareMPI);
     void initLogger(MPI_Comm comm, std::string logFileName, int verbosity);
     void sayHello();
+    void setup();
+    void checkNotInitialized() const;
 };

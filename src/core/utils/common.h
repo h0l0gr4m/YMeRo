@@ -2,14 +2,14 @@
 
 #include <string>
 
+/**
+ * Channel names used in several places of the program
+ * names starting with "__" are internal channel names 
+ */
 namespace ChannelNames
 {
 
 // per particle fields
-static const std::string forces      = "forces";
-static const std::string stresses    = "stresses";
-static const std::string densities   = "densities";
-static const std::string oldParts    = "old_particles";
 static const std::string DPDparameters ="DPDparameters";
 static const std::string vorticities ="vorticities";
 static const std::string aprox_densities ="aprox_densities";
@@ -17,6 +17,12 @@ static const std::string velocity_gradients ="velocity_gradients";
 static const std::string density_gradients   = "density_gradients";
 static const std::string NNInputs = "NNInputs";
 
+static const std::string positions     = "__positions";
+static const std::string velocities    = "__velocities";
+static const std::string forces        = "__forces";
+static const std::string stresses      = "stresses";
+static const std::string densities     = "densities";
+static const std::string oldPositions  = "old_positions";
 
 // per object fields
 static const std::string motions     = "motions";
@@ -41,3 +47,10 @@ enum class CheckpointIdAdvanceMode
     PingPong,
     Incremental
 };
+
+// tag used to stop the postprocess side to stop
+constexpr int stoppingTag = 424242;
+constexpr int stoppingMsg = -1;
+
+// tag used to tell the postprocess side to dump checkpoint 
+constexpr int checkpointTag = 434343;

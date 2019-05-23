@@ -2,6 +2,7 @@
 
 #include <core/logger.h>
 #include <core/utils/cpu_gpu_defines.h>
+#include <core/utils/vec_traits.h>
 
 #include <algorithm>
 #include <cassert>
@@ -111,6 +112,18 @@ struct __align__(16) Particle
      */
     __HD__ inline Particle() {};
 
+    __HD__ inline void setId(int64_t id)
+    {
+        int64_t highHalf = (id >> 32) << 32;
+        i1 = (int32_t) (id - highHalf);
+        i2 = (int32_t) (id >> 32);
+    }
+
+    __HD__ inline int64_t getId() const
+    {
+        return int64_t(i1) + (int64_t (i2) << 32);
+    }
+    
     /**
      * Construct a Particle from two float4 entries
      *
@@ -127,40 +140,14 @@ struct __align__(16) Particle
     }
 
     /**
-     * Equivalent to the following constructor:
-     * @code
-     * Particle(addr[2*pid], addr[2*pid+1]);
-     * @endcode
-     *
-     * @param addr must have at least \e 2*(pid+1) entries
-     * @param pid  particle id
-     */
-    __HD__ inline Particle(const float4 *addr, int pid)
-    {
-        read(addr, pid);
-    }
-
-    /**
-     * Read coordinate and velocity from the given \e addr
-     *
-     * @param addr must have at least \e 2*(pid+1) entries
-     * @param pid  particle id
-     */
-    __HD__ inline void read(const float4 *addr, int pid)
-    {
-        readCoordinate(addr, pid);
-        readVelocity  (addr, pid);
-    }
-
-    /**
      * Only read coordinates from the given \e addr
      *
-     * @param addr must have at least \e 2*pid entries
+     * @param addr must have at least \e pid entries
      * @param pid  particle id
      */
     __HD__ inline void readCoordinate(const float4 *addr, const int pid)
     {
-        const Float3_int tmp = addr[2*pid];
+        const Float3_int tmp = addr[pid];
         r  = tmp.v;
         i1 = tmp.i;
     }
@@ -168,12 +155,12 @@ struct __align__(16) Particle
     /**
      * Only read velocities from the given \e addr
      *
-     * @param addr must have at least \e 2*pid entries
+     * @param addr must have at least \e pid entries
      * @param pid  particle id
      */
     __HD__ inline void readVelocity(const float4 *addr, const int pid)
     {
-        const Float3_int tmp = addr[2*pid+1];
+        const Float3_int tmp = addr[pid];
         u  = tmp.v;
         i2 = tmp.i;
     }
@@ -214,10 +201,10 @@ struct __align__(16) Particle
      * @param dst must have at least \e 2*pid entries
      * @param pid particle id
      */
-    __HD__ inline void write2Float4(float4* dst, int pid) const
+    __HD__ inline void write2Float4(float4* pos, float4 *vel, int pid) const
     {
-        dst[2*pid]   = r2Float4();
-        dst[2*pid+1] = u2Float4();
+        pos[pid] = r2Float4();
+        vel[pid] = u2Float4();
     }
 
     __HD__ inline void mark()
@@ -257,6 +244,20 @@ struct __align__(16) Force
         return Float3_int{f, i}.toFloat4();
     }
 };
+
+__HD__ void inline operator+=(Force& a, const Force& b)
+{
+    a.f.x += b.f.x;
+    a.f.y += b.f.y;
+    a.f.z += b.f.z;
+}    
+
+__HD__ Force inline operator+(Force a, const Force& b)
+{
+    a += b;
+    return a;
+}
+
 
 struct Stress
 {
@@ -415,3 +416,37 @@ inline __HD__ Density_Gradient operator-(const Density_Gradient &a)
     b.z = -a.z;
     return b ;
 }
+
+#define RIGID_MOTIONS_DOUBLE
+
+#ifdef RIGID_MOTIONS_DOUBLE
+using RigidReal  = double;
+#else
+using RigidReal  = float;
+#endif
+
+using RigidReal3 = VecTraits::Vec<RigidReal, 3>::Type;
+using RigidReal4 = VecTraits::Vec<RigidReal, 4>::Type;
+
+//=================================================================
+
+template <class real>
+struct __align__(16) TemplRigidMotion
+{
+    using R3 = typename VecTraits::Vec<real, 3>::Type;
+    using R4 = typename VecTraits::Vec<real, 4>::Type;
+    
+    R3 r;
+    R4 q;
+    R3 vel, omega;
+    R3 force, torque;
+};
+
+using DoubleRigidMotion = TemplRigidMotion<double>;
+using SingleRigidMotion = TemplRigidMotion<float>;
+using RigidMotion       = TemplRigidMotion<RigidReal>;
+
+struct __align__(16) COMandExtent
+{
+    float3 com, low, high;
+};

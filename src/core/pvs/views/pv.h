@@ -11,7 +11,8 @@
 struct PVview
 {
     int size = 0;
-    float4 *particles = nullptr;
+    float4 *positions = nullptr;
+    float4 *velocities = nullptr;
     float4 *forces = nullptr;
 
     float mass = 0, invMass = 0;
@@ -21,24 +22,83 @@ struct PVview
         if (lpv == nullptr) return;
 
         size = lpv->size();
-        particles = reinterpret_cast<float4*>(lpv->coosvels.devPtr());
-        forces    = reinterpret_cast<float4*>(lpv->forces.devPtr());
+        positions  = lpv->positions() .devPtr();
+        velocities = lpv->velocities().devPtr();
+        forces     = reinterpret_cast<float4*>(lpv->forces().devPtr());
 
         mass = pv->mass;
         invMass = 1.0 / mass;
+    }
+
+    __HD__ inline float4 readPosition(int id) const
+    {
+        return positions[id];
+    }
+
+    __HD__ inline float4 readVelocity(int id) const
+    {
+        return velocities[id];
+    }
+
+    __HD__ inline void readPosition(Particle&p, int id) const
+    {
+        p.readCoordinate(positions, id);
+    }
+
+    __HD__ inline void readVelocity(Particle&p, int id) const
+    {
+        p.readVelocity(velocities, id);
+    }
+
+    __HD__ inline Particle readParticle(int id) const
+    {
+        return Particle(positions[id], velocities[id]);
+    }
+
+    __D__ inline float4 readPositionNoCache(int id) const
+    {
+        return readNoCache(positions + id);
+    }
+
+    __D__ inline Particle readParticleNoCache(int id) const
+    {
+        return {readNoCache(positions  + id),
+                readNoCache(velocities + id)};
+    }
+
+    __HD__ inline void writePosition(int id, const float4& r)
+    {
+        positions[id] = r;
+    }
+
+    __HD__ inline void writeVelocity(int id, const float4& u)
+    {
+        velocities[id] = u;
+    }
+
+    __HD__ inline void writeParticle(int id, const Particle& p)
+    {
+        positions [id] = p.r2Float4();
+        velocities[id] = p.u2Float4();
     }
 };
 
 
 struct PVviewWithOldParticles : public PVview
 {
-    float4 *old_particles = nullptr;
+    float4 *oldPositions = nullptr;
 
     PVviewWithOldParticles(ParticleVector *pv = nullptr, LocalParticleVector *lpv = nullptr) :
         PVview(pv, lpv)
     {
         if (lpv != nullptr)
-            old_particles = reinterpret_cast<float4*>( lpv->extraPerParticle.getData<Particle>(ChannelNames::oldParts)->devPtr() );
+            oldPositions = lpv->dataPerParticle.getData<float4>(ChannelNames::oldPositions)->devPtr();
+    }
+
+    __HD__ inline float3 readOldPosition(int id) const
+    {
+        const auto r = oldPositions[id];
+        return {r.x, r.y, r.z};
     }
 };
 
@@ -51,7 +111,7 @@ struct PVviewWithDensities : public PVview
         PVview(pv, lpv)
     {
         if (lpv != nullptr)
-            densities = lpv->extraPerParticle.getData<float>(ChannelNames::densities)->devPtr();
+            densities = lpv->dataPerParticle.getData<float>(ChannelNames::densities)->devPtr();
     }
 };
 
@@ -86,6 +146,6 @@ struct PVviewWithStresses : public BasicView
         BasicView(pv, lpv)
     {
         if (lpv != nullptr)
-            stresses = lpv->extraPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();
+            stresses = lpv->dataPerParticle.getData<Stress>(ChannelNames::stresses)->devPtr();            
     }
 };

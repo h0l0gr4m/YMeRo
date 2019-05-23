@@ -60,15 +60,16 @@ void addUniformParticles(float density, const MPI_Comm& comm, ParticleVector *pv
                 for (int p = 0; p < nparts; p++) {
 
                     auto part = genParticle(h, i, j, k, domain, udistr, gen);
-                    part.i1 = mycount;
 
                     if (! filterIn(domain.local2global(part.r)))
                         continue;
 
                     pv->local()->resize(mycount+1,  stream);
-                    auto cooPtr = pv->local()->coosvels.hostPtr();
+                    auto pos = pv->local()->positions ().hostPtr();
+                    auto vel = pv->local()->velocities().hostPtr();
 
-                    cooPtr[mycount] = part;
+                    pos[mycount] = part.r2Float4();
+                    vel[mycount] = part.u2Float4();
 
                     avgMomentum.x += part.u.x;
                     avgMomentum.y += part.u.y;
@@ -84,21 +85,16 @@ void addUniformParticles(float density, const MPI_Comm& comm, ParticleVector *pv
     avgMomentum.y /= mycount;
     avgMomentum.z /= mycount;
 
-    auto cooPtr = pv->local()->coosvels.hostPtr();
-
-    for (auto& part : pv->local()->coosvels) {
-        part.u.x -= avgMomentum.x;
-        part.u.y -= avgMomentum.y;
-        part.u.z -= avgMomentum.z;
+    for (auto& vel : pv->local()->velocities()) {
+        vel.x -= avgMomentum.x;
+        vel.y -= avgMomentum.y;
+        vel.z -= avgMomentum.z;
     }
 
-    int totalCount = 0; // TODO: int64!
-    MPI_Check( MPI_Exscan(&mycount, &totalCount, 1, MPI_INT, MPI_SUM, comm) );
-    for (auto& part : pv->local()->coosvels)
-        part.i1 += totalCount;
-
-    pv->local()->coosvels.uploadToDevice(stream);
-    pv->local()->extraPerParticle.getData<Particle>(ChannelNames::oldParts)->copy(pv->local()->coosvels, stream);
+    pv->local()->positions() .uploadToDevice(stream);
+    pv->local()->velocities().uploadToDevice(stream);
+    pv->local()->computeGlobalIds(comm, stream);
+    pv->local()->dataPerParticle.getData<float4>(ChannelNames::oldPositions)->copy(pv->local()->positions(), stream);
 
     debug2("Generated %d %s particles", pv->local()->size(), pv->name.c_str());
 }
