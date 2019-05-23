@@ -22,7 +22,6 @@ class Bouncer;
 class Wall;
 class SimulationPlugin;
 class PostprocessPlugin;
-
 class YMeRo
 {
 public:

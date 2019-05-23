@@ -37,7 +37,7 @@ void Checker::check(ParticleVector *pv,cudaStream_t stream)
  flag.downloadFromDevice(stream);
  if(flag[0]==1)
   {
-	printf("Flag has changed!");        
+	printf("Flag has changed! \n");        
   }
 
  

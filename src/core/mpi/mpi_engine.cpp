@@ -1,6 +1,6 @@
 #include "mpi_engine.h"
 #include "fragments_mapping.h"
-
+#include <core/hacker.h>
 #include <core/utils/timer.h>
 #include <core/logger.h>
 #include <algorithm>
@@ -12,7 +12,7 @@ MPIExchangeEngine::MPIExchangeEngine(std::unique_ptr<ParticleExchanger> exchange
     exchanger(std::move(exchanger))
 {
     MPI_Check( MPI_Comm_dup(comm, &haloComm) );
-
+    INCREASE;
     int dims[3], periods[3], coords[3];
     MPI_Check( MPI_Cart_get (haloComm, 3, dims, periods, coords) );
     MPI_Check( MPI_Comm_rank(haloComm, &myrank));
@@ -37,6 +37,7 @@ MPIExchangeEngine::MPIExchangeEngine(std::unique_ptr<ParticleExchanger> exchange
 MPIExchangeEngine::~MPIExchangeEngine()
 {
     MPI_Check( MPI_Comm_free(&haloComm) );
+    DECREASE;
 }
 
 void MPIExchangeEngine::init(cudaStream_t stream)
