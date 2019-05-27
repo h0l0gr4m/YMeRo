@@ -1,5 +1,4 @@
 #include "simulation.h"
-#include <core/hacker.h>
 #include <core/bouncers/interface.h>
 #include <core/celllist.h>
 #include <core/initial_conditions/interface.h>
@@ -98,7 +97,6 @@ Simulation::Simulation(const MPI_Comm &cartComm, const MPI_Comm &interComm, YmrS
     int nranks[3], periods[3], coords[3];
 
     MPI_Check(MPI_Comm_dup(cartComm, &this->cartComm));
-    INCREASE;
     MPI_Check(MPI_Cart_get(cartComm, 3, nranks, periods, coords));
     MPI_Check(MPI_Comm_rank(cartComm, &rank));
 
@@ -118,7 +116,6 @@ Simulation::Simulation(const MPI_Comm &cartComm, const MPI_Comm &interComm, YmrS
 Simulation::~Simulation()
 {
     MPI_Check( MPI_Comm_free(&cartComm) );
-    DECREASE;
 }
 
 

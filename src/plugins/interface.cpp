@@ -1,6 +1,5 @@
 #include "interface.h"
 #include <core/logger.h>
-#include <core/hacker.h>
 Plugin::Plugin():
     comm(MPI_COMM_NULL),
     interComm(MPI_COMM_NULL)
@@ -13,7 +12,6 @@ Plugin::~Plugin()
 if(comm != MPI_COMM_NULL)
 {
 	MPI_Check(MPI_Comm_free(&comm));
-	DECREASE;
 }
 
 }
@@ -29,7 +27,6 @@ int Plugin::_tag(const std::string& name)
 void Plugin::_setup(const MPI_Comm& comm, const MPI_Comm& interComm)
 {
     MPI_Check( MPI_Comm_dup(comm, &this->comm) );
-    INCREASE;
     this->interComm = interComm;
     
     MPI_Check( MPI_Comm_rank(this->comm, &rank) );

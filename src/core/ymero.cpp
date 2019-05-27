@@ -1,6 +1,5 @@
 #include <mpi.h>
 #include <cuda_runtime.h>
-#include <core/hacker.h>
 #include <core/bouncers/interface.h>
 #include <core/initial_conditions/interface.h>
 #include <core/initial_conditions/uniform.h>
@@ -37,7 +36,6 @@ static void selectIntraNodeGPU(const MPI_Comm& source)
 {
     MPI_Comm shmcomm;
     MPI_Check( MPI_Comm_split_type(source, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shmcomm) );
-    INCREASE; 
     int shmrank, shmsize;
     MPI_Check( MPI_Comm_rank(shmcomm, &shmrank) );
     MPI_Check( MPI_Comm_size(shmcomm, &shmsize) );
@@ -94,7 +92,6 @@ void YMeRo::init(int3 nranks3D, float3 globalDomainSize, float dt, std::string l
     
     computeTask = rank % 2;
     MPI_Check( MPI_Comm_split(comm, computeTask, rank, &splitComm) );
-    INCREASE;
     const int localLeader  = 0;
     const int remoteLeader = isComputeTask() ? 1 : 0;
     const int tag = 42;
@@ -115,16 +112,13 @@ void YMeRo::init(int3 nranks3D, float3 globalDomainSize, float dt, std::string l
     else
     {
         MPI_Check( MPI_Comm_dup(splitComm, &ioComm) );
-        INCREASE;
         MPI_Check( MPI_Intercomm_create(ioComm,   0, comm, 0, 0, &interComm) );
-	INCREASE;
         MPI_Check( MPI_Comm_rank(ioComm, &rank) );
 
         post = std::make_unique<Postprocess> (ioComm, interComm, checkpointFolder);
     }
 
     MPI_Check( MPI_Comm_free(&splitComm) );
-    DECREASE;
 }
 
 void YMeRo::initLogger(MPI_Comm comm, std::string logFileName, int verbosity)
@@ -141,7 +135,6 @@ YMeRo::YMeRo(PyTypes::int3 nranks3D, PyTypes::float3 globalDomainSize, float dt,
 {
     MPI_Init(nullptr, nullptr);
     MPI_Comm_dup(MPI_COMM_WORLD, &comm);
-    INCREASE;
     initializedMpi = true;
 
     init( make_int3(nranks3D), make_float3(globalDomainSize), dt, logFileName, verbosity,
@@ -156,7 +149,6 @@ YMeRo::YMeRo(long commAdress, PyTypes::int3 nranks3D, PyTypes::float3 globalDoma
     // see https://stackoverflow.com/questions/49259704/pybind11-possible-to-use-mpi4py
     MPI_Comm comm = *((MPI_Comm*) commAdress);
     MPI_Comm_dup(comm, &this->comm);
-    INCREASE;
     init( make_int3(nranks3D), make_float3(globalDomainSize), dt, logFileName, verbosity,
           checkpointEvery, checkpointFolder, checkpointMode, gpuAwareMPI);    
 }
@@ -167,7 +159,6 @@ YMeRo::YMeRo(MPI_Comm comm, PyTypes::int3 nranks3D, PyTypes::float3 globalDomain
     noSplash(noSplash)
 {
     MPI_Comm_dup(comm, &this->comm);
-    INCREASE;
     init( make_int3(nranks3D), make_float3(globalDomainSize), dt, logFileName, verbosity,
           checkpointEvery, checkpointFolder, checkpointMode, gpuAwareMPI);
 }
@@ -177,7 +168,6 @@ static void safeCommFree(MPI_Comm *comm)
     if (*comm != MPI_COMM_NULL)
      {
         MPI_Check( MPI_Comm_free(comm) );
-        DECREASE;
     }
 }
 
