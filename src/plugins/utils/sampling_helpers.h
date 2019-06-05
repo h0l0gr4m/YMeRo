@@ -13,6 +13,10 @@ template <> inline bool checkType<float3>(const Average3D::ChannelType& channelT
 template <> inline bool checkType<float4>(const Average3D::ChannelType& channelType) { return channelType == Average3D::ChannelType::Vector_float4;}
 template <> inline bool checkType<Stress>(const Average3D::ChannelType& channelType) { return channelType == Average3D::ChannelType::Tensor6;}
 template <> inline bool checkType<Force> (const Average3D::ChannelType& channelType) { return checkType<float4> (channelType);;}
+template <> inline bool checkType<NNInput>(const Average3D::ChannelType& channelType) { return channelType == Average3D::ChannelType::NNInput;}
+template <> inline bool checkType<Vorticity>(const Average3D::ChannelType& channelType) { return channelType == Average3D::ChannelType::Vector_float3;}
+template <> inline bool checkType<Velocity_Gradient>(const Average3D::ChannelType& channelType) { return channelType == Average3D::ChannelType::Tensor9;}
+template <> inline bool checkType<Aprox_Density>(const Average3D::ChannelType& channelType) { return channelType == Average3D::ChannelType::Vector_float3;}
 
 static float* getDataAndCheck(const std::string& name, LocalParticleVector *lpv, const Average3D::ChannelType& channelType)
 {
