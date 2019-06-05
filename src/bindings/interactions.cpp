@@ -516,11 +516,13 @@ void exportInteractions(py::module& m)
     )");
 
 
-    pyIntSmartDPD.def(py::init<const YmrState*,std::string,std::string,std::vector<float>,float,float,float,float,float>(),
-                 "state"_a, "name"_a,"parameterName"_a,"weights"_a,"rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, R"(
+    pyIntSmartDPD.def(py::init<const YmrState*,std::string,std::string,std::string,std::vector<float>,float,float,float>(),
+                 "state"_a, "name"_a,"parameterName"_a,"NeuralNetType"_a,"weights"_a,"rc"_a, "kbt"_a, "power"_a, R"(
             Args:
-            name: name of the interaction
-            parameterName: Name of the parameters
+                name: name of the interaction
+                parameterName: Name of the parameters
+                NeuralNetType: is the NeuralNet "linear" or "nonlinear" 
+                weights: The weights of the NeuralNet
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 a: :math:`a`
                 gamma: :math:`\gamma`
@@ -530,22 +532,16 @@ void exportInteractions(py::module& m)
 
     pyIntSmartDPD.def("setSpecificPair", &InteractionSmartDPD::setSpecificPair,
          "pv1"_a, "pv2"_a,
-         "a"_a=InteractionSmartDPD::Default, "gamma"_a=InteractionSmartDPD::Default,
          "kbt"_a=InteractionSmartDPD::Default,"power"_a=InteractionSmartDPD::Default,
          R"(
             Override some of the interaction parameters for a specific pair of Particle Vectors
     )");
 
     py::handlers_class<InteractionFlowProperty> pyIntFlowProperty(m, "FlowProperty", pyInt, R"(
-        Compute MDPD density of particles, see [Warren2003]_
-
-        .. math::
-
-            \rho_i = \sum\limits_{j \neq i} w_\rho (r_{ij})
-        where the summation goes over the neighbours of particle :math:`i` within a cutoff range of :math:`r_c`, and
-        .. math::
-
-            w_\rho(r) = \begin{cases} \frac{15}{2\pi r_d^3}\left(1-\frac{r}{r_d}\right)^2, & r < r_d \\ 0, & r \geqslant r_d \end{cases}
+              Pairwise Interaction which computes the Flowproperties, from which then the NeuralNetwork Inputs are computed for Smart DPD
+              Flowproperties: Velocity Gradient
+                              Vorticity
+                              Aprox_Density
     )");
 
     pyIntFlowProperty.def(py::init<const YmrState*, std::string, float>(),
@@ -561,12 +557,14 @@ void exportInteractions(py::module& m)
         wrapper of :any:`SmartDPD` with, in addition, stress computation
     )");
 
-    pyIntSmartDPDWithStress.def(py::init<const YmrState*,std::string, std::string, std::string,std::vector<float>, float, float, float, float, float, float>(),
-                                "state"_a,"name"_a,"parameterName"_a, "stressName"_a,"weights"_a, "rc"_a, "a"_a, "gamma"_a, "kbt"_a, "power"_a, "stressPeriod"_a, R"(
+    pyIntSmartDPDWithStress.def(py::init<const YmrState*,std::string, std::string,std::string, std::string,std::vector<float>, float,float, float, float>(),
+                                "state"_a,"name"_a,"parameterName"_a, "stressName"_a,"NeuralNetType"_a,"weights"_a, "rc"_a,"kbt"_a, "power"_a, "stressPeriod"_a, R"(
                  Args:
                      name: name of the interaction
                      parametName: name of the dpd parameter
                      stressName: name of the stress entry
+                     NeuralNetType: Is the NeuralNet "linear" or "nonlinear"
+		     Weights: the weights of the neural network
                      rc: interaction cut-off (no forces between particles further than **rc** apart)
                      a: :math:`a`
                      gamma: :math:`\gamma`

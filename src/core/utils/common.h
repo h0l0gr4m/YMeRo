@@ -16,6 +16,7 @@ static const std::string aprox_densities ="aprox_densities";
 static const std::string velocity_gradients ="velocity_gradients";
 static const std::string density_gradients   = "density_gradients";
 static const std::string NNInputs = "NNInputs";
+static const std::string Intermediate_Inputs = "Intermediate_Inputs";
 
 static const std::string positions     = "__positions";
 static const std::string velocities    = "__velocities";

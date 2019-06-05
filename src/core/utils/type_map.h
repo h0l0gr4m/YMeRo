@@ -23,8 +23,8 @@
     OP(Velocity_Gradient)       SEP                        \
     OP(DPDparameter)       SEP                        \
     OP(NNInput)       SEP                        \
-    OP(Force)
-
+    OP(Force)    SEP 	\
+    OP(Intermediate_Input) 
 
 #define TYPE_TABLE(OP) TYPE_TABLE__(OP, )
 #define COMMA ,

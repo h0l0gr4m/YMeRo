@@ -310,9 +310,38 @@ struct NNInput
             case 9 : return d3;
             case 10: return b1;
         }
-
     }
 };
+
+struct Intermediate_Input
+{
+   float f0,f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13,f14,f15;
+
+   __HD__ float &operator[]( size_t idx )
+   {
+        switch(idx)
+        {
+            case 0 : return f0;
+            case 1 : return f1;
+            case 2 : return f2;
+            case 3 : return f3;
+            case 4 : return f4;
+            case 5 : return f5;
+            case 6 : return f6;
+            case 7 : return f7;
+            case 8 : return f8;
+            case 9 : return f9;
+            case 10: return f10;
+	    case 11: return f11;
+	    case 12: return f12;
+            case 13: return f13;
+	    case 14: return f14;
+            case 15: return f15;
+        }
+    }
+};
+
+
 
 //implement += and + operators for different datatypes
 __HD__ void inline operator+=(Stress& a, const float b )

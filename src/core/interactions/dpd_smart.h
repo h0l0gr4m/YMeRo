@@ -34,7 +34,7 @@ class InteractionSmartDPD : public Interaction
 public:
     constexpr static float Default = std::numeric_limits<float>::infinity();
 
-    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights,float rc, float a, float gamma, float kbt, float power);
+    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::string NeuralNetType,std::vector<float> weights,float rc,  float kbt, float power);
 
     ~InteractionSmartDPD();
 
@@ -52,19 +52,19 @@ public:
 
 
     virtual void setSpecificPair(ParticleVector* pv1, ParticleVector* pv2,
-                                 float a=Default, float gamma=Default, float kbt=Default,
+                                 float kbt=Default,
                                  float power=Default);
 
 protected:
 
-    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::vector<float> weights, float rc, float a, float gamma, float kbt,  float power, bool allocateImpl);
+    InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::string NeuralNetType,std::vector<float> weights, float rc, float kbt,  float power, bool allocateImpl);
 
     std::unique_ptr<Interaction> impl;
 
     // Default values
-    float a, gamma, kbt,  power,loss ;
+    float  kbt,  power,loss ;
     std::string parameterName;
     PinnedBuffer<float> Weights;
     std::vector<float> weights;
-
+    std::string NeuralNetType;
 };

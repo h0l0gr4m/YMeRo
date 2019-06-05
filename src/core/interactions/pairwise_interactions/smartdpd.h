@@ -34,8 +34,8 @@ public:
   using ViewType     = PVviewWithFlowProperties;
   using ParticleType = ParticleWithFlowProperties;
 
-    PairwiseSmartDPDHandler(std::string parameterName,float rc, float a, float gamma, float kbT, float dt, float power) :
-        ParticleFetcherWithVelocityandFlowProperties(rc), parameterName(parameterName), a(a), gamma(gamma), power(power),kbT(kbT),dt(dt)
+    PairwiseSmartDPDHandler(std::string parameterName,float rc,  float kbT, float dt, float power) :
+        ParticleFetcherWithVelocityandFlowProperties(rc), parameterName(parameterName),  power(power),kbT(kbT),dt(dt)
     {
         rc2 = rc*rc;
         invrc = 1.0 / rc;
@@ -74,7 +74,7 @@ public:
 public:
     std::string parameterName;
     DPDparameter *pv1DPDparameter, *pv2DPDparameter;
-    float a, gamma, power, rc,kbT,dt;
+    float power, rc,kbT,dt;
     float invrc, rc2;
     float seed;
 };
@@ -87,8 +87,8 @@ public:
 
     using HandlerType = PairwiseSmartDPDHandler;
 
-    PairwiseSmartDPD(std::string parameterName,float rc, float a, float gamma, float kbT, float dt, float power, long seed=42424242) :
-        PairwiseSmartDPDHandler(parameterName,rc, a, gamma, kbT, dt, power),
+    PairwiseSmartDPD(std::string parameterName,float rc, float kbT, float dt, float power, long seed=42424242) :
+        PairwiseSmartDPDHandler(parameterName,rc, kbT, dt, power),
         stepGen(seed)
     {}
 

@@ -2,7 +2,7 @@
 
 #include <cassert>
 #include <type_traits>
-
+#include <vector>
 #include <core/datatypes.h>
 #include <core/celllist.h>
 #include <core/utils/cuda_common.h>
@@ -26,7 +26,6 @@ return threadId;
 
 
 //****************************************************************************
-//if iteration is equal to 4 , this is a fourth warp reduction
 //****************************************************************************
 __device__ inline  float warpReduce(float val)
 {
@@ -41,10 +40,9 @@ __device__ inline  float warpReduce(float val)
 
 
 
-__global__ void NeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
+__global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
 {
-  // printf("size: %d \n" ,size);
-	int thread = getGlobalIdx_3D_3D();
+  int thread = getGlobalIdx_3D_3D();
   if (thread > 32*size-1)
     return;
 
@@ -73,7 +71,6 @@ __global__ void NeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NN
 
   value = pv1NNInputs[particle][input_index]*Weights[weight_index];
   value = warpReduce(value);
-  // printf(" thread: %d, warpid : %d , laneid: %d , particle: %d , input_index: %d , weight_index: %d , pv1NNInputs[particle[input_index] : %f ,Weights[weight_index] : %f , value: %f  \n "   ,thread, warpid,laneid,particle,input_index,weight_index,pv1NNInputs[particle][input_index] , Weights[weight_index] ,value);
 
   if(laneid % 16 == 0)
   {
@@ -81,7 +78,6 @@ __global__ void NeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NN
     {
        value = (value + sqrt(value*value +1))/2 ;
        pv1DPDparameter[particle].alpha_p = value;
-       // printf("pv1DPDparameter[particle].alpha_p: %f , value: %f, particle: %d, laneid: %d , weight_index: %d  \n", pv1DPDparameter[particle].alpha_p ,value, particle, laneid,weight_index);
     }
 
 
@@ -89,11 +85,114 @@ __global__ void NeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NN
     {
        value = (value + sqrt(value*value +1))/2 ;
        pv1DPDparameter[particle].gamma_p=value;
-       // if (pv1DPDparameter[particle].gamma_p != 20.25)
-       // printf("pv1DPDparameter[particle].gamma_p: %f , value: %f, particle: %d, laneid: %d , weight_index: %d , inpud_index: %d \n", pv1DPDparameter[particle].gamma_p ,value, particle, laneid,weight_index,input_index);
     }
   }
 
 
 
 }
+__global__ void NonLinearNeuralNet_1(int size,Intermediate_Input *pvIntermediate_Inputs, NNInput *pvNNInputs, float *Weights)
+{
+
+  int thread = getGlobalIdx_3D_3D();
+  if (thread > 4*32*size-1)
+    return;
+
+  uint32_t weight_index = 0;
+  uint32_t input_index = 0 ;
+  float value = 0;
+  uint32_t warpid = thread / 32;
+  uint32_t laneid = thread % 32;
+  uint32_t particle = warpid/4;
+
+  if (laneid >15 && laneid <27)
+  {
+      input_index = laneid % 16;
+      weight_index = laneid % 16 +(warpid%4)*22+11;
+  }
+  else if (laneid < 11)
+  {
+      input_index = laneid % 16;
+      weight_index = laneid + (warpid%4)*22;
+
+  }
+  else
+  {
+   return;
+  }
+if(particle < 3000)
+value = pvNNInputs[particle][input_index]*Weights[weight_index];
+value = warpReduce(value);
+
+  if(laneid % 16 == 0)
+  {
+    if(weight_index<11)
+    {
+      if(value>0)
+      pvIntermediate_Inputs[particle][(warpid%4)*2+1]=value;
+      else
+      pvIntermediate_Inputs[particle][(warpid%4)*2+1]=0;
+
+    }
+
+   else
+    {
+      if(value>0)
+      pvIntermediate_Inputs[particle][(warpid%4)*2+1]=value;
+      else
+      pvIntermediate_Inputs[particle][(warpid%4)*2+1]=0;
+
+    }
+  }
+
+}
+__global__ void NonLinearNeuralNet_2(int size,Intermediate_Input *pvIntermediate_Inputs, DPDparameter *pvDPDparameters, float *Weights)
+{
+  int thread = getGlobalIdx_3D_3D();
+  if (thread > 32*size-1)
+    return;
+
+  uint32_t weight_index = 0;
+  uint32_t input_index = 0 ;
+  float value = 0;
+  uint32_t warpid = thread / 32;
+  uint32_t laneid = thread % 32;
+  uint32_t particle = warpid;
+
+  if (laneid >15 && laneid < 24)
+  {
+      input_index = laneid % 16;
+      weight_index = laneid % 16 +96;
+  }
+  else if (laneid < 9)
+  {
+      input_index = laneid % 16;
+      weight_index = laneid+88;
+
+  }
+  else
+  {
+   return;
+  }
+
+  value = pvIntermediate_Inputs[particle][input_index]*Weights[weight_index];
+  value = warpReduce(value);
+
+  if(laneid % 16 == 0)
+  {
+    if(weight_index<96)
+    {
+       value = (value + sqrt(value*value +1))/2 ;
+       pvDPDparameters[particle].alpha_p = value;
+    }
+
+
+    else
+    {
+       value = (value + sqrt(value*value +1))/2 ;
+       pvDPDparameters[particle].gamma_p=value;
+    }
+ 
+  }
+}
+

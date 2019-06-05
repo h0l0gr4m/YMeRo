@@ -1,7 +1,7 @@
 #pragma once
 
 #include "channel.h"
-
+#include <vector>
 #include <core/logger.h>
 #include <core/utils/type_map.h>
 
@@ -41,7 +41,7 @@ template <> Channel::NumberType inline getNumberType<Velocity_Gradient> () {retu
 template <> Channel::NumberType inline getNumberType<Density_Gradient> () {return Channel::NumberType::Float;}
 template <> Channel::NumberType inline getNumberType<DPDparameter> () {return Channel::NumberType::Float;}
 template <> Channel::NumberType inline getNumberType<NNInput> () {return Channel::NumberType::Float;}
-
+template <> Channel::NumberType inline getNumberType<Intermediate_Input> () {return Channel::NumberType::Float;}
 
 template <typename T>
 Channel::NumberType inline getNumberType()
