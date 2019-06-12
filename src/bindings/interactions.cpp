@@ -521,7 +521,7 @@ void exportInteractions(py::module& m)
             Args:
                 name: name of the interaction
                 parameterName: Name of the parameters
-                NeuralNetType: is the NeuralNet "linear" or "nonlinear" 
+                NeuralNetType: is the NeuralNet "linear","pseudolinear" or "nonlinear" 
                 weights: The weights of the NeuralNet
                 rc: interaction cut-off (no forces between particles further than **rc** apart)
                 a: :math:`a`
@@ -563,7 +563,7 @@ void exportInteractions(py::module& m)
                      name: name of the interaction
                      parametName: name of the dpd parameter
                      stressName: name of the stress entry
-                     NeuralNetType: Is the NeuralNet "linear" or "nonlinear"
+                     NeuralNetType: Is the NeuralNet "linear" , "pseudolinear" or "nonlinear"
 		     Weights: the weights of the neural network
                      rc: interaction cut-off (no forces between particles further than **rc** apart)
                      a: :math:`a`

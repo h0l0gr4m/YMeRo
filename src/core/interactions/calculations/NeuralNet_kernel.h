@@ -41,6 +41,7 @@ __device__ inline  float warpReduce(float val)
 
 
 __global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
+
 {
   int thread = getGlobalIdx_3D_3D();
   if (thread > 32*size-1)
@@ -84,6 +85,55 @@ __global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput 
     else
     {
        value = (value + sqrt(value*value +1))/2 ;
+       pv1DPDparameter[particle].gamma_p=value;
+    }
+  }
+
+
+
+}
+__global__ void PseudolinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
+{
+  int thread = getGlobalIdx_3D_3D();
+  if (thread > 32*size-1)
+    return;
+
+  uint32_t weight_index = 0;
+  uint32_t input_index = 0 ;
+  float value = 0;
+  uint32_t warpid = thread / 32;
+  uint32_t laneid = thread % 32;
+  uint32_t particle = warpid;
+
+  if (laneid >15 && laneid < 27)
+  {
+      input_index = laneid % 16;
+      weight_index = laneid % 16 +11;
+  }
+  else if (laneid < 11)
+  {
+      input_index = laneid % 16;
+      weight_index = laneid;
+
+  }
+  else
+  {
+   return;
+  }
+
+  value = pv1NNInputs[particle][input_index]*Weights[weight_index];
+  value = warpReduce(value);
+
+  if(laneid % 16 == 0)
+  {
+    if(weight_index<11)
+    {
+       pv1DPDparameter[particle].alpha_p = value;
+    }
+
+
+    else
+    {
        pv1DPDparameter[particle].gamma_p=value;
     }
   }

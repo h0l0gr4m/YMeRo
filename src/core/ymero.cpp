@@ -185,7 +185,6 @@ YMeRo::~YMeRo()
     safeCommFree(&interComm);
     if (initializedMpi)
         MPI_Finalize();
-    printf("Destructor is called");
 }
 
 void YMeRo::registerParticleVector(const std::shared_ptr<ParticleVector>& pv, const std::shared_ptr<InitialConditions>& ic, int checkpointEvery)

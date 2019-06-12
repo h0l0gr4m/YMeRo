@@ -116,7 +116,7 @@ void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* 
     cl1->requireExtraDataPerParticle <NNInput> (ChannelNames::NNInputs);
     cl2->requireExtraDataPerParticle <NNInput> (ChannelNames::NNInputs);
 
-    if(NeuralNetType=="linear")
+    if(NeuralNetType=="pseudolinear" || NeuralNetType=="linear")
 	{
 	    Weights.resize_anew(22);
 	    auto hostPtr = Weights.hostPtr();
@@ -155,13 +155,21 @@ void InteractionSmartDPD::localNeuralNetwork (ParticleVector* pv, CellList* cl,c
     auto pvDPDparameter = pv->local()->dataPerParticle.getData<DPDparameter>(ChannelNames::DPDparameters)->devPtr();
     auto pvNNInputs = pv->local()->dataPerParticle.getData<NNInput>(ChannelNames::NNInputs)->devPtr();
     auto Weights_ptr = Weights.devPtr();
-    if(NeuralNetType=="linear")
+    if(NeuralNetType=="pseudolinear")
+	{
+				SAFE_KERNEL_LAUNCH(
+				PseudolinearNeuralNet,getNblocks(32*size,nth),nth,0,stream,
+				size,pvDPDparameter,pvNNInputs,Weights_ptr
+				);
+	}   
+    else if (NeuralNetType =="linear")
 	{
 				SAFE_KERNEL_LAUNCH(
 				LinearNeuralNet,getNblocks(32*size,nth),nth,0,stream,
 				size,pvDPDparameter,pvNNInputs,Weights_ptr
 				);
 	}   
+
     else if (NeuralNetType == "nonlinear")
 	{
   				auto pvIntermediate_Inputs = pv->halo()->dataPerParticle.getData<Intermediate_Input>(ChannelNames::Intermediate_Inputs)->devPtr();
