@@ -40,7 +40,7 @@ __device__ inline  float warpReduce(float val)
 
 
 
-__global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
+__global__ void PseudolinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
 
 {
   int thread = getGlobalIdx_3D_3D();
@@ -92,7 +92,7 @@ __global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput 
 
 
 }
-__global__ void PseudolinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
+__global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput *pv1NNInputs, float *Weights)
 {
   int thread = getGlobalIdx_3D_3D();
   if (thread > 32*size-1)
