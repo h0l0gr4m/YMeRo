@@ -210,6 +210,14 @@ void InteractionSmartDPD::haloNeuralNetwork(ParticleVector* pv,CellList *cl, cud
 				size,pvDPDparameter,pvNNInputs,Weights_ptr
 				);
 	}	
+  else if(NeuralNetType=="pseudolinear")
+         {
+                                 SAFE_KERNEL_LAUNCH(
+                                 PseudolinearNeuralNet,getNblocks(32*size,nth),nth,0,stream,
+                                 size,pvDPDparameter,pvNNInputs,Weights_ptr
+                                 );
+         }
+
   else if (NeuralNetType =="nonlinear")
 	{
   				auto pvIntermediate_Inputs = pv->halo()->dataPerParticle.getData<Intermediate_Input>(ChannelNames::Intermediate_Inputs)->devPtr();
