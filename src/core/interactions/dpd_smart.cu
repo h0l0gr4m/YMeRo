@@ -82,9 +82,9 @@ void InteractionFlowProperty::halo (ParticleVector *pv1, ParticleVector *pv2, Ce
 
 
 
-InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name, std::string parameterName,std::string NeuralNetType,std::vector<float> weights, float rc,  float kbt, float power, bool allocateImpl) :
+InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name, std::string parameterName,std::string NeuralNetType,std::vector<float> weights,float viscosity, float rc,  float kbt, float power, bool allocateImpl) :
     Interaction(state, name, rc),
-    parameterName(parameterName),NeuralNetType(NeuralNetType), kbt(kbt), power(power),weights(weights)
+    parameterName(parameterName),NeuralNetType(NeuralNetType), kbt(kbt), power(power),weights(weights),viscosity(viscosity)
 {
     if (allocateImpl)
     {
@@ -95,8 +95,8 @@ InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name
 
 }
 
-InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::string NeuralNetType,std::vector<float> weights, float rc, float kbt,  float power) :
-    InteractionSmartDPD(state,name,parameterName,NeuralNetType,weights, rc, kbt, power, true)
+InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::string NeuralNetType,std::vector<float> weights, ,float viscosity,float rc, float kbt,  float power) :
+    InteractionSmartDPD(state,name,parameterName,NeuralNetType,weights,viscosity, rc, kbt, power, true)
 {}
 
 InteractionSmartDPD::~InteractionSmartDPD() = default;
