@@ -46,7 +46,7 @@ int dataFormToNcomponents(Channel::DataForm dataForm)
     case Channel::DataForm::Vector:     return 3;
     case Channel::DataForm::Tensor6:    return 6;
     case Channel::DataForm::Tensor9:    return 9;
-    case Channel::DataForm::NNInput:    return 11;
+    case Channel::DataForm::NNInput:    return 12;
     case Channel::DataForm::Quaternion: return 4;
     case Channel::DataForm::Triangle:   return 3;
     case Channel::DataForm::Other:      return 1;

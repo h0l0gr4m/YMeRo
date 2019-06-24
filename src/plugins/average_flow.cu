@@ -39,7 +39,7 @@ int Average3D::getNcomponents(Average3D::ChannelType type) const
     if (type == Average3D::ChannelType::Scalar)  components = 1;
     if (type == Average3D::ChannelType::Tensor6) components = 6;
     if (type == Average3D::ChannelType::Tensor9) components = 9;
-    if (type == Average3D::ChannelType::NNInput) components = 11;
+    if (type == Average3D::ChannelType::NNInput) components = 12;
     return components;
 }
 

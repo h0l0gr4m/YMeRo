@@ -292,7 +292,7 @@ struct DPDparameter
 
 struct NNInput
 {
-   float i1,i2,i3,i4,i5,i6,v1,d1,d2,d3,b1=1;
+   float i1,i2,i3,i4,i5,i6,v1,d1,d2,d3,vis,b1=1;
 
    __HD__ float &operator[]( size_t idx )
    {
@@ -308,7 +308,8 @@ struct NNInput
             case 7 : return d1;
             case 8 : return d2;
             case 9 : return d3;
-            case 10: return b1;
+            case 10: return vis;
+            case 11: return b1;
         }
     }
 };

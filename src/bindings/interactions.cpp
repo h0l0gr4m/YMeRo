@@ -558,7 +558,7 @@ void exportInteractions(py::module& m)
     )");
 
     pyIntSmartDPDWithStress.def(py::init<const YmrState*,std::string, std::string,std::string, std::string,std::vector<float>,float, float,float, float, float>(),
-                                "state"_a,"name"_a,"parameterName"_a, "stressName"_a,"NeuralNetType"_a,"weights"_a,"viscosity" _a, "rc"_a,"kbt"_a, "power"_a, "stressPeriod"_a, R"(
+                                "state"_a,"name"_a,"parameterName"_a, "stressName"_a,"NeuralNetType"_a,"weights"_a,"viscosity"_a, "rc"_a,"kbt"_a, "power"_a, "stressPeriod"_a, R"(
                  Args:
                      name: name of the interaction
                      parametName: name of the dpd parameter

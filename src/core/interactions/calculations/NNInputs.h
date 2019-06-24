@@ -32,8 +32,8 @@ public:
   using ViewType     = PVviewWithFlowProperties;
   using ParticleType = ParticleWithFlowProperties;
 
-    NNInput_Computation(float rc,std::string nninputs_name = "NNInputs") :
-        ParticleFetcherWithVelocityandFlowProperties(rc),nninputs_name(nninputs_name)
+    NNInput_Computation(float rc,float viscosity,std::string nninputs_name = "NNInputs") :
+        ParticleFetcherWithVelocityandFlowProperties(rc),nninputs_name(nninputs_name),viscosity(viscosity)
     {}
 
     void setup(LocalParticleVector *lpv1)
@@ -113,10 +113,11 @@ public:
       pv1NNInput[dstId].d2 = dst.aprox_density.y;
       pv1NNInput[dstId].d3 = dst.aprox_density.z;
       pv1NNInput[dstId].b1 = 1;
-
+      pv1NNInput[dstId].vis = viscosity;
 
    }
 private:
       NNInput *pv1NNInput, *pv2NNInput;
       std::string nninputs_name;
+      float viscosity;
 };

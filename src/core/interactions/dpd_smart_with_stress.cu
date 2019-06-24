@@ -9,8 +9,8 @@
 
 
 InteractionSmartDPDWithStress::InteractionSmartDPDWithStress(const YmrState *state,std::string name,std::string parameterName,std::string stressName,std::string NeuralNetType,std::vector<float> weights,
-                                                   float rc, float kbt, float power, float stressPeriod) :
-    InteractionSmartDPD(state,name,parameterName,NeuralNetType,weights, rc, kbt, power, false),
+                                                   float viscosity,float rc, float kbt, float power, float stressPeriod) :
+    InteractionSmartDPD(state,name,parameterName,NeuralNetType,weights,viscosity, rc, kbt, power, false),
     stressPeriod(stressPeriod)
 {
     PairwiseSmartDPD dpd(parameterName,rc, kbt, state->dt, power);

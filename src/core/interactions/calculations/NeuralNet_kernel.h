@@ -54,12 +54,12 @@ __global__ void PseudolinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NN
   uint32_t laneid = thread % 32;
   uint32_t particle = warpid;
 
-  if (laneid >15 && laneid < 27)
+  if (laneid >15 && laneid < 28)
   {
       input_index = laneid % 16;
-      weight_index = laneid % 16 +11;
+      weight_index = laneid % 16 +12;
   }
-  else if (laneid < 11)
+  else if (laneid < 12)
   {
       input_index = laneid % 16;
       weight_index = laneid;
@@ -75,7 +75,7 @@ __global__ void PseudolinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NN
 
   if(laneid % 16 == 0)
   {
-    if(weight_index<11)
+    if(weight_index<12)
     {
        value = (value + sqrt(value*value +1))/2 ;
        pv1DPDparameter[particle].alpha_p = value;
@@ -105,12 +105,12 @@ __global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput 
   uint32_t laneid = thread % 32;
   uint32_t particle = warpid;
 
-  if (laneid >15 && laneid < 27)
+  if (laneid >15 && laneid < 28)
   {
       input_index = laneid % 16;
       weight_index = laneid % 16 +11;
   }
-  else if (laneid < 11)
+  else if (laneid < 12)
   {
       input_index = laneid % 16;
       weight_index = laneid;
@@ -126,7 +126,7 @@ __global__ void LinearNeuralNet(int size,DPDparameter *pv1DPDparameter, NNInput 
 
   if(laneid % 16 == 0)
   {
-    if(weight_index<11)
+    if(weight_index<12)
     {
        pv1DPDparameter[particle].alpha_p = value;
     }
@@ -170,13 +170,13 @@ __global__ void NonLinearNeuralNet_1(int size,Intermediate_Input *pvIntermediate
   {
    return;
   }
-if(particle < 3000)
+
 value = pvNNInputs[particle][input_index]*Weights[weight_index];
 value = warpReduce(value);
 
   if(laneid % 16 == 0)
   {
-    if(weight_index<11)
+    if(weight_index<12)
     {
       if(value>0)
       pvIntermediate_Inputs[particle][(warpid%4)*2+1]=value;
@@ -230,7 +230,7 @@ __global__ void NonLinearNeuralNet_2(int size,Intermediate_Input *pvIntermediate
 
   if(laneid % 16 == 0)
   {
-    if(weight_index<96)
+    if(weight_index<97)
     {
        value = (value + sqrt(value*value +1))/2 ;
        pvDPDparameters[particle].alpha_p = value;

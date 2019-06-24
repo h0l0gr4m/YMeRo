@@ -43,7 +43,7 @@ void ParticleSenderPlugin::handshake()
             sizes.push_back(9);
             break;
         case ChannelType::NNInput:
-            sizes.push_back(11);
+            sizes.push_back(12);
             break;
         }
 
@@ -122,7 +122,7 @@ void ParticleDumperPlugin::handshake()
             case 3: channels.push_back(init_channel(XDMF::Channel::DataForm::Vector,  sizes[i], names[i])); break;
             case 6: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor6, sizes[i], names[i])); break;
             case 9: channels.push_back(init_channel(XDMF::Channel::DataForm::Tensor9, sizes[i], names[i])); break;
-            case 11: channels.push_back(init_channel(XDMF::Channel::DataForm::NNInput, sizes[i], names[i])); break;
+            case 12: channels.push_back(init_channel(XDMF::Channel::DataForm::NNInput, sizes[i], names[i])); break;
 
             default:
                 die("Plugin '%s' got %d as a channel '%s' size, expected 1, 3 , 6,9 or 11", name.c_str(), sizes[i], names[i].c_str());

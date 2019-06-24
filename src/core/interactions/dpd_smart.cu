@@ -95,7 +95,7 @@ InteractionSmartDPD::InteractionSmartDPD(const YmrState *state, std::string name
 
 }
 
-InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::string NeuralNetType,std::vector<float> weights, ,float viscosity,float rc, float kbt,  float power) :
+InteractionSmartDPD::InteractionSmartDPD(const YmrState *state,std::string name,std::string parameterName,std::string NeuralNetType,std::vector<float> weights, float viscosity,float rc, float kbt,  float power) :
     InteractionSmartDPD(state,name,parameterName,NeuralNetType,weights,viscosity, rc, kbt, power, true)
 {}
 
@@ -103,6 +103,7 @@ InteractionSmartDPD::~InteractionSmartDPD() = default;
 
 void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* pv2,CellList *cl1, CellList *cl2)
 {
+    
     impl->setPrerequisites(pv1, pv2,cl1,cl2);
     pv1->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters,DataManager::PersistenceMode::None);
     pv2->requireDataPerParticle <DPDparameter> (ChannelNames::DPDparameters,DataManager::PersistenceMode::None);
@@ -116,16 +117,17 @@ void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* 
     cl1->requireExtraDataPerParticle <NNInput> (ChannelNames::NNInputs);
     cl2->requireExtraDataPerParticle <NNInput> (ChannelNames::NNInputs);
 
+
     if(NeuralNetType=="pseudolinear" || NeuralNetType=="linear")
 	{
-	    Weights.resize_anew(22);
+	    Weights.resize_anew(weights.size());
 	    auto hostPtr = Weights.hostPtr();
 	    memcpy(hostPtr, &weights[0], weights.size() * sizeof(float));
 	    Weights.uploadToDevice(0);
 	}
     else if(NeuralNetType=="nonlinear")
         {
- 	    Weights.resize_anew(103);
+ 	    Weights.resize_anew(weights.size());
             auto hostPtr = Weights.hostPtr();
             memcpy(hostPtr, &weights[0], weights.size() * sizeof(float));
             Weights.uploadToDevice(0);
@@ -141,7 +143,7 @@ void InteractionSmartDPD::setPrerequisites(ParticleVector* pv1, ParticleVector* 
 
 void InteractionSmartDPD::localNeuralNetwork (ParticleVector* pv, CellList* cl,cudaStream_t stream)
 {
-    NNInput_Computation nninputs(rc);
+    NNInput_Computation nninputs(rc,viscosity);
     using ViewType = typename NNInput_Computation::ViewType;
     ViewType view(pv,pv->local());
     int size = view.size;
@@ -189,7 +191,7 @@ void InteractionSmartDPD::localNeuralNetwork (ParticleVector* pv, CellList* cl,c
 
 void InteractionSmartDPD::haloNeuralNetwork(ParticleVector* pv,CellList *cl, cudaStream_t stream)
 {
-  NNInput_Computation nninputs(rc);
+  NNInput_Computation nninputs(rc,viscosity);
   using ViewType = typename NNInput_Computation::ViewType;
   ViewType  view (pv,pv->halo());
   int size =view.size;
