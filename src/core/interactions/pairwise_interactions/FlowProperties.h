@@ -64,7 +64,7 @@ public:
         const float rij2 = dot(dr, dr);
         const float invrij = rsqrtf(rij2);
         const float rij = rij2 * invrij;
-        const float Vj  = 1.0/6.0;
+        const float Vj  = 1.0/10.0;
         const float q = invrij*Vj*der_eta_kernel(rij);
 
         Vorticity vorticity;

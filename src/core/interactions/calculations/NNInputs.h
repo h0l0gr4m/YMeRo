@@ -55,7 +55,7 @@ public:
       const float rxz = (dst.velocity_gradient.xz-dst.velocity_gradient.zx)/2;
       const float ryx = (dst.velocity_gradient.yx-dst.velocity_gradient.xy)/2;
       const float ryz = (dst.velocity_gradient.yz-dst.velocity_gradient.zy)/2;
-      const float rzx = (dst.velocity_gradient.zx-dst.velocity_gradient.xy)/2;
+      const float rzx = (dst.velocity_gradient.zx-dst.velocity_gradient.xz)/2;
       const float rzy = (dst.velocity_gradient.zy-dst.velocity_gradient.yz)/2;
 
       //calculate s²
@@ -68,17 +68,17 @@ public:
 
       //calculate r²
       const float r2xx = rxy*ryx+rxz*rzx;
-      const float r2xy = rxy*rzy;
+      const float r2xy = rxz*rzy;
       const float r2xz = rxy*ryz;
       const float r2yx = ryz*rzx;
       const float r2yy = ryx*rxy + ryz*rzy;
       const float r2yz = ryx *rxz;
       const float r2zx = rzy*ryx;
-      const float r2zy = rzy * rxy;
+      const float r2zy = rzx * rxy;
       const float r2zz = rzx* rxz + rzy*ryz;
 
       //calculate s³
-      const float s3xx = s2xx *dst.velocity_gradient.xx + s2xy*sxy+s2xz + s2xz;
+      const float s3xx = s2xx *dst.velocity_gradient.xx + s2xy*sxy+s2xz*sxz;
       const float s3yy = s2xy * sxy + dst.velocity_gradient.yy * s2yy + s2yz*syz;
       const float s3zz = s2xz * sxz + s2yz * syz + dst.velocity_gradient.zz*s2zz;
 
