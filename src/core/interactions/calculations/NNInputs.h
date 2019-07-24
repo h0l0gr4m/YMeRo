@@ -92,7 +92,7 @@ public:
       const float r2s2yy = r2yx*s2xy + r2yy*s2yy + r2yz*s2yz;
       const float r2s2zz = r2zx*s2xz + r2zy*s2yz + r2zz*s2zz;
 
-      //calculate trace of s, s² ,r² , s³ ,r²s, r²s³
+      //calculate trace of s, s² ,r² , s³ ,r²s, r²s2
       pv1NNInput[dstId].i1 = dst.velocity_gradient.xx+dst.velocity_gradient.yy+dst.velocity_gradient.zz;
       pv1NNInput[dstId].i2 = s2xx+s2yy+s2zz;
       pv1NNInput[dstId].i3 = r2xx+r2yy+r2zz;

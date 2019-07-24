@@ -88,7 +88,7 @@ public:
         //caluclate vorcicity vector
         vorticity.x = -q*(du.z*dr.y-du.y*dr.z);
         vorticity.y = -q*(du.x*dr.z-du.z*dr.x);
-        vorticity.z = -q*(du.y*dr.x-du.x*dr.z);
+        vorticity.z = -q*(du.y*dr.x-du.x*dr.y);
 
         // calculate aprox_densities via symmetry functions
         aprox_density.x = symmetry_function(rij,0.5,1)*eta_kernel(rij);
